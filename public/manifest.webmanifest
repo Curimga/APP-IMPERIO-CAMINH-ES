@@ -1,0 +1,56 @@
+{
+  "name": "Império Caminhões",
+  "short_name": "Império",
+  "description": "Gestão operacional da Império Caminhões",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#F4B400",
+  "background_color": "#0B0B0B",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Garagem",
+      "short_name": "Garagem",
+      "description": "Abrir a garagem da frota",
+      "url": "/garagem",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "description": "Ver compromissos",
+      "url": "/agenda",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
