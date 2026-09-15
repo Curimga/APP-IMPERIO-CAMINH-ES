@@ -31,7 +31,14 @@ function LoginPage() {
       nav({ to: "/" });
     } catch (err: any) {
       const msg = err?.message ?? "Falha no login";
-      toast.error(msg.includes("Invalid login") ? "E-mail ou senha incorretos" : msg);
+      const translated = /invalid login/i.test(msg)
+        ? "E-mail ou senha incorretos"
+        : /blocked|disabled|banned|suspended/i.test(msg)
+          ? "Acesso bloqueado. Fale com o administrador."
+          : /not confirmed|email not/i.test(msg)
+            ? "E-mail ainda não confirmado. Verifique sua caixa de entrada."
+            : msg;
+      toast.error(translated);
     } finally {
       setLoading(false);
     }
@@ -42,7 +49,14 @@ function LoginPage() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + "/login",
     });
-    if (error) toast.error(error.message);
+    if (error)
+      toast.error(
+        /not found/i.test(error.message)
+          ? "Este e-mail não está cadastrado"
+          : /not confirmed|email not/i.test(error.message)
+            ? "E-mail ainda não confirmado"
+            : error.message,
+      );
     else toast.success("E-mail de recuperação enviado");
   };
 
@@ -177,14 +191,14 @@ function LoginPage() {
 
           <div className="flex items-center gap-3 text-xs text-sidebar-foreground/40">
             <div className="h-px flex-1 bg-sidebar-border" />
-            <span>ou</span>
+            <span>acesso corporativo</span>
             <div className="h-px flex-1 bg-sidebar-border" />
           </div>
 
           <p className="text-center text-sm text-sidebar-foreground/60">
             Não tem conta?{" "}
             <Link to="/cadastro" className="text-gold hover:underline font-medium">
-              Solicitar acesso
+              Saiba como solicitar acesso
             </Link>
           </p>
         </form>

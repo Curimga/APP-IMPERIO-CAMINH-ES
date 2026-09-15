@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { monthKey, monthLabel, dateBR, brl as brlFmt, sumMoney, money } from "@/lib/format";
 
 export type DashboardSnapshot = Awaited<ReturnType<typeof fetchDashboardSnapshot>>;
@@ -9,8 +10,10 @@ export async function fetchDashboardSnapshot() {
   const start12m = new Date(today.getFullYear(), today.getMonth() - 11, 1).toISOString();
 
   const next30 = new Date(today.getTime() + 30 * 86400000).toISOString();
-  const [trucks, deals, customers, leads, payables, receivables, banks, txs, expenses, commissions, goals, employees, events, generalExp, services, purchaseInst] = await Promise.all([
-    supabase.from("trucks").select("id,status,brand,model,year,plate,purchase_price,expected_price,sold_price,expenses_total,created_at,updated_at,purchase_date,sold_at,warranty_end,status_expected_end"),
+  // Este módulo é chamado apenas pelo Executivo (useMobileFinance é gated por
+  // isAdmin). Usa consultas diretas reutilizando as políticas RLS do CRM.
+  const trucks = await supabase.from("trucks").select("*");
+  const [deals, customers, leads, payables, receivables, banks, txs, expenses, commissions, goals, employees, events, generalExp, services, purchaseInst] = await Promise.all([
     supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at"),
     supabase.from("customers").select("id,name,status,created_at"),
     supabase.from("leads").select("id,status,source,created_at,owner_id"),
@@ -25,26 +28,26 @@ export async function fetchDashboardSnapshot() {
     supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id").gte("starts_at", today.toISOString()).lte("starts_at", next30),
     supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description").gte("occurred_at", start12m.slice(0, 10)),
     supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at"),
-    supabase.from("truck_purchase_installments" as any).select("*"),
+    supabase.from("truck_purchase_installments").select("*"),
   ]);
 
   return {
-    trucks: (trucks.data ?? []) as any[],
-    deals: (deals.data ?? []) as any[],
-    customers: (customers.data ?? []) as any[],
-    leads: (leads.data ?? []) as any[],
-    payables: (payables.data ?? []) as any[],
-    receivables: (receivables.data ?? []) as any[],
-    banks: (banks.data ?? []) as any[],
-    txs: (txs.data ?? []) as any[],
-    expenses: (expenses.data ?? []) as any[],
-    commissions: (commissions.data ?? []) as any[],
-    goals: (goals.data ?? []) as any[],
-    employees: (employees.data ?? []) as any[],
-    events: (events.data ?? []) as any[],
-    generalExp: (generalExp.data ?? []) as any[],
-    services: (services.data ?? []) as any[],
-    purchaseInst: (purchaseInst.data ?? []) as any[],
+    trucks: (trucks.data ?? []) as Tables<"trucks">[],
+    deals: (deals.data ?? []) as Tables<"deals">[],
+    customers: (customers.data ?? []) as Tables<"customers">[],
+    leads: (leads.data ?? []) as Tables<"leads">[],
+    payables: (payables.data ?? []) as Tables<"payables">[],
+    receivables: (receivables.data ?? []) as Tables<"receivables">[],
+    banks: (banks.data ?? []) as Tables<"bank_accounts">[],
+    txs: (txs.data ?? []) as Tables<"bank_transactions">[],
+    expenses: (expenses.data ?? []) as Tables<"truck_expenses">[],
+    commissions: (commissions.data ?? []) as Tables<"commissions">[],
+    goals: (goals.data ?? []) as Tables<"goals">[],
+    employees: (employees.data ?? []) as Tables<"employees">[],
+    events: (events.data ?? []) as Tables<"calendar_events">[],
+    generalExp: (generalExp.data ?? []) as Tables<"general_expenses">[],
+    services: (services.data ?? []) as Tables<"services">[],
+    purchaseInst: (purchaseInst.data ?? []) as Tables<"truck_purchase_installments">[],
     refs: { today, startYear, start12m },
   };
 }
@@ -104,8 +107,8 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
   const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const balance = s.banks.reduce((s, b) => s + Number(b.current_balance ?? 0), 0);
 
-  const openReceivable = s.receivables.filter((r) => r.status === "aberto").reduce((s, r) => s + Number(r.amount ?? 0), 0);
-  const openPayable = s.payables.filter((p) => p.status === "aberto").reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const openReceivable = s.receivables.filter((r) => !r.received_at).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const openPayable = s.payables.filter((p) => !p.paid_at).reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const openPurchase = (s.purchaseInst ?? []).filter((p) => p.status === "pendente").reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const profitForecast = money(openReceivable - openPayable - openPurchase);
 
@@ -196,11 +199,11 @@ export function computeAlerts(s: DashboardSnapshot, kpis: ReturnType<typeof comp
     alerts.push({ id: `aging-${a.id}`, severity: "warning", title: `Caminhão parado há ${a.dias} dias`, description: `${a.label} · capital imobilizado de ${brl(a.capital)}`, link: `/estoque/${a.id}` }),
   );
 
-  (s.payables || []).filter((p) => p?.status === "aberto" && p.due_date <= todayStr).slice(0, 5).forEach((p) =>
+  (s.payables || []).filter((p) => !p?.paid_at && p.due_date <= todayStr).slice(0, 5).forEach((p) =>
     alerts.push({ id: `pay-${p.id}`, severity: "critical", title: `Conta vencida · ${brl(Number(p.amount))}`, description: `Vencimento em ${dateBR(p.due_date)}`, link: "/financeiro/contas-pagar" }),
   );
 
-  (s.receivables || []).filter((r) => r?.status === "aberto" && r.due_date <= todayStr).slice(0, 5).forEach((r) =>
+  (s.receivables || []).filter((r) => !r?.received_at && r.due_date <= todayStr).slice(0, 5).forEach((r) =>
     alerts.push({ id: `rec-${r.id}`, severity: "warning", title: `Boleto vencido · ${brl(Number(r.amount))}`, description: `Vencimento em ${dateBR(r.due_date)}`, link: "/financeiro/contas-receber" }),
   );
 
@@ -261,15 +264,15 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
     return null;
   };
 
-  const truckById = new Map(s.trucks.map((t: any) => [t.id, t]));
+  const truckById = new Map(s.trucks.map((t) => [t.id, t]));
   const truckLabel = (id?: string | null) => {
     if (!id) return undefined;
-    const t: any = truckById.get(id);
+    const t = truckById.get(id);
     return t ? `${t.brand} ${t.model}${t.year ? ` ${t.year}` : ""}${t.plate ? ` · ${t.plate}` : ""}` : undefined;
   };
 
   // FINANCEIRO — contas a pagar
-  (s.payables || []).filter((p: any) => p?.status === "aberto").forEach((p: any) => {
+  (s.payables || []).filter((p) => !p?.paid_at).forEach((p) => {
     const b = bucketOf(p.due_date);
     if (!b) return;
     out.push({
@@ -286,7 +289,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   });
 
   // FINANCEIRO — contas a receber
-  (s.receivables || []).filter((r: any) => r?.status === "aberto").forEach((r: any) => {
+  (s.receivables || []).filter((r) => !r?.received_at).forEach((r) => {
     const b = bucketOf(r.due_date);
     if (!b) return;
     out.push({
@@ -303,7 +306,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   });
 
   // SERVIÇOS — previsão de entrega (somente pendentes/em andamento)
-  (s.services ?? []).forEach((sv: any) => {
+  (s.services ?? []).forEach((sv) => {
     if (!sv.expected_at) return;
     if (sv.status === "concluido" || sv.status === "cancelado") return;
     if (sv.completed_at) return;
@@ -325,7 +328,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   });
 
   // GARANTIAS — caminhões com garantia próximas do vencimento
-  (s.trucks || []).forEach((t: any) => {
+  (s.trucks || []).forEach((t) => {
     if (!t.warranty_end) return;
     const b = bucketOf(t.warranty_end);
     if (!b) return;
@@ -343,7 +346,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   });
 
   // AGENDA — compromissos
-  (s.events ?? []).forEach((ev: any) => {
+  (s.events ?? []).forEach((ev) => {
     const b = bucketOf(ev.starts_at);
     if (!b) return;
     const d = new Date(ev.starts_at);
@@ -361,7 +364,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   });
 
   // COMPRA CAMINHÃO — parcelas a pagar
-  (s.purchaseInst ?? []).filter((p: any) => p.status === "pendente").forEach((p: any) => {
+  (s.purchaseInst ?? []).filter((p) => p.status === "pendente").forEach((p) => {
     const b = bucketOf(p.due_date);
     if (!b) return;
     out.push({
@@ -371,24 +374,6 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
       priority: b === "atrasado" ? "alta" : b === "hoje" ? "alta" : "media",
       title: `Parcela Compra · ${p.installment_number}/${p.total_installments}`,
       subtitle: truckLabel(p.truck_id),
-      detail: b === "atrasado" ? `Vencida há ${Math.abs(daysBetween(new Date(p.due_date), today))} dia(s)` : b === "hoje" ? "Vence hoje" : `Vence em ${daysBetween(new Date(p.due_date), today)} dia(s)`,
-      amount: Number(p.amount ?? 0),
-      date: p.due_date,
-    });
-  });
-  
-  // PARCELAS DE COMPRA — próximos vencimentos
-  (s.purchaseInst ?? []).filter((p: any) => p.status === "pendente").forEach((p: any) => {
-    const b = bucketOf(p.due_date);
-    if (!b) return;
-    const truck = truckById.get(p.truck_id);
-    out.push({
-      id: `pur-${p.id}`,
-      bucket: b,
-      category: "financeiro",
-      priority: b === "atrasado" ? "alta" : "media",
-      title: `Parcela ${p.installment_number}/${p.total_installments} · ${truck ? (truck as any).brand + ' ' + (truck as any).model : 'Compra'}`,
-      subtitle: truck ? (truck as any).plate : undefined,
       detail: b === "atrasado" ? `Vencida há ${Math.abs(daysBetween(new Date(p.due_date), today))} dia(s)` : b === "hoje" ? "Vence hoje" : `Vence em ${daysBetween(new Date(p.due_date), today)} dia(s)`,
       amount: Number(p.amount ?? 0),
       date: p.due_date,

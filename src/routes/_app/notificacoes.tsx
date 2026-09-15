@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Bell, CheckCheck, AlertTriangle } from "lucide-react";
+import { Bell, CheckCheck, AlertTriangle, Wrench, DollarSign, Calendar, TrendingUp, Package, Users } from "lucide-react";
 import { useNotifications } from "@/lib/mobile/queries";
 import { markNotificationsRead } from "@/lib/mobile/actions";
 import { MobileCard, SkeletonRows, EmptyState } from "@/components/mobile/ui";
@@ -20,6 +20,16 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 
 const KIND_ICON: Partial<Record<Enums<"notification_type">, React.ReactNode>> = {
+  manutencao: <Wrench className="h-4 w-4" />,
+  financeiro: <DollarSign className="h-4 w-4" />,
+  agenda: <Calendar className="h-4 w-4" />,
+  vendas: <TrendingUp className="h-4 w-4" />,
+  estoque: <Package className="h-4 w-4" />,
+  clientes: <Users className="h-4 w-4" />,
+  sistema: <Bell className="h-4 w-4" />,
+};
+
+const PREFIX_ICON: Record<string, React.ReactNode> = {
   info: <Bell className="h-4 w-4" />,
   success: <CheckCheck className="h-4 w-4" />,
   warning: <AlertTriangle className="h-4 w-4" />,
@@ -93,7 +103,7 @@ function Notificacoes() {
                 )}
               >
                 <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                  {KIND_ICON[n.type] ?? <Bell className="h-4 w-4" />}
+                  {KIND_ICON[n.type] ?? PREFIX_ICON[n.type] ?? <Bell className="h-4 w-4" />}
                   <span
                     className={cn(
                       "absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full",

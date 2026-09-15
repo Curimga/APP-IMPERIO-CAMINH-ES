@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { PostgrestError } from "@supabase/supabase-js";
+import { useAuth } from "@/hooks/use-auth";
+import { isAdmin } from "@/lib/mobile/perm";
 
 /**
  * Sincronização em tempo real (PWA Império Caminhões).
@@ -28,10 +30,14 @@ const TABLE_KEYS: Record<string, string[]> = {
     "sold-trucks-mobile",
     "finance-mobile",
     "dashboard-snapshot",
+    "capital-imobilizado",
     "calendar-events",
     "agenda",
     "agenda-mobile",
     "agenda-mobile-today",
+    "agenda-range",
+    "event-mobile",
+    "dashboard-mobile",
   ],
   truck_photos: ["trucks-mobile", "truck-mobile", "sold-trucks-mobile", "trucks", "stock-quick"],
   truck_expenses: [
@@ -94,6 +100,7 @@ const TABLE_KEYS: Record<string, string[]> = {
     "agenda-mobile-today",
     "notifications-mobile",
     "dashboard-snapshot",
+    "dashboard-mobile",
   ],
   services: [
     "services",
@@ -105,6 +112,7 @@ const TABLE_KEYS: Record<string, string[]> = {
     "agenda-mobile-today",
     "notifications-mobile",
     "dashboard-snapshot",
+    "dashboard-mobile",
   ],
   suppliers: ["suppliers", "suppliers-options"],
   employees: ["employees"],
@@ -143,6 +151,9 @@ type GeneratePayableAlertsRpc = (
  */
 export function useRealtimeSync(extraKeys: string[] = []) {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  const rolesRef = useRef(roles);
+  rolesRef.current = roles;
   const extraKeysRef = useRef(extraKeys);
   extraKeysRef.current = extraKeys;
   useEffect(() => {
@@ -178,8 +189,10 @@ export function useRealtimeSync(extraKeys: string[] = []) {
     });
     channel.subscribe();
 
-    // Gera alertas financeiros (vencimentos ≤3 dias / atrasos) periodicamente
+    // Gera alertas financeiros (vencimentos ≤3 dias / atrasos) periodicamente.
+    // Exclusivo do Executivo: financeiro/secretaria não devem receber avisos financeiros.
     const runAlerts = async () => {
+      if (!isAdmin(rolesRef.current)) return;
       try {
         const generatePayableAlerts = supabase.rpc as unknown as GeneratePayableAlertsRpc;
         await generatePayableAlerts("fn_generate_payable_alerts");

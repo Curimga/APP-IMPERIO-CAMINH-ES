@@ -9,7 +9,7 @@
  *  - Quando offline, responde com a página offline própria (#/offline é evitado;
  *    usamos um payload HTML inline para não rotear pelo app).
  */
-const VERSION = "imperio-v1-2026.09";
+const VERSION = "imperio-v1-2026.09-premium";
 const APP_SHELL = "/";
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">
@@ -21,7 +21,7 @@ const OFFLINE_HTML = `<!doctype html>
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:#0B0B0B;color:#fff;font-family:Inter,system-ui,-apple-system,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px}
   .box{text-align:center;max-width:340px}
-  .dot{width:64px;height:64px;border-radius:18px;background:#F5C400;color:#0B0B0B;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-weight:800;font-size:22px}
+  .dot{width:64px;height:64px;border-radius:18px;background:#F4B400;color:#0B0B0B;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-weight:800;font-size:22px}
   h1{font-size:20px;margin-bottom:10px}
   p{font-size:14px;color:#B6B7C0;line-height:1.55}
   .ok{margin-top:24px;display:inline-block;padding:12px 24px;background:#F5C400;color:#0B0B0B;border:0;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none}

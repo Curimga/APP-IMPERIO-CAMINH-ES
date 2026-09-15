@@ -12,14 +12,24 @@ export function isAdmin(roles: AppRole[]) {
   return roles.includes("admin");
 }
 
-/** Executivo/Financeiro: acesso a indicadores financeiros. */
-export function canSeeFinance(roles: AppRole[]) {
-  return roles.includes("admin") || roles.includes("financeiro");
+/**
+ * Acesso financeiro exclusivo do Executivo.
+ *
+ * Decisão de negócio: mesmo o cargo "financeiro" NÃO possui acesso a
+ * informações financeiras. Apenas o Executivo (admin).
+ */
+export function isFinanceExecutive(roles: AppRole[]) {
+  return roles.includes("admin");
 }
 
-/** Ações financeiras críticas (lançamentos, pagamentos). */
+/** Executivo: acesso ao módulo Financeiro. */
+export function canSeeFinance(roles: AppRole[]) {
+  return isFinanceExecutive(roles);
+}
+
+/** Ações financeiras críticas (lançamentos, pagamentos) — Executivo. */
 export function canEditFinance(roles: AppRole[]) {
-  return roles.includes("admin") || roles.includes("financeiro");
+  return isFinanceExecutive(roles);
 }
 
 /** Secretaria pode editar estoque de itens (conforme regras do CRM). */
@@ -33,7 +43,7 @@ export function canManageTrucks(roles: AppRole[]) {
 }
 
 export function canRegisterExpense(roles: AppRole[]) {
-  return roles.includes("admin") || roles.includes("financeiro");
+  return isFinanceExecutive(roles);
 }
 
 export function roleLabel(roles: AppRole[]): string {
@@ -83,7 +93,7 @@ export const MOBILE_MENU: {
     label: "Financeiro",
     to: "/financeiro",
     icon: "dollar",
-    allowed: canSeeFinance,
+    allowed: isFinanceExecutive,
     description: "Indicadores e lançamentos",
   },
   {

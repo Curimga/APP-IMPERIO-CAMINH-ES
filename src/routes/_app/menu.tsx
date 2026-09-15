@@ -10,12 +10,14 @@ import {
   Bell,
   UserRound,
   Download,
+  ListTodo,
 } from "lucide-react";
 import { MOBILE_MENU } from "@/lib/mobile/perm";
 import { useAuth } from "@/hooks/use-auth";
 import { MobileCard, ListRow } from "@/components/mobile/ui";
 import { useNotifications } from "@/lib/mobile/queries";
 import { useInstallPrompt } from "@/lib/mobile/install";
+import { usePendencies } from "@/routes/_app/pendencias";
 
 export const Route = createFileRoute("/_app/menu")({
   component: Menu,
@@ -34,6 +36,7 @@ const ICONS: Record<string, React.ReactNode> = {
 function Menu() {
   const { roles } = useAuth();
   const { data } = useNotifications();
+  const pendencias = usePendencies();
   const install = useInstallPrompt();
   const items = MOBILE_MENU.filter((m) => m.allowed(roles));
   const unread = data?.unread ?? 0;
@@ -45,6 +48,28 @@ function Menu() {
       </div>
 
       <MobileCard className="divide-y">
+        <ListRow
+          to="/pendencias"
+          title="Pendências"
+          subtitle={
+            pendencias.total > 0
+              ? `${pendencias.total} ${pendencias.total === 1 ? "pendência" : "pendências"} para atenção`
+              : "Nenhuma pendência registrada"
+          }
+          icon={
+            <span className="text-gold-dark">
+              <ListTodo className="h-5 w-5" />
+            </span>
+          }
+          right={
+            pendencias.total > 0 ? (
+              <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive/15 px-1.5 text-xs font-bold tabular-nums text-destructive">
+                {pendencias.total}
+              </span>
+            ) : undefined
+          }
+          unread={pendencias.total > 0}
+        />
         {items.map((m) => (
           <ListRow
             key={m.to}

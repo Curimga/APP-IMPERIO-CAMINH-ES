@@ -15,12 +15,14 @@ import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAgendaRouteImport } from './routes/_app/agenda'
+import { Route as AppBuscaRouteImport } from './routes/_app/busca'
 import { Route as AppClientesRouteImport } from './routes/_app/clientes'
 import { Route as AppEstoqueRouteImport } from './routes/_app/estoque'
 import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppGaragemRouteImport } from './routes/_app/garagem'
 import { Route as AppMenuRouteImport } from './routes/_app/menu'
 import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
+import { Route as AppPendenciasRouteImport } from './routes/_app/pendencias'
 import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
 import { Route as AppServicosRouteImport } from './routes/_app/servicos'
 import { Route as AppVendidosRouteImport } from './routes/_app/vendidos'
@@ -61,6 +63,11 @@ const AppAgendaRoute = AppAgendaRouteImport.update({
   path: '/agenda',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBuscaRoute = AppBuscaRouteImport.update({
+  id: '/busca',
+  path: '/busca',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppClientesRoute = AppClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
@@ -89,6 +96,11 @@ const AppMenuRoute = AppMenuRouteImport.update({
 const AppNotificacoesRoute = AppNotificacoesRouteImport.update({
   id: '/notificacoes',
   path: '/notificacoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPendenciasRoute = AppPendenciasRouteImport.update({
+  id: '/pendencias',
+  path: '/pendencias',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPerfilRoute = AppPerfilRouteImport.update({
@@ -149,12 +161,14 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/login': typeof LoginRoute
   '/agenda': typeof AppAgendaRouteWithChildren
+  '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
   '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/garagem': typeof AppGaragemRouteWithChildren
   '/menu': typeof AppMenuRoute
   '/notificacoes': typeof AppNotificacoesRoute
+  '/pendencias': typeof AppPendenciasRoute
   '/perfil': typeof AppPerfilRoute
   '/servicos': typeof AppServicosRouteWithChildren
   '/vendidos': typeof AppVendidosRoute
@@ -171,12 +185,14 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/login': typeof LoginRoute
   '/agenda': typeof AppAgendaRouteWithChildren
+  '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
   '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/garagem': typeof AppGaragemRouteWithChildren
   '/menu': typeof AppMenuRoute
   '/notificacoes': typeof AppNotificacoesRoute
+  '/pendencias': typeof AppPendenciasRoute
   '/perfil': typeof AppPerfilRoute
   '/servicos': typeof AppServicosRouteWithChildren
   '/vendidos': typeof AppVendidosRoute
@@ -196,12 +212,14 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/login': typeof LoginRoute
   '/_app/agenda': typeof AppAgendaRouteWithChildren
+  '/_app/busca': typeof AppBuscaRoute
   '/_app/clientes': typeof AppClientesRouteWithChildren
   '/_app/estoque': typeof AppEstoqueRouteWithChildren
   '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/garagem': typeof AppGaragemRouteWithChildren
   '/_app/menu': typeof AppMenuRoute
   '/_app/notificacoes': typeof AppNotificacoesRoute
+  '/_app/pendencias': typeof AppPendenciasRoute
   '/_app/perfil': typeof AppPerfilRoute
   '/_app/servicos': typeof AppServicosRouteWithChildren
   '/_app/vendidos': typeof AppVendidosRoute
@@ -222,12 +240,14 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/login'
     | '/agenda'
+    | '/busca'
     | '/clientes'
     | '/estoque'
     | '/financeiro'
     | '/garagem'
     | '/menu'
     | '/notificacoes'
+    | '/pendencias'
     | '/perfil'
     | '/servicos'
     | '/vendidos'
@@ -244,12 +264,14 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/login'
     | '/agenda'
+    | '/busca'
     | '/clientes'
     | '/estoque'
     | '/financeiro'
     | '/garagem'
     | '/menu'
     | '/notificacoes'
+    | '/pendencias'
     | '/perfil'
     | '/servicos'
     | '/vendidos'
@@ -268,12 +290,14 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/login'
     | '/_app/agenda'
+    | '/_app/busca'
     | '/_app/clientes'
     | '/_app/estoque'
     | '/_app/financeiro'
     | '/_app/garagem'
     | '/_app/menu'
     | '/_app/notificacoes'
+    | '/_app/pendencias'
     | '/_app/perfil'
     | '/_app/servicos'
     | '/_app/vendidos'
@@ -338,6 +362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgendaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/busca': {
+      id: '/_app/busca'
+      path: '/busca'
+      fullPath: '/busca'
+      preLoaderRoute: typeof AppBuscaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/clientes': {
       id: '/_app/clientes'
       path: '/clientes'
@@ -378,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/notificacoes'
       fullPath: '/notificacoes'
       preLoaderRoute: typeof AppNotificacoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pendencias': {
+      id: '/_app/pendencias'
+      path: '/pendencias'
+      fullPath: '/pendencias'
+      preLoaderRoute: typeof AppPendenciasRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/perfil': {
@@ -528,12 +566,14 @@ const AppServicosRouteWithChildren = AppServicosRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRouteWithChildren
+  AppBuscaRoute: typeof AppBuscaRoute
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
   AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppGaragemRoute: typeof AppGaragemRouteWithChildren
   AppMenuRoute: typeof AppMenuRoute
   AppNotificacoesRoute: typeof AppNotificacoesRoute
+  AppPendenciasRoute: typeof AppPendenciasRoute
   AppPerfilRoute: typeof AppPerfilRoute
   AppServicosRoute: typeof AppServicosRouteWithChildren
   AppVendidosRoute: typeof AppVendidosRoute
@@ -542,12 +582,14 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgendaRoute: AppAgendaRouteWithChildren,
+  AppBuscaRoute: AppBuscaRoute,
   AppClientesRoute: AppClientesRouteWithChildren,
   AppEstoqueRoute: AppEstoqueRouteWithChildren,
   AppFinanceiroRoute: AppFinanceiroRoute,
   AppGaragemRoute: AppGaragemRouteWithChildren,
   AppMenuRoute: AppMenuRoute,
   AppNotificacoesRoute: AppNotificacoesRoute,
+  AppPendenciasRoute: AppPendenciasRoute,
   AppPerfilRoute: AppPerfilRoute,
   AppServicosRoute: AppServicosRouteWithChildren,
   AppVendidosRoute: AppVendidosRoute,

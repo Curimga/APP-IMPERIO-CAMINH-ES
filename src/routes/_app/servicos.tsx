@@ -12,9 +12,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/servicos")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    truck_id: typeof s.truck_id === "string" ? s.truck_id : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>) => {
+    const r: { truck_id?: string; tab?: "atrasados" | "concluidos" } = {};
+    if (typeof s.truck_id === "string") r.truck_id = s.truck_id;
+    if (s.tab === "atrasados" || s.tab === "concluidos") r.tab = s.tab;
+    return r;
+  },
   component: Servicos,
 });
 
@@ -111,7 +114,9 @@ function ServiceItem({ s }: { s: ServiceItem }) {
 
 function Servicos() {
   const search = Route.useSearch();
-  const [tab, setTab] = useState<Tab>("andamento");
+  const [tab, setTab] = useState<Tab>(() =>
+    search.tab === "atrasados" || search.tab === "concluidos" ? search.tab : "andamento",
+  );
   const { data, isLoading, isError } = useServices();
 
   const all = data ?? [];
@@ -138,26 +143,40 @@ function Servicos() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-secondary p-1">
         {(
           [
-            ["andamento", `Andamento (${andamento.length})`],
-            ["atrasados", `Atrasados (${atrasados.length})`],
-            ["concluidos", `Concluídos (${concluidos.length})`],
+            ["andamento", "Andamento"],
+            ["atrasados", "Atrasados"],
+            ["concluidos", "Concluídos"],
           ] as [Tab, string][]
-        ).map(([t, label]) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              "h-10 rounded-xl border px-1 text-[13px] font-bold",
-              tab === t ? "border-gold bg-gold text-gold-foreground" : "bg-background",
-            )}
-          >
-            {label}
-          </button>
-        ))}
+        ).map(([t, label]) => {
+          const n = t === "andamento" ? andamento.length : t === "atrasados" ? atrasados.length : concluidos.length;
+          const bad = t === "atrasados";
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={cn(
+                "flex h-9 items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold transition-colors",
+                tab === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              {label}
+              {n > 0 && (
+                <span
+                  className={cn(
+                    "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums",
+                    bad ? "bg-destructive/15 text-destructive" : "bg-gold/15 text-gold-dark",
+                  )}
+                >
+                  {n}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {isLoading ? (

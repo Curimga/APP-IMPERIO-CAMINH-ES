@@ -115,6 +115,8 @@ export interface EventInput {
   priority?: Enums<"deal_priority">;
   related_truck_id?: string | null;
   amount?: number | null;
+  recurrence?: string | null;
+  reminder_minutes?: number | null;
 }
 
 export async function createEvent(input: EventInput): Promise<void> {
@@ -126,6 +128,23 @@ export async function createEvent(input: EventInput): Promise<void> {
   });
   if (error) throw new Error(error.message);
   toast.success("Compromisso criado");
+}
+
+export async function updateEvent(id: string, patch: Partial<EventInput>): Promise<void> {
+  const { error } = await supabase.from("calendar_events").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+  toast.success("Compromisso atualizado");
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+  if (error)
+    throw new Error(
+      /permission|policy|row-level/i.test(error.message)
+        ? "Exclusão permitida apenas para administradores."
+        : error.message,
+    );
+  toast.success("Compromisso excluído");
 }
 
 export interface CustomerInput {

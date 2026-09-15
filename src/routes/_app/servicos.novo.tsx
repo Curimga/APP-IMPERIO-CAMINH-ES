@@ -11,9 +11,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/servicos/novo")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    truck_id: typeof s.truck_id === "string" ? s.truck_id : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>) => {
+    const r: { truck_id?: string } = {};
+    if (typeof s.truck_id === "string") r.truck_id = s.truck_id;
+    return r;
+  },
   component: NewService,
 });
 

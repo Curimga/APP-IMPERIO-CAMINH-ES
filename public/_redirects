@@ -1,0 +1,4 @@
+/* SPA fallback — Netlify: redireciona todas as rotas para o app shell.
+ * O service worker e o manifest já ficam na raiz (public/), pois são
+ * servidos como arquivos estáticos, não como rotas SPA. */
+/* /index.html 200

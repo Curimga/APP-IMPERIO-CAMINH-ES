@@ -50,7 +50,10 @@ function RegisterExpense() {
     setError(null);
     if (!selectedTruckId) return setError("Selecione o caminhão.");
     const val = Number(amount.replace(/[^\d.]/g, ""));
-    if (!Number.isFinite(val) || val <= 0) return setError("Informe um valor válido.");
+    if (!Number.isFinite(val) || val <= 0) {
+      setError("Informe um valor válido maior que zero.");
+      return;
+    }
     setSaving(true);
     try {
       await createTruckExpense({
@@ -82,7 +85,7 @@ function RegisterExpense() {
         <h1 className="text-xl font-bold">Registrar despesa</h1>
       </div>
 
-      <form onSubmit={submit} className="space-y-3">
+      <form id="expense-form" onSubmit={submit} className="space-y-3 pb-28">
         <MobileCard className="space-y-3 p-4">
           <Field label="Caminhão *">
             <button
@@ -151,14 +154,23 @@ function RegisterExpense() {
             {error}
           </div>
         )}
-
-        <button type="submit" disabled={saving} className={btnGold}>
-          {saving ? "Salvando..." : "Salvar despesa"}
-        </button>
-        <Link to="/garagem" className={btnGhost + " flex items-center justify-center"}>
-          Cancelar
-        </Link>
       </form>
+
+      <div className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-30 border-t bg-card/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-md items-center gap-2">
+          <Link to="/garagem" className={btnGhost + " h-12 w-24 shrink-0"}>
+            Cancelar
+          </Link>
+          <button
+            type="submit"
+            form="expense-form"
+            disabled={saving}
+            className={btnGold}
+          >
+            {saving ? "Salvando..." : "Salvar despesa"}
+          </button>
+        </div>
+      </div>
 
       <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl p-0 pb-8">

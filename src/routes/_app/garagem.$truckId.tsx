@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, MapPin, CalendarDays, DollarSign, Wrench } from "lucide-react";
-import { useTruck } from "@/lib/mobile/queries";
+import { useEffect, useState } from "react";
+import { ArrowLeft, MapPin, CalendarDays, DollarSign, Wrench, Heart } from "lucide-react";
+import { useTruck, sortTruckPhotos, truckPhotoSrc } from "@/lib/mobile/queries";
 import type { TruckDetail, TruckPhoto, TruckWithPhotos } from "@/lib/mobile/queries";
 import {
   MobileCard,
@@ -25,8 +25,10 @@ import { truckTitle } from "@/lib/truck-title";
 import { setTruckStatus } from "@/lib/mobile/actions";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { canRegisterExpense } from "@/lib/mobile/perm";
+import { canRegisterExpense, isFinanceExecutive } from "@/lib/mobile/perm";
 import { toast } from "sonner";
+import { pushRecentTruck, toggleFavTruck, isFavTruck, notifyRecents } from "@/lib/mobile/recent";
+import { haptic } from "@/lib/mobile/haptic";
 
 export const Route = createFileRoute("/_app/garagem/$truckId")({
   component: TruckDetail,
@@ -112,26 +114,28 @@ function StatusSheet({
 
 function PhotoGallery({ photos, truck }: { photos: TruckPhoto[]; truck: TruckWithPhotos }) {
   const [idx, setIdx] = useState(0);
-  if (!photos.length) return null;
-  const current = photos[idx]?.url ?? photos[0]?.url;
+  // Ordenação determinística: a capa é sempre a primeira posição da galeria.
+  const ordered = sortTruckPhotos(photos);
+  if (!ordered.length) return null;
+  const current = ordered[idx]?.url ?? ordered[0]?.url;
   return (
     <MobileCard className="overflow-hidden p-0">
       <img
-        src={current}
+        src={truckPhotoSrc(current, ordered[idx]?.created_at)}
         alt={truckTitle(truck)}
         className="aspect-[4/3] w-full bg-muted object-cover"
       />
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-xs text-muted-foreground">{truckTitle(truck)}</span>
         <span className="text-xs font-semibold tabular-nums">
-          {idx + 1}/{photos.length}
+          {idx + 1}/{ordered.length}
         </span>
       </div>
-      {photos.length > 1 && (
+      {ordered.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto px-3 pb-3">
-          {photos.map((p, i) => (
+          {ordered.map((p, i) => (
             <button
-              key={p.url + i}
+              key={`${truck.id}-${p.id}`}
               type="button"
               aria-label={`Foto ${i + 1}`}
               onClick={() => setIdx(i)}
@@ -140,7 +144,7 @@ function PhotoGallery({ photos, truck }: { photos: TruckPhoto[]; truck: TruckWit
                 i === idx ? "border-gold" : "border-transparent",
               )}
             >
-              <img src={p.url} alt="" className="h-14 w-14 object-cover" loading="lazy" />
+              <img src={truckPhotoSrc(p.url, p.created_at)} alt="" className="h-14 w-14 object-cover" loading="lazy" />
             </button>
           ))}
         </div>
@@ -153,8 +157,16 @@ function TruckDetail() {
   const { truckId } = Route.useParams();
   const nav = useNavigate();
   const { roles } = useAuth();
+  const isExec = isFinanceExecutive(roles);
   const { data: truck, isLoading, isError } = useTruck(truckId);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [fav, setFav] = useState(false);
+
+  useEffect(() => {
+    if (!truck) return;
+    pushRecentTruck({ id: truck.id, label: truckTitle(truck), plate: truck.plate });
+    setFav(isFavTruck(truck.id));
+  }, [truck]);
 
   if (isLoading || !truck) return <SkeletonRows rows={4} height={88} />;
   if (isError)
@@ -188,6 +200,18 @@ function TruckDetail() {
           <h1 className="truncate text-xl font-bold leading-tight">{truckTitle(truck)}</h1>
           <div className="text-[13px] text-muted-foreground">{truck.plate ?? "sem placa"}</div>
         </div>
+        <button
+          type="button"
+          aria-label={fav ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+          onClick={() => {
+            haptic(8);
+            setFav(toggleFavTruck({ id: truck.id, label: truckTitle(truck), plate: truck.plate }));
+            notifyRecents();
+          }}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card pressable active:scale-95"
+        >
+          <Heart className={cn("h-5 w-5", fav ? "fill-destructive text-destructive" : "text-muted-foreground")} />
+        </button>
         <StatusBadge status={truck.status} />
       </div>
 
@@ -244,8 +268,8 @@ function TruckDetail() {
         </div>
       </MobileCard>
 
-      {/* Aquisição */}
-      {(truck.purchase_price != null || truck.purchase_date) && (
+      {/* Aquisição — Executivo */}
+      {isExec && (truck.purchase_price != null || truck.purchase_date) && (
         <MobileCard className="p-3">
           <SectionTitle className="mb-1">Aquisição</SectionTitle>
           <div className="divide-y divide-border/60">
@@ -256,8 +280,8 @@ function TruckDetail() {
         </MobileCard>
       )}
 
-      {/* Estimativa de venda */}
-      {(truck.expected_price != null || truck.sold_price != null) && (
+      {/* Estimativa de venda — Executivo */}
+      {isExec && (truck.expected_price != null || truck.sold_price != null) && (
         <MobileCard className="p-3">
           <SectionTitle className="mb-1">Venda</SectionTitle>
           <div className="divide-y divide-border/60">
@@ -278,42 +302,44 @@ function TruckDetail() {
         </MobileCard>
       )}
 
-      {/* Despesas */}
-      <MobileCard className="p-3">
-        <div className="flex items-center justify-between">
-          <SectionTitle className="mb-1">Despesas</SectionTitle>
-          {canRegisterExpense(roles) ? (
-            <Link
-              to="/garagem/$truckId/despesa"
-              params={{ truckId: truck.id }}
-              className="text-xs font-bold text-gold"
-            >
-              registrar
-            </Link>
-          ) : null}
-        </div>
-        {expenses.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">Nenhuma despesa registrada.</p>
-        ) : (
-          <div className="divide-y divide-border/60">
-            {expenses.slice(0, 6).map((e) => (
-              <div key={e.id} className="flex items-center gap-2 py-2">
-                <DollarSign className="h-4 w-4 shrink-0 text-destructive" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium">{e.description || e.kind}</div>
-                  <div className="text-xs text-muted-foreground">{dateBR(e.occurred_at)}</div>
-                </div>
-                <span className="shrink-0 text-[14px] font-bold tabular-nums">{brl(e.amount)}</span>
-              </div>
-            ))}
-            {expenses.length > 6 ? (
-              <div className="pt-1 text-center text-xs text-muted-foreground">
-                + {expenses.length - 6} despesas
-              </div>
+      {/* Despesas — Executivo */}
+      {isExec && (
+        <MobileCard className="p-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle className="mb-1">Despesas</SectionTitle>
+            {canRegisterExpense(roles) ? (
+              <Link
+                to="/garagem/$truckId/despesa"
+                params={{ truckId: truck.id }}
+                className="text-xs font-bold text-gold"
+              >
+                registrar
+              </Link>
             ) : null}
           </div>
-        )}
-      </MobileCard>
+          {expenses.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">Nenhuma despesa registrada.</p>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {expenses.slice(0, 6).map((e) => (
+                <div key={e.id} className="flex items-center gap-2 py-2">
+                  <DollarSign className="h-4 w-4 shrink-0 text-destructive" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium">{e.description || e.kind}</div>
+                    <div className="text-xs text-muted-foreground">{dateBR(e.occurred_at)}</div>
+                  </div>
+                  <span className="shrink-0 text-[14px] font-bold tabular-nums">{brl(e.amount)}</span>
+                </div>
+              ))}
+              {expenses.length > 6 ? (
+                <div className="pt-1 text-center text-xs text-muted-foreground">
+                  + {expenses.length - 6} despesas
+                </div>
+              ) : null}
+            </div>
+          )}
+        </MobileCard>
+      )}
 
       {/* Descrição do site */}
       {truck.description ? (
@@ -336,7 +362,7 @@ function TruckDetail() {
         </Link>
         <Link
           to="/agenda/novo"
-          search={{ truck_id: truck.id }}
+          search={{ truck_id: truck.id, date: undefined, edit: undefined }}
           className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
         >
           <CalendarDays className="h-4 w-4" /> Compromisso

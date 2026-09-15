@@ -6,6 +6,8 @@ import { brl, dateBR } from "@/lib/format";
 import { mdDiffDays, spaTodayISO } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/vendidos")({
   component: Vendidos,
@@ -20,6 +22,8 @@ function warrantyInfo(warrantyEnd: string | null) {
 }
 
 function Vendidos() {
+  const { roles } = useAuth();
+  const isExec = isFinanceExecutive(roles);
   const { data, isLoading, isError } = useSoldTrucks();
   const trucks = data?.trucks ?? [];
 
@@ -55,7 +59,7 @@ function Vendidos() {
                       {t.plate ?? ""} {t.year ?? ""}
                     </div>
                   </div>
-                  {t.sold_price != null ? (
+                  {isExec && t.sold_price != null ? (
                     <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[12px] font-bold text-success">
                       {brl(t.sold_price)}
                     </span>

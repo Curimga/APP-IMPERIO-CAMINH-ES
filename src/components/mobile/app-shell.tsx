@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Home,
@@ -9,11 +9,17 @@ import {
   Plus,
   User,
   Package,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { roleLabel } from "@/lib/mobile/perm";
-import { NotificationsBell } from "@/components/notifications-bell";
+import { canEditInventory, isAdmin } from "@/lib/mobile/perm";
+import { AppHeader } from "@/components/mobile/header";
+import { OfflineBanner } from "@/components/mobile/connection";
+import { haptic } from "@/lib/mobile/haptic";
+import { useNotifications, useServices } from "@/lib/mobile/queries";
+import { RefreshSurface } from "@/components/mobile/pull-to-refresh";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Sheet,
   SheetContent,
@@ -21,7 +27,6 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { mdWeekdayLabel } from "@/lib/mobile/dates";
 
 const TABS = [
   { to: "/", label: "Início", icon: Home, active: (p: string) => p === "/" },
@@ -51,66 +56,67 @@ const TABS = [
   },
 ] as const;
 
-function MobileHeader() {
-  const { profile, roles } = useAuth();
-  const name = profile?.full_name?.split(" ")[0] ?? "usuário";
-  const initial = (profile?.full_name?.[0] ?? "U").toUpperCase();
-  return (
-    <header
-      className="sticky top-0 z-30 -mx-4 mb-3 rounded-b-2xl bg-sidebar text-sidebar-foreground shadow-premium"
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
-    >
-      <div className="px-4 pb-3 pt-3 flex items-center gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <div className="h-9 w-9 shrink-0 rounded-xl bg-gold text-gold-foreground flex items-center justify-center font-extrabold text-sm">
-            IMP
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 truncate text-[15px] font-bold leading-tight">
-              Olá, <span className="truncate">{name}</span>
-            </div>
-            <div className="text-[11px] capitalize leading-tight text-sidebar-foreground/60">
-              {roleLabel(roles)} · {mdWeekdayLabel().split(",")[0]}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <NotificationsBell />
-          <Link
-            to="/perfil"
-            aria-label="Perfil"
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-accent text-sidebar-foreground font-bold"
-          >
-            {initial}
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
+export function MobileTabBar() {
+  const location = useLocation();
+  const { data: notif } = useNotifications();
+  const { data: services } = useServices();
+  const unread = notif?.unread ?? 0;
+  const delayedCount = (services ?? []).filter(
+    (s) =>
+      s.status === "em_andamento" &&
+      s.expected_at &&
+      s.expected_at.slice(0, 10) < new Date().toISOString().slice(0, 10),
+  ).length;
 
-function OfflineBanner() {
-  const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
-  useEffect(() => {
-    const up = () => setOnline(true);
-    const down = () => setOnline(false);
-    window.addEventListener("online", up);
-    window.addEventListener("offline", down);
-    return () => {
-      window.removeEventListener("online", up);
-      window.removeEventListener("offline", down);
-    };
-  }, []);
-  if (online) return null;
   return (
-    <div
-      className="mb-3 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-[13px] font-medium text-warning-foreground"
-      role="status"
+    <nav
+      aria-label="Navegação principal"
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <span className="h-2 w-2 rounded-full bg-warning" />
-      Sem conexão — os dados exibidos podem estar desatualizados. Conecte-se para consultar ou
-      salvar.
-    </div>
+      <div className="mx-auto grid max-w-2xl grid-cols-5">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const isActive = t.active(location.pathname);
+          const badge =
+            t.to === "/" ? unread : t.to === "/servicos" ? delayedCount : 0;
+          return (
+            <Link
+              key={t.to}
+              to={t.to as never}
+              className="relative flex min-h-[58px] flex-col items-center justify-center gap-1 py-2"
+              aria-current={isActive ? "page" : undefined}
+            >
+              {isActive ? (
+                <span className="absolute top-0 h-[3px] w-10 rounded-b-full bg-gold" />
+              ) : null}
+              <span className="relative">
+                <Icon
+                  className={cn(
+                    "h-[22px] w-[22px] transition-colors",
+                    isActive ? "text-gold-dark" : "text-muted-foreground",
+                  )}
+                  strokeWidth={isActive ? 2.3 : 1.8}
+                />
+                {badge > 0 && (
+                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white tabular-nums ring-2 ring-card">
+                    {badge > 9 ? "9+" : badge}
+                  </span>
+                )}
+              </span>
+              <span
+                className={cn(
+                  "text-[10px] font-semibold",
+                  isActive ? "text-gold-dark" : "text-muted-foreground",
+                )}
+              >
+                {t.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -122,29 +128,27 @@ export interface FabAction {
   onClick?: () => void;
 }
 
-function FabSheet({
-  actions,
-  onNavigate,
-}: {
-  actions: FabAction[];
-  onNavigate: (to: string) => void;
-}) {
+function FabSheet({ actions }: { actions: FabAction[] }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   if (actions.length === 0) return null;
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          haptic(10);
+          setOpen(true);
+        }}
         aria-label="Ações rápidas"
-        className="fixed right-4 bottom-[calc(64px+env(safe-area-inset-bottom)+10px)] z-40 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold text-gold-foreground shadow-lg active:scale-95 transition-transform"
+        className="fixed bottom-[calc(64px+env(safe-area-inset-bottom)+10px)] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold text-gold-foreground shadow-premium pressable active:scale-95"
       >
         <Plus className="h-7 w-7" strokeWidth={2.4} />
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="bottom"
-          className="rounded-t-2xl p-0 pb-6"
+          className="rounded-t-2xl p-0"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)" }}
         >
           <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
@@ -157,14 +161,15 @@ function FabSheet({
               <button
                 key={a.label}
                 type="button"
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left active:bg-muted/60"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left tap-gold active:bg-muted/60"
                 onClick={() => {
+                  haptic(8);
                   setOpen(false);
-                  if (a.to) onNavigate(a.to);
+                  if (a.to) navigate({ to: a.to as never });
                   a.onClick?.();
                 }}
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/15 text-gold">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-secondary text-gold-dark">
                   {a.icon}
                 </div>
                 <div className="min-w-0">
@@ -180,97 +185,74 @@ function FabSheet({
   );
 }
 
-export function MobileTabBar() {
-  const location = useLocation();
-  return (
-    <nav
-      aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="grid grid-cols-5">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const isActive = t.active(location.pathname);
-          return (
-            <Link
-              key={t.to}
-              to={t.to as never}
-              className="flex flex-col items-center gap-1 py-2.5 min-h-[56px] justify-center"
-              aria-current={isActive ? "page" : undefined}
-            >
-              <Icon
-                className={cn(
-                  "h-[22px] w-[22px]",
-                  isActive ? "text-gold" : "text-muted-foreground",
-                )}
-                strokeWidth={isActive ? 2.3 : 1.8}
-              />
-              <span
-                className={cn(
-                  "text-[10px] font-semibold",
-                  isActive ? "text-gold" : "text-muted-foreground",
-                )}
-              >
-                {t.label}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
-/** Estrutura do app mobile: cabeçalho, conteúdo scrollável e navegação inferior. */
-export function AppShell({ children }: { children: ReactNode }) {
+function useFabActions() {
   const { roles } = useAuth();
-  const nav = useNavigate();
-
-  const allowedActions = (): FabAction[] => {
-    const list: FabAction[] = [];
-    if (roles.includes("admin") || roles.includes("secretaria") || roles.includes("financeiro")) {
-      list.push({
-        label: "Cadastrar caminhão",
-        description: "Adicionar veículo à garagem",
-        icon: <Truck className="h-5 w-5" />,
-        to: "/garagem/novo",
-      });
-    }
-    list.push({
-      label: "Criar compromisso",
-      description: "Agendar na agenda",
-      icon: <CalendarDays className="h-5 w-5" />,
-      to: "/agenda/novo",
+  const staff =
+    roles.includes("admin") || roles.includes("financeiro") || roles.includes("secretaria");
+  const actions: FabAction[] = [];
+  if (staff) {
+    actions.push({
+      label: "Cadastrar caminhão",
+      description: "Adicionar veículo à garagem",
+      icon: <Truck className="h-5 w-5" />,
+      to: "/garagem/novo",
     });
-    list.push({
-      label: "Cadastrar cliente",
-      description: "Novo cliente",
-      icon: <User className="h-5 w-5" />,
-      to: "/clientes/novo",
-    });
-    list.push({
-      label: "Criar serviço",
-      description: "Serviço para caminhão",
-      icon: <Wrench className="h-5 w-5" />,
-      to: "/servicos/novo",
-    });
-    list.push({
+  }
+  actions.push({
+    label: "Criar compromisso",
+    description: "Agendar na agenda",
+    icon: <CalendarDays className="h-5 w-5" />,
+    to: "/agenda/novo",
+  });
+  actions.push({
+    label: "Cadastrar cliente",
+    description: "Novo cliente",
+    icon: <User className="h-5 w-5" />,
+    to: "/clientes/novo",
+  });
+  actions.push({
+    label: "Criar serviço",
+    description: "Serviço para caminhão",
+    icon: <Wrench className="h-5 w-5" />,
+    to: "/servicos/novo",
+  });
+  if (canEditInventory(roles)) {
+    actions.push({
       label: "Adicionar item ao estoque",
       description: "Item de material",
       icon: <Package className="h-5 w-5" />,
       to: "/estoque/novo",
     });
-    return list;
-  };
+  }
+  if (isAdmin(roles)) {
+    actions.push({
+      label: "Financeiro",
+      description: "Indicadores e lançamentos",
+      icon: <Activity className="h-5 w-5" />,
+      to: "/financeiro",
+    });
+  }
+  return actions;
+}
 
+/** Estrutura do app mobile: cabeçalho premium, conteúdo e navegação inferior. */
+export function AppShell({ children }: { children: ReactNode }) {
+  const actions = useFabActions();
+  const qc = useQueryClient();
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-background px-4 pb-28 text-foreground lg:max-w-2xl">
-      <MobileHeader />
-      <OfflineBanner />
-      <main className="space-y-3">{children}</main>
-      <MobileTabBar />
-      <FabSheet actions={allowedActions()} onNavigate={(to) => nav({ to: to as never })} />
+      <RefreshSurface
+        onRefresh={() => {
+          haptic(10);
+          return qc.invalidateQueries();
+        }}
+      >
+        <AppHeader />
+        <OfflineBanner />
+        <main className="space-y-3">{children}</main>
+        <MobileTabBar />
+        <FabSheet actions={actions} />
+      </RefreshSurface>
     </div>
   );
 }

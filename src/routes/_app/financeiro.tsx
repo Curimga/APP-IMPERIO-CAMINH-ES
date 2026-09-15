@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Eye, EyeOff, TrendingUp, TrendingDown, Boxes, Landmark, ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,8 +28,14 @@ type OpenRow = {
 const sumOpen = (rows: OpenRow[] | undefined | null, paidField: "paid_at" | "received_at") =>
   (rows ?? []).reduce((s, r) => s + (r[paidField] == null ? Number(r.amount ?? 0) : 0), 0);
 
+/**
+ * O módulo Financeiro é exclusivo do Executivo. Os hooks financeiros
+ * (`useMobileFinance`, `useCapitalImobilizado`) só executam consulta quando o
+ * usuário é admin — para não executivos nenhuma requisição financeira dispara.
+ */
 function Financeiro() {
   const { roles } = useAuth();
+  const navigate = useNavigate();
   const [reveal, setReveal] = useState(false);
   const { data, isLoading, isError } = useMobileFinance();
   const cap = useCapitalImobilizado();
@@ -37,8 +43,10 @@ function Financeiro() {
   if (!canSeeFinance(roles)) {
     return (
       <EmptyState
-        title="Sem acesso financeiro"
-        hint="Sua função não permite visualizar indicadores financeiros."
+        title="Você não possui permissão para acessar esta área"
+        hint="O módulo Financeiro é restrito ao Executivo."
+        actionLabel="Voltar para o início"
+        onAction={() => navigate({ to: "/" })}
       />
     );
   }
@@ -101,11 +109,12 @@ function Financeiro() {
           </Link>
         </div>
         <div className="mt-2 text-2xl font-extrabold tabular-nums tracking-tight">
-          {valuemaybe(cap.total)}
+          {valuemaybe(cap.data?.total ?? 0)}
         </div>
         <div className="mt-1 text-[12px] text-muted-foreground">
-          {cap.count} caminhão{cap.count === 1 ? "" : "ões"} parado{cap.count === 1 ? "" : "s"} em
-          estoque (compra + despesas)
+          {cap.data?.count ?? 0} caminhão...
+          {(cap.data?.count ?? 0) === 1 ? "" : "ões"} parado
+          {(cap.data?.count ?? 0) === 1 ? "" : "s"} em estoque (compra + despesas)
         </div>
       </MobileCard>
 

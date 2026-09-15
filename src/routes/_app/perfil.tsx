@@ -79,7 +79,6 @@ function Perfil() {
                 <Check className="h-5 w-5" />
               </span>
             }
-            onClick={() => {}}
           />
         ) : install.canInstall ? (
           <ListRow

@@ -4,6 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
 import { createTruck } from "@/lib/mobile/actions";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/garagem/novo")({
   component: NewTruck,
@@ -46,6 +48,8 @@ const toNumber = (v: string) => {
 
 function NewTruck() {
   const nav = useNavigate();
+  const { roles } = useAuth();
+  const isExec = isFinanceExecutive(roles);
   const [form, setForm] = useState<Form>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,26 +190,28 @@ function NewTruck() {
           </div>
         </MobileCard>
 
-        <MobileCard className="space-y-3 p-4">
-          <Field label="Preço de compra (R$)" hint="Adicione como número, ex.: 450000">
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              value={form.purchase_price}
-              onChange={set("purchase_price")}
-              placeholder="450000"
-            />
-          </Field>
-          <Field label="Preço de venda estimado (R$)">
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              value={form.expected_price}
-              onChange={set("expected_price")}
-              placeholder="520000"
-            />
-          </Field>
-        </MobileCard>
+        {isExec && (
+          <MobileCard className="space-y-3 p-4">
+            <Field label="Preço de compra (R$)" hint="Adicione como número, ex.: 450000">
+              <input
+                className={inputClass}
+                inputMode="decimal"
+                value={form.purchase_price}
+                onChange={set("purchase_price")}
+                placeholder="450000"
+              />
+            </Field>
+            <Field label="Preço de venda estimado (R$)">
+              <input
+                className={inputClass}
+                inputMode="decimal"
+                value={form.expected_price}
+                onChange={set("expected_price")}
+                placeholder="520000"
+              />
+            </Field>
+          </MobileCard>
+        )}
 
         <MobileCard className="space-y-3 p-4">
           <Field

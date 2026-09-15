@@ -3,6 +3,7 @@ import { Bell, Check } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { isFinancialNotification } from "@/lib/mobile/queries";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +42,7 @@ export function NotificationsBell() {
       .or(`user_id.eq.${user.id},user_id.is.null`)
       .order("created_at", { ascending: false })
       .limit(15);
-    setItems((data as Notif[]) ?? []);
+    setItems(((data as Notif[]) ?? []).filter((n) => !isFinancialNotification(n)));
   };
 
   useEffect(() => {
