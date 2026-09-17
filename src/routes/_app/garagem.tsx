@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, Plus, Truck, Heart, LayoutGrid, Rows2 } from "lucide-react";
-import { useTrucks, getTruckCover, truckPhotoSrc } from "@/lib/mobile/queries";
+import { useTrucks, getTruckCoverPhoto, truckPhotoSrc, truckPhotoVersion } from "@/lib/mobile/queries";
 import type { TruckWithPhotos } from "@/lib/mobile/queries";
 import { MobileCard, SkeletonRows, EmptyState, StatusBadge } from "@/components/mobile/ui";
 import {
@@ -44,7 +44,7 @@ function readSavedFilter(): Filter {
 
 function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<string>; isExec: boolean }) {
   const qc = useQueryClient();
-  const cover = getTruckCover(t);
+  const cover = getTruckCoverPhoto(t);
   const days = mdDaysParked(t.purchase_date ?? t.created_at);
   const fav = favIds.has(t.id);
   return (
@@ -53,7 +53,8 @@ function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<stri
         <div className="relative h-40 bg-muted">
           {cover ? (
             <img
-              src={truckPhotoSrc(cover, t.updated_at ?? t.created_at)}
+              key={`${t.id}-${cover.id}`}
+              src={truckPhotoSrc(cover.url, truckPhotoVersion(cover, t.updated_at ?? t.created_at))}
               alt={truckTitle(t)}
               loading="lazy"
               className="absolute inset-0 h-full w-full object-cover"
@@ -116,7 +117,7 @@ function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<stri
 
 function TruckRow({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<string>; isExec: boolean }) {
   const qc = useQueryClient();
-  const cover = getTruckCover(t);
+  const cover = getTruckCoverPhoto(t);
   const fav = favIds.has(t.id);
   const days = mdDaysParked(t.purchase_date ?? t.created_at);
   return (
@@ -125,7 +126,8 @@ function TruckRow({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<strin
         <div className="flex items-center gap-3">
           {cover ? (
             <img
-              src={truckPhotoSrc(cover, t.updated_at ?? t.created_at)}
+              key={`${t.id}-${cover.id}`}
+              src={truckPhotoSrc(cover.url, truckPhotoVersion(cover, t.updated_at ?? t.created_at))}
               alt={truckTitle(t)}
               loading="lazy"
               className="h-14 w-14 shrink-0 rounded-xl object-cover bg-muted"
@@ -326,31 +328,35 @@ function Garagem() {
             Favoritos
           </h2>
           <div className="h-row -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            {favTrucks.map((t) => { const cover = getTruckCover(t); return (
-              <Link
-                key={t.id}
-                to="/garagem/$truckId"
-                params={{ truckId: t.id }}
-                className="w-32 shrink-0"
-                onClick={() => haptic(5)}
-              >
-                <MobileCard className="overflow-hidden p-0">
-                  {cover ? (
-                    <img
-                      src={truckPhotoSrc(cover, t.updated_at ?? t.created_at)}
-                      alt={truckTitle(t)}
-                      loading="lazy"
-                      className="h-20 w-full object-cover"
-                    />
-                  ) : (
-                    <div className="gradient-dark flex h-20 w-full items-center justify-center">
-                      <Truck className="h-6 w-6 text-sidebar-foreground/30" />
-                    </div>
-                  )}
-                  <div className="truncate px-2 py-1.5 text-[11px] font-bold">{truckTitle(t)}</div>
-                </MobileCard>
-              </Link>
-            ); })}}
+            {favTrucks.map((t) => {
+              const cover = getTruckCoverPhoto(t);
+              return (
+                <Link
+                  key={t.id}
+                  to="/garagem/$truckId"
+                  params={{ truckId: t.id }}
+                  className="w-32 shrink-0"
+                  onClick={() => haptic(5)}
+                >
+                  <MobileCard className="overflow-hidden p-0">
+                    {cover ? (
+                      <img
+                        key={`${t.id}-${cover.id}`}
+                        src={truckPhotoSrc(cover.url, truckPhotoVersion(cover, t.updated_at ?? t.created_at))}
+                        alt={truckTitle(t)}
+                        loading="lazy"
+                        className="h-20 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="gradient-dark flex h-20 w-full items-center justify-center">
+                        <Truck className="h-6 w-6 text-sidebar-foreground/30" />
+                      </div>
+                    )}
+                    <div className="truncate px-2 py-1.5 text-[11px] font-bold">{truckTitle(t)}</div>
+                  </MobileCard>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}

@@ -81,14 +81,11 @@ export function mdDaysParked(since: MDate): number {
 /** "há X dias", "hoje", "amanhã", "atrasado" para exibição de prazos. */
 export function mdRelative(d: MDate, ref = new Date()): string {
   if (!d) return "—";
-  const diff = mdDiffDays(d, ref);
-  if (diff === 0) return "hoje";
-  if (diff === 1) return "amanhã";
-  if (diff === -1) return "ontem";
+  const diff = mdDiffDays(ref, d);
   const abs = Math.abs(diff);
-  if (diff < 0) return `atrasado há ${abs} d`;
-  if (abs === 1) return "em 1 dia";
-  return `em ${abs} dias`;
+  if (diff === 0) return "hoje";
+  if (diff > 0) return abs === 1 ? "amanhã" : `em ${abs} dias`;
+  return abs === 1 ? "atrasado há 1 d" : `atrasado há ${abs} dias`;
 }
 
 /** HH:MM a partir de ISO datetime local. */

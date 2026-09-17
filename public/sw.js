@@ -1,22 +1,23 @@
-/*
- * Service Worker — Império Caminhões PWA
+﻿/*
+ * Service Worker â€” ImpÃ©rio CaminhÃµes PWA
  *
- * Estratégia de cache SEGURA (requisitos do projeto):
- *  - Cacheia SOMENTE a estrutura do app (núcleo "/" document shell + assets versionados).
+ * EstratÃ©gia de cache SEGURA (requisitos do projeto):
+ *  - Cacheia SOMENTE a estrutura do app (nÃºcleo "/" document shell + assets versionados).
  *  - NUNCA cacheia respostas do Supabase (URLs com "supabase"), Storage privado,
  *    rotas de auth, dados financeiros/clientes/documentos.
- *  - Nenhum token é gravado no cache.
- *  - Quando offline, responde com a página offline própria (#/offline é evitado;
- *    usamos um payload HTML inline para não rotear pelo app).
+ *  - Nenhum token Ã© gravado no cache.
+ *  - Quando offline, responde com a pÃ¡gina offline prÃ³pria (#/offline Ã© evitado;
+ *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
-const VERSION = "imperio-v1-2026.09-premium";
+const CACHE_PREFIX = "imperio-";
+const VERSION = "imperio-v4-2026.09-live-crm-backend";
 const APP_SHELL = "/";
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Sem conexão — Império Caminhões</title>
+<title>Sem conexÃ£o â€” ImpÃ©rio CaminhÃµes</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:#0B0B0B;color:#fff;font-family:Inter,system-ui,-apple-system,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px}
@@ -55,9 +56,15 @@ self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (e) => {
@@ -76,7 +83,7 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // 2. Navegação (app shell): network-first, fallback para cache do shell e offline.
+  // 2. NavegaÃ§Ã£o (app shell): network-first, fallback para cache do shell e offline.
   if (req.mode === "navigate") {
     e.respondWith(
       fetch(req)
@@ -97,7 +104,7 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // 3. Assets estáticos (JS/CSS versionados, ícones, fontes): stale-while-revalidate.
+  // 3. Assets estÃ¡ticos (JS/CSS versionados, Ã­cones, fontes): stale-while-revalidate.
   if (FILTER_IMPORTANT(req)) {
     e.respondWith(
       caches.match(req).then((cached) => {

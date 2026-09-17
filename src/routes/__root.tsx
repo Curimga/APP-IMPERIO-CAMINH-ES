@@ -78,6 +78,14 @@ function registerServiceWorker() {
     navigator.serviceWorker.register("/sw.js").catch(() => {
       /* silencioso — o app funciona sem SW */
     });
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
   });
 }
 
@@ -86,6 +94,20 @@ function RootComponent() {
 
   useEffect(() => {
     registerServiceWorker();
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        const swVersion = reg.active ? "active" : "none";
+        console.log(
+          "%c[SW] Status: " + swVersion + " | controller: " + (navigator.serviceWorker.controller ? "yes" : "no"),
+          "color: #F4B400; font-weight: bold"
+        );
+        if (reg.active) {
+          console.log("[SW] scope:", reg.scope);
+          console.log("[SW] scriptURL:", reg.active.scriptURL);
+        }
+      });
+    }
 
     const handleChunkError = (event: ErrorEvent | PromiseRejectionEvent) => {
       const message = "message" in event ? event.message : "";

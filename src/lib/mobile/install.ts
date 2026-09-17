@@ -62,8 +62,10 @@ export function useInstallPrompt() {
 }
 
 /**
- * Feedback discreto "nova versão disponível". Como não usamos gerador automático de SW,
- * verificamos se o SW registrado mudou de versão com polling leve a cada 30min.
+ * Feedback discreto "nova versão disponível". Verifica se o SW registrado
+ * mudou de versão com polling leve a cada 5min e imediatamente no foco.
+ * Quando detecta um SW novo, força reload automático para garantir que
+ * o JS executado é o mais recente.
  */
 export function useSwUpdate() {
   const [updateReady, setUpdateReady] = useState(false);
@@ -72,12 +74,19 @@ export function useSwUpdate() {
     if (!("serviceWorker" in navigator)) return;
     const check = async () => {
       const reg = await navigator.serviceWorker.getRegistration("/");
-      if (reg?.waiting) setUpdateReady(true);
+      if (reg?.waiting) {
+        setUpdateReady(true);
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
     };
     navigator.serviceWorker.addEventListener("controllerchange", () => setUpdateReady(false));
-    const interval = setInterval(check, 30 * 60 * 1000);
+    const interval = setInterval(check, 5 * 60 * 1000);
+    window.addEventListener("focus", check);
     check();
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", check);
+    };
   }, []);
 
   const applyUpdate = useCallback(async () => {

@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { useAuth } from "@/hooks/use-auth";
 import { isAdmin } from "@/lib/mobile/perm";
+import { ALL_TABLE_KEYS, invalidateKeysFor } from "@/lib/mobile/realtime-map";
+import type { RealtimeKeyMap } from "@/lib/mobile/realtime-map";
 
 /**
  * Sincronização em tempo real (PWA Império Caminhões).
@@ -17,124 +19,8 @@ import { isAdmin } from "@/lib/mobile/perm";
  * Apenas as tabelas existentes no banco deste app são registradas aqui, para
  * que o canal realtime não assine tabelas inexistentes.
  */
-const TABLE_KEYS: Record<string, string[]> = {
-  trucks: [
-    "trucks",
-    "truck",
-    "stock",
-    "stock-quick",
-    "sold-trucks",
-    "trucks-options",
-    "trucks-mobile",
-    "truck-mobile",
-    "sold-trucks-mobile",
-    "finance-mobile",
-    "dashboard-snapshot",
-    "capital-imobilizado",
-    "calendar-events",
-    "agenda",
-    "agenda-mobile",
-    "agenda-mobile-today",
-    "agenda-range",
-    "event-mobile",
-    "dashboard-mobile",
-  ],
-  truck_photos: ["trucks-mobile", "truck-mobile", "sold-trucks-mobile", "trucks", "stock-quick"],
-  truck_expenses: [
-    "truck-mobile",
-    "trucks-mobile",
-    "sold-trucks-mobile",
-    "finance-mobile",
-    "dashboard-snapshot",
-    "truck-expenses",
-    "truck-expenses-sum",
-  ],
-  truck_purchase_installments: [
-    "truck-mobile",
-    "finance-mobile",
-    "dashboard-snapshot",
-    "sold-trucks-mobile",
-  ],
-  deals: ["deals", "dashboard-snapshot"],
-  leads: ["leads", "dashboard-snapshot"],
-  customers: [
-    "customers",
-    "customer",
-    "customers_min",
-    "customers-mini",
-    "customers-mobile",
-    "dashboard-snapshot",
-  ],
-  profiles: ["profiles", "profiles_min"],
-  user_roles: ["user_roles", "roles"],
-  payables: [
-    "payables",
-    "finance-mobile",
-    "calendar-events",
-    "agenda",
-    "agenda-mobile",
-    "agenda-mobile-today",
-    "notifications",
-    "notifications-bell",
-    "notifications-mobile",
-    "dashboard-snapshot",
-  ],
-  receivables: [
-    "receivables",
-    "finance-mobile",
-    "agenda-mobile",
-    "agenda-mobile-today",
-    "notifications-mobile",
-    "notifications",
-    "notifications-bell",
-    "dashboard-snapshot",
-  ],
-  bank_accounts: ["finance-mobile", "bank_accounts", "dashboard-snapshot"],
-  bank_transactions: ["finance-mobile", "bank_transactions", "dashboard-snapshot"],
-  commissions: ["finance-mobile", "commissions", "dashboard-snapshot"],
-  goals: ["goals", "dashboard-snapshot"],
-  calendar_events: [
-    "calendar-events",
-    "agenda",
-    "agenda-mobile",
-    "agenda-mobile-today",
-    "notifications-mobile",
-    "dashboard-snapshot",
-    "dashboard-mobile",
-  ],
-  services: [
-    "services",
-    "service",
-    "services-mobile",
-    "truck-mobile",
-    "trucks-mobile",
-    "agenda-mobile",
-    "agenda-mobile-today",
-    "notifications-mobile",
-    "dashboard-snapshot",
-    "dashboard-mobile",
-  ],
-  suppliers: ["suppliers", "suppliers-options"],
-  employees: ["employees"],
-  notifications: ["notifications", "notifications-bell", "notifications-mobile"],
-  financial_categories: ["financial_categories", "fin_cats", "finance-mobile"],
-  general_expenses: [
-    "general-expenses",
-    "finance-mobile",
-    "truck-expenses",
-    "truck-expenses-sum",
-    "dashboard-snapshot",
-  ],
-  inventory_items: [
-    "inventory-mobile",
-    "inventory-items",
-    "inventory-item",
-    "inventory-summary",
-    "dashboard-snapshot",
-  ],
-};
 
-const ALL_TABLES = Object.keys(TABLE_KEYS);
+const ALL_TABLES = ALL_TABLE_KEYS;
 
 /** O RPC de geração de alertas não está nos tipos gerados; assinatura mínima tipada. */
 type GeneratePayableAlertsRpc = (
@@ -164,7 +50,7 @@ export function useRealtimeSync(extraKeys: string[] = []) {
     const pending = new Map<string, ReturnType<typeof setTimeout>>();
     const flush = (table: string) => {
       pending.delete(table);
-      const keys = TABLE_KEYS[table] ?? [];
+      const keys = invalidateKeysFor(table as keyof RealtimeKeyMap);
       keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       extraKeysRef.current.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
     };

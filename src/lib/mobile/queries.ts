@@ -192,21 +192,13 @@ export type TruckDetail = Tables<"trucks"> & {
 };
 
 /**
- * Regra única de ordenação de fotos de um caminhão.
- *
- * 1. Capa (`is_cover`) primeiro.
- * 2. Ordem/posição definida no CRM (`position` asc).
- * 3. Na ausência de desempate, a foto mais recente primeiro.
- *
- * Nunca devolve fotos misturadas entre caminhões (o SELECT já filtra por truck_id).
+ * Mantém a mesma regra do CRM: foto marcada como capa; se não houver, primeira
+ * foto retornada no relacionamento `truck_photos`.
  */
 export function sortTruckPhotos(photos: TruckPhoto[]): TruckPhoto[] {
-  return [...photos].sort(
-    (a, b) =>
-      Number(b.is_cover) - Number(a.is_cover) ||
-      (a.position ?? Infinity) - (b.position ?? Infinity) ||
-      Date.parse(b.created_at) - Date.parse(a.created_at),
-  );
+  const withUrl = photos.filter((p) => Boolean(p.url));
+  const cover = withUrl.find((p) => p.is_cover);
+  return cover ? [cover, ...withUrl.filter((p) => p.id !== cover.id)] : withUrl;
 }
 
 /**
@@ -216,7 +208,10 @@ export function sortTruckPhotos(photos: TruckPhoto[]): TruckPhoto[] {
  * - Retorna null quando o caminhão não possui fotos.
  */
 export const getTruckCover = (t: { truck_photos?: TruckPhoto[] } | null): string | null =>
-  sortTruckPhotos(t?.truck_photos ?? [])[0]?.url ?? null;
+  getTruckCoverPhoto(t)?.url ?? null;
+
+export const getTruckCoverPhoto = (t: { truck_photos?: TruckPhoto[] } | null): TruckPhoto | null =>
+  sortTruckPhotos(t?.truck_photos ?? [])[0] ?? null;
 
 /**
  * URL de exibição de uma foto com cache-busting seguro.
@@ -227,9 +222,17 @@ export const getTruckCover = (t: { truck_photos?: TruckPhoto[] } | null): string
  */
 export function truckPhotoSrc(url: string | null | undefined, version?: string | null): string | undefined {
   if (!url) return undefined;
-  if (url.includes("?")) return url;
   const v = version ? String(version) : undefined;
-  return v ? `${url}?v=${encodeURIComponent(v)}` : url;
+  if (!v) return url;
+  const SIGNED_PARAMS = ["token", "signature", "expires", "expires_at", "X-Amz-Signature"];
+  if (SIGNED_PARAMS.some((p) => new RegExp(`[?&]${p}=`).test(url))) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${encodeURIComponent(v)}`;
+}
+
+export function truckPhotoVersion(photo: TruckPhoto | null | undefined, truckUpdatedAt?: string | null) {
+  if (!photo) return truckUpdatedAt ?? null;
+  return [photo.id, photo.created_at, truckUpdatedAt].filter(Boolean).join(":");
 }
 
 /** Lista da garagem — todos os caminhões com foto principal. */
@@ -239,20 +242,45 @@ export function useTrucks() {
   return useQuery({
     queryKey: ["trucks-mobile", isExec],
     refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
     queryFn: async () => {
       const { data, error } = await (isExec
         ? supabase
             .from("trucks")
             .select("*, truck_photos(id, url, is_cover, position, created_at)")
-            .order("position", { ascending: true, referencedTable: "truck_photos" })
             .order("created_at", { ascending: false })
         : supabase
             .from("trucks")
             .select(TRUCK_OPERATIONAL_SELECT)
-            .order("position", { ascending: true, referencedTable: "truck_photos" })
             .order("created_at", { ascending: false }));
       if (error) throw error;
-      return (data ?? []) as TruckWithPhotos[];
+      const trucks = (data ?? []) as TruckWithPhotos[];
+      if (import.meta.env.DEV) {
+        const TEST_PLATES = ["SVL3G81", "BBY5H79", "AXD0C32", "BBZ1D29", "BCA7A57", "ITS0267"];
+        const diagnostic = trucks
+          .filter((t) => TEST_PLATES.includes(t.plate ?? ""))
+          .map((t) => {
+            const cover = sortTruckPhotos(t.truck_photos ?? [])[0] ?? null;
+            return {
+              id: t.id,
+              plate: t.plate,
+              status: t.status,
+              updated_at: t.updated_at,
+              photo_count: t.truck_photos?.length ?? 0,
+              cover_id: cover?.id ?? null,
+              cover_is_cover: cover?.is_cover ?? null,
+              cover_url: cover?.url ? cover.url.substring(0, 80) + "..." : null,
+            };
+          });
+        console.group("%c[DIAG] useTrucks — Supabase raw response", "color: #F4B400; font-weight: bold");
+        console.log("Total trucks:", trucks.length);
+        console.log("isExec:", isExec);
+        console.log("Query key:", ["trucks-mobile", isExec]);
+        console.table(diagnostic);
+        console.groupEnd();
+      }
+      return trucks;
     },
   });
 }
@@ -276,18 +304,28 @@ export function useTruck(id: string | undefined) {
         ? supabase
             .from("trucks")
             .select("*, truck_photos(id, url, is_cover, position, created_at)")
-            .order("position", { ascending: true, referencedTable: "truck_photos" })
             .eq("id", id!)
             .maybeSingle()
         : supabase
             .from("trucks")
             .select(TRUCK_OPERATIONAL_SELECT)
-            .order("position", { ascending: true, referencedTable: "truck_photos" })
             .eq("id", id!)
             .maybeSingle());
       if (error) throw error;
       const row = (data ?? null) as TruckDetail | null;
       if (!row) return null;
+
+      if (import.meta.env.DEV) {
+        const cover = sortTruckPhotos(row.truck_photos ?? [])[0] ?? null;
+        console.group("%c[DIAG] useTruck — detail response", "color: #F4B400; font-weight: bold");
+        console.log("id:", row.id, "| plate:", row.plate, "| status:", row.status);
+        console.log("truck_photos count:", row.truck_photos?.length ?? 0);
+        if (cover) {
+          console.log("cover:", { id: cover.id, is_cover: cover.is_cover, url: cover.url?.substring(0, 80) + "..." });
+        }
+        console.log("raw truck_photos:", JSON.parse(JSON.stringify(row.truck_photos ?? [])));
+        console.groupEnd();
+      }
 
       if (isExec) {
         const expensesR = await supabase
@@ -384,8 +422,8 @@ export function useTodaysEvents() {
  *
  * Em vez de buscar a garagem inteira com `*` (descrições longas, vendas, etc.)
  * e os 200 serviços completos, busca apenas as colunas que o painel usa, em
- * três requests paralelos. `staleTime` maior para reabrir o app instantaneamente
- * a partir do cache; o Realtime invalida pelo prefixo `dashboard-mobile`.
+ * três requests paralelos. Recarrega em mount/foco/reconexão pelo QueryClient;
+ * o Realtime apenas complementa invalidando pelo prefixo `dashboard-mobile`.
  */
 export function useDashboardData() {
   return useQuery({
@@ -418,13 +456,24 @@ export function useDashboardData() {
       if (trucksR.error) throw trucksR.error;
       if (servicesR.error) throw servicesR.error;
       if (eventsR.error) throw eventsR.error;
-      return {
+      const result = {
         trucks: (trucksR.data ?? []) as DashboardTruck[],
         services: (servicesR.data ?? []) as DashboardService[],
         events: (eventsR.data ?? []) as DashboardEvent[],
       };
+      if (import.meta.env.DEV) {
+        const TEST_PLATES = ["SVL3G81", "BBY5H79", "AXD0C32", "BBZ1D29", "BCA7A57", "ITS0267"];
+        const diag = result.trucks
+          .filter((t) => TEST_PLATES.includes(t.plate ?? ""))
+          .map((t) => ({ plate: t.plate, status: t.status, updated_at: t.updated_at }));
+        if (diag.length) {
+          console.group("%c[DIAG] useDashboardData — trucks for test plates", "color: #F4B400; font-weight: bold");
+          console.table(diag);
+          console.groupEnd();
+        }
+      }
+      return result;
     },
-    staleTime: 60_000,
   });
 }
 

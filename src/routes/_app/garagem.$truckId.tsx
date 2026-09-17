@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft, MapPin, CalendarDays, DollarSign, Wrench, Heart } from "lucide-react";
-import { useTruck, sortTruckPhotos, truckPhotoSrc } from "@/lib/mobile/queries";
+import { useTruck, sortTruckPhotos, truckPhotoSrc, truckPhotoVersion } from "@/lib/mobile/queries";
 import type { TruckDetail, TruckPhoto, TruckWithPhotos } from "@/lib/mobile/queries";
 import {
   MobileCard,
@@ -117,11 +117,12 @@ function PhotoGallery({ photos, truck }: { photos: TruckPhoto[]; truck: TruckWit
   // Ordenação determinística: a capa é sempre a primeira posição da galeria.
   const ordered = sortTruckPhotos(photos);
   if (!ordered.length) return null;
-  const current = ordered[idx]?.url ?? ordered[0]?.url;
+  const current = ordered[idx] ?? ordered[0];
   return (
     <MobileCard className="overflow-hidden p-0">
       <img
-        src={truckPhotoSrc(current, ordered[idx]?.created_at)}
+        key={`${truck.id}-${current.id}`}
+        src={truckPhotoSrc(current.url, truckPhotoVersion(current, truck.updated_at ?? truck.created_at))}
         alt={truckTitle(truck)}
         className="aspect-[4/3] w-full bg-muted object-cover"
       />
@@ -144,7 +145,13 @@ function PhotoGallery({ photos, truck }: { photos: TruckPhoto[]; truck: TruckWit
                 i === idx ? "border-gold" : "border-transparent",
               )}
             >
-              <img src={truckPhotoSrc(p.url, p.created_at)} alt="" className="h-14 w-14 object-cover" loading="lazy" />
+              <img
+                key={`${truck.id}-${p.id}`}
+                src={truckPhotoSrc(p.url, truckPhotoVersion(p, truck.updated_at ?? truck.created_at))}
+                alt=""
+                className="h-14 w-14 object-cover"
+                loading="lazy"
+              />
             </button>
           ))}
         </div>

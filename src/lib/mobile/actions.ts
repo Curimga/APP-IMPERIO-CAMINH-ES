@@ -46,12 +46,13 @@ export async function updateTruck(id: string, patch: Partial<TruckInput>): Promi
 }
 
 export async function setTruckStatus(id: string, status: TruckStatus): Promise<void> {
+  const changedAt = new Date().toISOString();
   const { error } = await supabase
     .from("trucks")
     .update({
       status,
-      status_started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      status_started_at: changedAt,
+      updated_at: changedAt,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
