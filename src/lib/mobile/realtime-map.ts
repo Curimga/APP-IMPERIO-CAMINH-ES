@@ -14,9 +14,14 @@ export interface RealtimeKeyMap {
   trucks: string[];
   truck_photos: string[];
   truck_status_history: string[];
+  truck_notes: string[];
+  truck_documents: string[];
   truck_expenses: string[];
   truck_purchase_installments: string[];
+  truck_warranties: string[];
   deals: string[];
+  deal_events: string[];
+  documents: string[];
   leads: string[];
   customers: string[];
   profiles: string[];
@@ -47,6 +52,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "trucks-options",
     "trucks-mobile",
     "truck-mobile",
+    "truck-detail",
     "sold-trucks-mobile",
     "finance-mobile",
     "dashboard-snapshot",
@@ -59,17 +65,21 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "event-mobile",
     "dashboard-mobile",
   ],
-  truck_photos: ["trucks-mobile", "truck-mobile", "sold-trucks-mobile", "trucks", "stock-quick"],
+  truck_photos: ["trucks-mobile", "truck-mobile", "truck-detail", "sold-trucks-mobile", "trucks", "stock-quick"],
   truck_status_history: [
     "trucks-mobile",
     "truck-mobile",
+    "truck-detail",
     "sold-trucks-mobile",
     "dashboard-mobile",
     "dashboard-snapshot",
     "capital-imobilizado",
   ],
+  truck_notes: ["truck-detail"],
+  truck_documents: ["truck-detail"],
   truck_expenses: [
     "truck-mobile",
+    "truck-detail",
     "trucks-mobile",
     "sold-trucks-mobile",
     "finance-mobile",
@@ -79,24 +89,30 @@ export const TABLE_KEYS: RealtimeKeyMap = {
   ],
   truck_purchase_installments: [
     "truck-mobile",
+    "truck-detail",
     "finance-mobile",
     "dashboard-snapshot",
     "sold-trucks-mobile",
   ],
-  deals: ["deals", "trucks-mobile", "truck-mobile", "sold-trucks-mobile", "dashboard-mobile", "dashboard-snapshot"],
+  truck_warranties: ["truck-detail", "sold-trucks-mobile"],
+  deals: ["deals", "trucks-mobile", "truck-mobile", "truck-detail", "sold-trucks-mobile", "dashboard-mobile", "dashboard-snapshot"],
+  deal_events: ["truck-detail", "deals"],
+  documents: ["truck-detail"],
   leads: ["leads", "dashboard-snapshot"],
   customers: [
     "customers",
     "customer",
+    "truck-detail",
     "customers_min",
     "customers-mini",
     "customers-mobile",
     "dashboard-snapshot",
   ],
-  profiles: ["profiles", "profiles_min"],
+  profiles: ["profiles", "profiles_min", "truck-detail"],
   user_roles: ["user_roles", "roles"],
   payables: [
     "payables",
+    "truck-detail",
     "finance-mobile",
     "calendar-events",
     "agenda",
@@ -109,6 +125,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
   ],
   receivables: [
     "receivables",
+    "truck-detail",
     "finance-mobile",
     "agenda-mobile",
     "agenda-mobile-today",
@@ -135,6 +152,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "service",
     "services-mobile",
     "truck-mobile",
+    "truck-detail",
     "trucks-mobile",
     "agenda-mobile",
     "agenda-mobile-today",
@@ -142,7 +160,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "dashboard-snapshot",
     "dashboard-mobile",
   ],
-  suppliers: ["suppliers", "suppliers-options"],
+  suppliers: ["suppliers", "suppliers-options", "truck-detail"],
   employees: ["employees"],
   notifications: ["notifications", "notifications-bell", "notifications-mobile"],
   financial_categories: ["financial_categories", "fin_cats", "finance-mobile"],

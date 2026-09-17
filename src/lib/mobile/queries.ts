@@ -5,6 +5,7 @@ import { spaTodayISO } from "@/lib/mobile/dates";
 import { useAuth } from "@/hooks/use-auth";
 import { isAdmin } from "@/lib/mobile/perm";
 import type { Tables } from "@/integrations/supabase/types";
+import type { TruckCustomerRef, TruckDealRef } from "@/lib/mobile/truck-detail";
 
 /**
  * Consultas do aplicativo mobile.
@@ -54,6 +55,8 @@ export type OperationalTruck = Pick<
   | "mileage"
   | "fuel"
   | "transmission"
+  | "description"
+  | "ai_description"
 >;
 
 /** Campos financeiros — retornados pelo banco apenas para o Executivo. */
@@ -85,7 +88,7 @@ export type TruckWithPhotos = OperationalTruck &
  * é feito aqui, na camada de consulta do app (ver relatório de divergências).
  */
 export const TRUCK_OPERATIONAL_SELECT =
-  "id, brand, model, year, plate, color, status, status_started_at, status_expected_end, status_notes, status_supplier_id, supplier, origin, consigned, created_by, created_at, updated_at, purchase_date, sold_at, warranty_end, sold_customer_id, chassis, renavam, mileage, fuel, transmission, truck_photos(id, url, is_cover, position, created_at)" as const;
+  "id, brand, model, year, plate, color, status, status_started_at, status_expected_end, status_notes, status_supplier_id, supplier, origin, consigned, created_by, created_at, updated_at, purchase_date, sold_at, warranty_end, sold_customer_id, chassis, renavam, mileage, fuel, transmission, description, ai_description, truck_photos(id, url, is_cover, position, created_at)" as const;
 
 export interface TruckRef {
   id: string;
@@ -190,6 +193,47 @@ export type TruckDetail = Tables<"trucks"> & {
   truck_photos: TruckPhoto[];
   truck_expenses: Tables<"truck_expenses">[];
 };
+
+export type TruckServiceDetail = Pick<
+  Tables<"services">,
+  | "id"
+  | "truck_id"
+  | "title"
+  | "description"
+  | "notes"
+  | "status"
+  | "category"
+  | "supplier_id"
+  | "attachment_url"
+  | "expected_at"
+  | "completed_at"
+  | "created_at"
+  | "created_by"
+  | "truck_previous_status"
+>;
+
+export type ProfileName = Pick<Tables<"profiles">, "id" | "full_name">;
+export type SupplierName = { id: string; name: string };
+
+export interface TruckDetailBundle {
+  truck: TruckWithPhotos | null;
+  expenses: Tables<"truck_expenses">[];
+  services: TruckServiceDetail[];
+  history: Tables<"truck_status_history">[];
+  notes: Tables<"truck_notes">[];
+  truckDocuments: Tables<"truck_documents">[];
+  documents: Tables<"documents">[];
+  documentUrls: Map<string, string>;
+  deals: TruckDealRef[];
+  dealEvents: Tables<"deal_events">[];
+  customers: TruckCustomerRef[];
+  profiles: Map<string, string>;
+  suppliers: Map<string, string>;
+  warranty: Tables<"truck_warranties"> | null;
+  purchaseInstallments: Tables<"truck_purchase_installments">[];
+  payables: Tables<"payables">[];
+  receivables: Tables<"receivables">[];
+}
 
 /**
  * Mantém a mesma regra do CRM: foto marcada como capa; se não houver, primeira
@@ -341,6 +385,244 @@ export function useTruck(id: string | undefined) {
       }
 
       return row;
+    },
+  });
+}
+
+/**
+ * Ficha completa do caminhão aberta por `trucks.id` real.
+ *
+ * Valores financeiros (compra, venda, despesas, parcelas, contas) só são
+ * consultados quando o usuário é Executivo. Para demais perfis essas requests
+ * nem são enviadas ao Supabase.
+ */
+export function useTruckDetail(id: string | undefined) {
+  const { roles } = useAuth();
+  const isExec = isAdmin(roles);
+  return useQuery({
+    queryKey: ["truck-detail", id, isExec],
+    enabled: !!id,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    queryFn: async (): Promise<TruckDetailBundle> => {
+      const truckR = await (isExec
+        ? supabase
+            .from("trucks")
+            .select("*, truck_photos(id, url, is_cover, position, created_at)")
+            .eq("id", id!)
+            .maybeSingle()
+        : supabase
+            .from("trucks")
+            .select(TRUCK_OPERATIONAL_SELECT)
+            .eq("id", id!)
+            .maybeSingle());
+      if (truckR.error) throw truckR.error;
+
+      const truck = (truckR.data ?? null) as TruckWithPhotos | null;
+      const empty: TruckDetailBundle = {
+        truck: null,
+        expenses: [],
+        services: [],
+        history: [],
+        notes: [],
+        truckDocuments: [],
+        documents: [],
+        documentUrls: new Map(),
+        deals: [],
+        dealEvents: [],
+        customers: [],
+        profiles: new Map(),
+        suppliers: new Map(),
+        warranty: null,
+        purchaseInstallments: [],
+        payables: [],
+        receivables: [],
+      };
+      if (!truck) return empty;
+
+      const [servicesR, historyR, notesR, truckDocsR, dealsR, warrantyR] = await Promise.all([
+        supabase
+          .from("services")
+          .select(
+            "id, truck_id, title, description, notes, status, category, supplier_id, attachment_url, expected_at, completed_at, created_at, created_by, truck_previous_status",
+          )
+          .eq("truck_id", id!)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("truck_status_history")
+          .select("*")
+          .eq("truck_id", id!)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("truck_notes")
+          .select("*")
+          .eq("truck_id", id!)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("truck_documents")
+          .select("*")
+          .eq("truck_id", id!)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("deals")
+          .select("id, truck_id, customer_id, stage, title, notes, value, priority, owner_id, occurred_at, created_at, updated_at")
+          .eq("truck_id", id!)
+          .order("updated_at", { ascending: false })
+          .limit(30),
+        supabase
+          .from("truck_warranties")
+          .select("*")
+          .eq("truck_id", id!)
+          .maybeSingle(),
+      ]);
+      if (servicesR.error) throw servicesR.error;
+      if (historyR.error) throw historyR.error;
+      if (notesR.error) throw notesR.error;
+      if (truckDocsR.error) throw truckDocsR.error;
+      if (dealsR.error) throw dealsR.error;
+      if (warrantyR.error) throw warrantyR.error;
+
+      const services = (servicesR.data ?? []) as TruckServiceDetail[];
+      const history = (historyR.data ?? []) as Tables<"truck_status_history">[];
+      const notes = (notesR.data ?? []) as Tables<"truck_notes">[];
+      const truckDocuments = (truckDocsR.data ?? []) as Tables<"truck_documents">[];
+      const deals = (dealsR.data ?? []) as TruckDealRef[];
+      const warranty = (warrantyR.data ?? null) as Tables<"truck_warranties"> | null;
+      const dealIds = deals.map((d) => d.id);
+
+      const docsQuery = supabase.from("documents").select("*");
+      const docsR = dealIds.length
+        ? await docsQuery.or(`truck_id.eq.${id!},deal_id.in.(${dealIds.join(",")})`).order("created_at", { ascending: false })
+        : await docsQuery.eq("truck_id", id!).order("created_at", { ascending: false });
+      if (docsR.error) throw docsR.error;
+      const documents = (docsR.data ?? []) as Tables<"documents">[];
+
+      const customerIds = Array.from(
+        new Set(
+          [truck.sold_customer_id, warranty?.customer_id, ...deals.map((d) => d.customer_id)].filter(
+            Boolean,
+          ) as string[],
+        ),
+      );
+      const customersR = customerIds.length
+        ? isExec
+          ? await supabase
+              .from("customers")
+              .select("id, name, phone, email, city, document")
+              .in("id", customerIds)
+          : await supabase
+              .from("customers")
+              .select("id, name, phone, email, city")
+              .in("id", customerIds)
+        : null;
+      if (customersR?.error) throw customersR.error;
+      const customers = (customersR?.data ?? []) as unknown as TruckCustomerRef[];
+
+      const dealEventsR = dealIds.length
+        ? await supabase
+            .from("deal_events")
+            .select("*")
+            .in("deal_id", dealIds)
+            .order("created_at", { ascending: false })
+        : null;
+      if (dealEventsR?.error) throw dealEventsR.error;
+
+      const profileIds = Array.from(
+        new Set(
+          [
+            truck.created_by,
+            ...services.map((s) => s.created_by),
+            ...history.map((h) => h.changed_by),
+            ...notes.map((n) => n.created_by),
+            ...deals.map((d) => d.owner_id),
+            ...(dealEventsR?.data ?? []).map((e) => e.user_id),
+          ].filter(Boolean) as string[],
+        ),
+      );
+      const profilesR = profileIds.length
+        ? await supabase.from("profiles").select("id, full_name").in("id", profileIds)
+        : null;
+      if (profilesR?.error) throw profilesR.error;
+
+      const supplierIds = Array.from(
+        new Set([truck.status_supplier_id, ...services.map((s) => s.supplier_id)].filter(Boolean) as string[]),
+      );
+      const suppliersR = supplierIds.length
+        ? await supabase.from("suppliers").select("id, name").in("id", supplierIds)
+        : null;
+      if (suppliersR?.error) throw suppliersR.error;
+
+      const documentUrls = new Map<string, string>();
+      const paths = Array.from(
+        new Set([
+          ...truckDocuments.map((d) => d.file_path).filter(Boolean),
+          ...documents.map((d) => d.storage_path).filter(Boolean),
+        ] as string[]),
+      );
+      await Promise.all(
+        paths.map(async (path) => {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
+          if (data?.signedUrl) documentUrls.set(path, data.signedUrl);
+        }),
+      );
+
+      let expenses: Tables<"truck_expenses">[] = [];
+      let purchaseInstallments: Tables<"truck_purchase_installments">[] = [];
+      let payables: Tables<"payables">[] = [];
+      let receivables: Tables<"receivables">[] = [];
+      if (isExec) {
+        const [expensesR, installmentsR, payablesR, receivablesR] = await Promise.all([
+          supabase
+            .from("truck_expenses")
+            .select("*")
+            .eq("truck_id", id!)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("truck_purchase_installments")
+            .select("*")
+            .eq("truck_id", id!)
+            .order("installment_number", { ascending: true }),
+          supabase
+            .from("payables")
+            .select("*")
+            .eq("truck_id", id!)
+            .order("due_date", { ascending: true }),
+          supabase
+            .from("receivables")
+            .select("*")
+            .eq("truck_id", id!)
+            .order("due_date", { ascending: true }),
+        ]);
+        if (expensesR.error) throw expensesR.error;
+        if (installmentsR.error) throw installmentsR.error;
+        if (payablesR.error) throw payablesR.error;
+        if (receivablesR.error) throw receivablesR.error;
+        expenses = (expensesR.data ?? []) as Tables<"truck_expenses">[];
+        purchaseInstallments = (installmentsR.data ?? []) as Tables<"truck_purchase_installments">[];
+        payables = (payablesR.data ?? []) as Tables<"payables">[];
+        receivables = (receivablesR.data ?? []) as Tables<"receivables">[];
+      }
+
+      return {
+        truck,
+        expenses,
+        services,
+        history,
+        notes,
+        truckDocuments,
+        documents,
+        documentUrls,
+        deals,
+        dealEvents: (dealEventsR?.data ?? []) as Tables<"deal_events">[],
+        customers,
+        profiles: new Map(((profilesR?.data ?? []) as ProfileName[]).map((p) => [p.id, p.full_name ?? "—"])),
+        suppliers: new Map(((suppliersR?.data ?? []) as SupplierName[]).map((s) => [s.id, s.name])),
+        warranty,
+        purchaseInstallments,
+        payables,
+        receivables,
+      };
     },
   });
 }

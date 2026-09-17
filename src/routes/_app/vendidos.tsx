@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShieldCheck, ShieldOff, UserRound } from "lucide-react";
 import { useSoldTrucks } from "@/lib/mobile/queries";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
@@ -51,7 +51,8 @@ function Vendidos() {
           {trucks.map((t) => {
             const w = warrantyInfo(t.warranty_end);
             return (
-              <MobileCard key={t.id} className="p-3">
+              <Link key={t.id} to="/garagem/$truckId" params={{ truckId: t.id }} className="block active:opacity-95">
+              <MobileCard className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-[15px] font-bold">{truckTitle(t)}</div>
@@ -87,6 +88,7 @@ function Vendidos() {
                   {w.label}
                 </div>
               </MobileCard>
+              </Link>
             );
           })}
         </div>
