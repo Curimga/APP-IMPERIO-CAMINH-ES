@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, Plus, Truck, Heart, LayoutGrid, Rows2 } from "lucide-react";
 import { useTrucks, getTruckCoverPhoto, truckPhotoSrc, truckPhotoVersion } from "@/lib/mobile/queries";
@@ -42,13 +43,41 @@ function readSavedFilter(): Filter {
   }
 }
 
+function useOpenTruck(truckId: string) {
+  const navigate = useNavigate();
+  return () => {
+    haptic(5);
+    navigate({ to: "/garagem/$truckId", params: { truckId } });
+  };
+}
+
+function onLinkKeyDown(event: KeyboardEvent<HTMLElement>, openTruck: () => void) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openTruck();
+  }
+}
+
+function stopCardNavigation(event: MouseEvent<HTMLElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<string>; isExec: boolean }) {
   const qc = useQueryClient();
+  const openTruck = useOpenTruck(t.id);
   const cover = getTruckCoverPhoto(t);
   const days = mdDaysParked(t.purchase_date ?? t.created_at);
   const fav = favIds.has(t.id);
   return (
-    <Link to="/garagem/$truckId" params={{ truckId: t.id }} className="block active:opacity-95">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openTruck}
+      onKeyDown={(event) => onLinkKeyDown(event, openTruck)}
+      className="block cursor-pointer active:opacity-95"
+      aria-label={`Abrir ficha de ${truckTitle(t)} ${t.plate ?? ""}`.trim()}
+    >
       <MobileCard className="overflow-hidden p-0">
         <div className="relative h-40 bg-muted">
           {cover ? (
@@ -71,7 +100,7 @@ function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<stri
           <button
             type="button"
             onClick={(e) => {
-              e.preventDefault();
+              stopCardNavigation(e);
               haptic(8);
               toggleFavTruck({ id: t.id, label: truckTitle(t), plate: t.plate });
               qc.setQueryData(["garagem-favs"], getFavTrucks());
@@ -111,17 +140,25 @@ function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<stri
           </div>
         </div>
       </MobileCard>
-    </Link>
+    </div>
   );
 }
 
 function TruckRow({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<string>; isExec: boolean }) {
   const qc = useQueryClient();
+  const openTruck = useOpenTruck(t.id);
   const cover = getTruckCoverPhoto(t);
   const fav = favIds.has(t.id);
   const days = mdDaysParked(t.purchase_date ?? t.created_at);
   return (
-    <Link to="/garagem/$truckId" params={{ truckId: t.id }} className="block active:opacity-95">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openTruck}
+      onKeyDown={(event) => onLinkKeyDown(event, openTruck)}
+      className="block cursor-pointer active:opacity-95"
+      aria-label={`Abrir ficha de ${truckTitle(t)} ${t.plate ?? ""}`.trim()}
+    >
       <MobileCard className="p-2">
         <div className="flex items-center gap-3">
           {cover ? (
@@ -150,9 +187,9 @@ function TruckRow({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<strin
           <div className="flex shrink-0 flex-col items-end gap-2">
             <StatusBadge status={t.status} />
             <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
+            type="button"
+            onClick={(e) => {
+                stopCardNavigation(e);
                 haptic(8);
                 toggleFavTruck({ id: t.id, label: truckTitle(t), plate: t.plate });
                 qc.setQueryData(["garagem-favs"], getFavTrucks());
@@ -166,11 +203,44 @@ function TruckRow({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<strin
           </div>
         </div>
       </MobileCard>
-    </Link>
+    </div>
+  );
+}
+
+function FavoriteTruckCard({ t }: { t: TruckWithPhotos }) {
+  const openTruck = useOpenTruck(t.id);
+  const cover = getTruckCoverPhoto(t);
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openTruck}
+      onKeyDown={(event) => onLinkKeyDown(event, openTruck)}
+      className="w-32 shrink-0 cursor-pointer"
+      aria-label={`Abrir ficha de ${truckTitle(t)} ${t.plate ?? ""}`.trim()}
+    >
+      <MobileCard className="overflow-hidden p-0 active:opacity-95">
+        {cover ? (
+          <img
+            key={`${t.id}-${cover.id}`}
+            src={truckPhotoSrc(cover.url, truckPhotoVersion(cover, t.updated_at ?? t.created_at))}
+            alt={truckTitle(t)}
+            loading="lazy"
+            className="h-20 w-full object-cover"
+          />
+        ) : (
+          <div className="gradient-dark flex h-20 w-full items-center justify-center">
+            <Truck className="h-6 w-6 text-sidebar-foreground/30" />
+          </div>
+        )}
+        <div className="truncate px-2 py-1.5 text-[11px] font-bold">{truckTitle(t)}</div>
+      </MobileCard>
+    </div>
   );
 }
 
 function Garagem() {
+  const location = useLocation();
   const { roles } = useAuth();
   const isExec = isFinanceExecutive(roles);
   const { data, isLoading, isError } = useTrucks();
@@ -260,6 +330,10 @@ function Garagem() {
   const favorites = getFavTrucks();
   const favTrucks = trucks.filter((t) => favorites.some((f) => f.id === t.id));
 
+  if (location.pathname !== "/garagem") {
+    return <Outlet />;
+  }
+
   return (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -328,35 +402,7 @@ function Garagem() {
             Favoritos
           </h2>
           <div className="h-row -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            {favTrucks.map((t) => {
-              const cover = getTruckCoverPhoto(t);
-              return (
-                <Link
-                  key={t.id}
-                  to="/garagem/$truckId"
-                  params={{ truckId: t.id }}
-                  className="w-32 shrink-0"
-                  onClick={() => haptic(5)}
-                >
-                  <MobileCard className="overflow-hidden p-0">
-                    {cover ? (
-                      <img
-                        key={`${t.id}-${cover.id}`}
-                        src={truckPhotoSrc(cover.url, truckPhotoVersion(cover, t.updated_at ?? t.created_at))}
-                        alt={truckTitle(t)}
-                        loading="lazy"
-                        className="h-20 w-full object-cover"
-                      />
-                    ) : (
-                      <div className="gradient-dark flex h-20 w-full items-center justify-center">
-                        <Truck className="h-6 w-6 text-sidebar-foreground/30" />
-                      </div>
-                    )}
-                    <div className="truncate px-2 py-1.5 text-[11px] font-bold">{truckTitle(t)}</div>
-                  </MobileCard>
-                </Link>
-              );
-            })}
+            {favTrucks.map((t) => <FavoriteTruckCard key={t.id} t={t} />)}
           </div>
         </section>
       )}

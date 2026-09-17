@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { KeyboardEvent } from "react";
 import { Search, Truck, User, Wrench } from "lucide-react";
 import { useGlobalSearch } from "@/lib/mobile/queries";
 import { ListRow, EmptyState, SkeletonRows, MobileCard, PageHeader } from "@/components/mobile/ui";
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/_app/busca")({
 });
 
 function BuscaPage() {
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const debounced = useDebouncedValue(q, 250);
   const { data, isLoading, isFetching } = useGlobalSearch(debounced);
@@ -60,16 +62,32 @@ function BuscaPage() {
                 Caminhões ({results.trucks.length})
               </h2>
               <MobileCard className="divide-y divide-border">
-                {results.trucks.map((t) => (
-                  <ListRow
-                    key={t.id}
-                    to={`/garagem/${t.id}`}
-                    icon={<Truck className="h-5 w-5 text-gold-dark" />}
-                    title={`${t.brand} ${t.model}`}
-                    subtitle={t.plate ?? "Sem placa"}
-                    right={<StatusBadge status={t.status} />}
-                  />
-                ))}
+                {results.trucks.map((t) => {
+                  const openTruck = () => navigate({ to: "/garagem/$truckId", params: { truckId: t.id } });
+                  return (
+                    <div
+                      key={t.id}
+                      role="link"
+                      tabIndex={0}
+                      onClick={openTruck}
+                      onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openTruck();
+                        }
+                      }}
+                      className="cursor-pointer tap-gold active:bg-muted/50"
+                      aria-label={`Abrir ficha de ${t.brand} ${t.model} ${t.plate ?? ""}`.trim()}
+                    >
+                      <ListRow
+                        icon={<Truck className="h-5 w-5 text-gold-dark" />}
+                        title={`${t.brand} ${t.model}`}
+                        subtitle={t.plate ?? "Sem placa"}
+                        right={<StatusBadge status={t.status} />}
+                      />
+                    </div>
+                  );
+                })}
               </MobileCard>
             </section>
           )}

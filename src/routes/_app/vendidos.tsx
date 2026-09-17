@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { KeyboardEvent } from "react";
 import { ShieldCheck, ShieldOff, UserRound } from "lucide-react";
 import { useSoldTrucks } from "@/lib/mobile/queries";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
@@ -22,6 +23,7 @@ function warrantyInfo(warrantyEnd: string | null) {
 }
 
 function Vendidos() {
+  const navigate = useNavigate();
   const { roles } = useAuth();
   const isExec = isFinanceExecutive(roles);
   const { data, isLoading, isError } = useSoldTrucks();
@@ -50,8 +52,22 @@ function Vendidos() {
           </SectionTitle>
           {trucks.map((t) => {
             const w = warrantyInfo(t.warranty_end);
+            const openTruck = () => navigate({ to: "/garagem/$truckId", params: { truckId: t.id } });
             return (
-              <Link key={t.id} to="/garagem/$truckId" params={{ truckId: t.id }} className="block active:opacity-95">
+              <div
+                key={t.id}
+                role="link"
+                tabIndex={0}
+                onClick={openTruck}
+                onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openTruck();
+                  }
+                }}
+                className="block cursor-pointer active:opacity-95"
+                aria-label={`Abrir ficha de ${truckTitle(t)} ${t.plate ?? ""}`.trim()}
+              >
               <MobileCard className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -88,7 +104,7 @@ function Vendidos() {
                   {w.label}
                 </div>
               </MobileCard>
-              </Link>
+              </div>
             );
           })}
         </div>
