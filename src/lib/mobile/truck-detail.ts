@@ -138,6 +138,84 @@ export function expenseKindLabel(kind: string | null | undefined): string {
   return EXPENSE_KIND_LABEL[kind] ?? kind;
 }
 
+/** Linha unificada de despesa exibida na aba Despesas (de qualquer origem). */
+export interface TruckExpenseLine {
+  id: string;
+  source: "truck" | "geral";
+  kind: string | null;
+  description: string | null;
+  supplier: string | null;
+  amount: number;
+  status: string | null;
+  occurred_at: string | null;
+  due_date: string | null;
+  notes: string | null;
+  attachment_url: string | null;
+}
+
+/** Forma mínima compartilhada por `truck_expenses` e `general_expenses`. */
+export interface TruckExpenseSource {
+  id: string;
+  kind?: string | null;
+  category?: string | null;
+  description?: string | null;
+  supplier?: string | null;
+  amount?: number | null;
+  imperio_amount?: number | null;
+  shared?: boolean | null;
+  status?: string | null;
+  occurred_at?: string | null;
+  due_date?: string | null;
+  notes?: string | null;
+  attachment_url?: string | null;
+}
+
+/**
+ * Valor efetivo de uma despesa geral — mesma regra do CRM/dashboard
+ * (`imperioShare`): compartilhada conta só a parte do Império.
+ */
+export function generalExpenseAmount(r: TruckExpenseSource): number {
+  if (r.shared) return Number(r.imperio_amount ?? 0);
+  return Number(r.imperio_amount ?? r.amount ?? 0);
+}
+
+/**
+ * Mescla `truck_expenses` com `general_expenses` (despesas gerais vinculadas ao
+ * caminhão) na aba Despesas — ambas alimentam `trucks.expenses_total` no CRM.
+ */
+export function mergeTruckExpenses(
+  expenses: TruckExpenseSource[] | null | undefined,
+  generalExpenses: TruckExpenseSource[] | null | undefined,
+): TruckExpenseLine[] {
+  const truck = (expenses ?? []).map((e): TruckExpenseLine => ({
+    id: `truck-${e.id}`,
+    source: "truck",
+    kind: e.kind ?? e.category ?? null,
+    description: e.description ?? null,
+    supplier: e.supplier ?? null,
+    amount: Number(e.amount ?? 0),
+    status: e.status ?? null,
+    occurred_at: e.occurred_at ?? null,
+    due_date: e.due_date ?? null,
+    notes: e.notes ?? null,
+    attachment_url: e.attachment_url ?? null,
+  }));
+  const geral = (generalExpenses ?? []).map((e): TruckExpenseLine => ({
+    id: `geral-${e.id}`,
+    source: "geral",
+    kind: e.category ?? null,
+    description: e.description ?? null,
+    supplier: e.supplier ?? null,
+    amount: generalExpenseAmount(e),
+    status: e.status ?? null,
+    occurred_at: e.occurred_at ?? null,
+    due_date: e.due_date ?? null,
+    notes: e.notes ?? null,
+    attachment_url: e.attachment_url ?? null,
+  }));
+  return [...truck, ...geral].sort((a, b) => String(b.occurred_at ?? "").localeCompare(String(a.occurred_at ?? "")));
+}
+
 export interface TruckDealRef {
   id: string;
   truck_id: string | null;

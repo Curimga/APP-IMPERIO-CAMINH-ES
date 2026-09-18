@@ -32,8 +32,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { canRegisterExpense } from "@/lib/mobile/perm";
 import {
   expenseKindLabel,
+  generalExpenseAmount,
   maySeeCpfCnpj,
   maySeeTruckFinance,
+  mergeTruckExpenses,
   normalizeTruckIdParam,
   resolveTruckSale,
   truckDocumentsList,
@@ -254,7 +256,8 @@ function TruckDetail() {
   const indicator = truckIndicator(truck.status);
   const days = mdDaysParked(truck.purchase_date ?? truck.created_at);
   const finance = truckFinanceSnapshot(truck);
-  const expenseSummary = truckExpenseSummary(data.expenses);
+  const expenseLines = mergeTruckExpenses(data.expenses, data.generalExpenses);
+  const expenseSummary = truckExpenseSummary(expenseLines);
   const sale = resolveTruckSale({ truckId: truck.id, truck, deals: data.deals, customers: data.customers });
   const docs = truckDocumentsList({ truckDocuments: data.truckDocuments, documents: data.documents });
   const warranty = data.warranty;
@@ -406,12 +409,12 @@ function TruckDetail() {
               <div className="rounded-xl bg-muted p-2"><div className="font-bold">{expenseSummary.paid}</div><div className="text-muted-foreground">pagas</div></div>
               <div className="rounded-xl bg-muted p-2"><div className="font-bold">{expenseSummary.pending}</div><div className="text-muted-foreground">pend.</div></div>
             </div>
-            {data.expenses.length === 0 ? <EmptyLine text="Nenhuma despesa registrada." /> : (
+            {expenseLines.length === 0 ? <EmptyLine text="Nenhuma despesa registrada." /> : (
               <div className="divide-y divide-border/60">
-                {data.expenses.map((e) => (
+                {expenseLines.map((e) => (
                   <div key={e.id} className="py-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0"><div className="font-semibold">{e.description || expenseKindLabel(e.kind)}</div><div className="text-xs text-muted-foreground">{expenseKindLabel(e.kind)} · {e.supplier ?? "sem fornecedor"}</div></div>
+                      <div className="min-w-0"><div className="font-semibold">{e.description || expenseKindLabel(e.kind)}</div><div className="text-xs text-muted-foreground">{expenseKindLabel(e.kind)} · {e.supplier ?? "sem fornecedor"}{e.source === "geral" ? " · geral" : ""}</div></div>
                       <div className="text-right"><div className="font-bold">{brl(e.amount)}</div><MiniPill tone={e.status === "pago" ? "success" : "gold"}>{e.status ?? "pendente"}</MiniPill></div>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -489,14 +492,14 @@ function TruckDetail() {
       {tab === "documentos" ? (
         <MobileCard className="p-3">
           <SectionTitle className="mb-1">Documentos</SectionTitle>
-          {docs.length === 0 && !data.services.some((s) => s.attachment_url) && !(isExec && data.expenses.some((e) => e.attachment_url)) ? <EmptyLine text="Nenhum documento anexado." /> : null}
+          {docs.length === 0 && !data.services.some((s) => s.attachment_url) && !(isExec && expenseLines.some((e) => e.attachment_url)) ? <EmptyLine text="Nenhum documento anexado." /> : null}
           <div className="divide-y divide-border/60">
             {docs.map((d) => {
               const href = d.url ?? (d.path ? data.documentUrls.get(d.path) : undefined);
               return <div key={d.id} className="flex items-center gap-3 py-3"><FileText className="h-4 w-4 shrink-0 text-gold" /><div className="min-w-0 flex-1"><div className="truncate font-semibold">{d.name}</div><div className="text-xs text-muted-foreground">{d.type ?? "documento"} · {dateBR(d.date)}</div></div>{href ? <a href={href} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">Abrir</a> : <span className="text-xs text-muted-foreground">sem arquivo</span>}</div>;
             })}
             {data.services.filter((s) => s.attachment_url).map((s) => <div key={`svc-${s.id}`} className="flex items-center gap-3 py-3"><Wrench className="h-4 w-4 shrink-0 text-gold" /><div className="min-w-0 flex-1"><div className="truncate font-semibold">Anexo de serviço</div><div className="text-xs text-muted-foreground">{s.title}</div></div><a href={s.attachment_url!} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">Abrir</a></div>)}
-            {isExec ? data.expenses.filter((e) => e.attachment_url).map((e) => <div key={`exp-${e.id}`} className="flex items-center gap-3 py-3"><DollarSign className="h-4 w-4 shrink-0 text-gold" /><div className="min-w-0 flex-1"><div className="truncate font-semibold">Comprovante de despesa</div><div className="text-xs text-muted-foreground">{e.description || expenseKindLabel(e.kind)}</div></div><a href={e.attachment_url!} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">Abrir</a></div>) : null}
+            {isExec ? expenseLines.filter((e) => e.attachment_url).map((e) => <div key={`exp-${e.id}`} className="flex items-center gap-3 py-3"><DollarSign className="h-4 w-4 shrink-0 text-gold" /><div className="min-w-0 flex-1"><div className="truncate font-semibold">Comprovante de despesa</div><div className="text-xs text-muted-foreground">{e.description || expenseKindLabel(e.kind)}</div></div><a href={e.attachment_url!} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">Abrir</a></div>) : null}
           </div>
         </MobileCard>
       ) : null}

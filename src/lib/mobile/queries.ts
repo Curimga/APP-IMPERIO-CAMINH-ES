@@ -218,6 +218,7 @@ export type SupplierName = { id: string; name: string };
 export interface TruckDetailBundle {
   truck: TruckWithPhotos | null;
   expenses: Tables<"truck_expenses">[];
+  generalExpenses: Tables<"general_expenses">[];
   services: TruckServiceDetail[];
   history: Tables<"truck_status_history">[];
   notes: Tables<"truck_notes">[];
@@ -423,6 +424,7 @@ export function useTruckDetail(id: string | undefined) {
       const empty: TruckDetailBundle = {
         truck: null,
         expenses: [],
+        generalExpenses: [],
         services: [],
         history: [],
         notes: [],
@@ -568,16 +570,22 @@ export function useTruckDetail(id: string | undefined) {
       );
 
       let expenses: Tables<"truck_expenses">[] = [];
+      let generalExpenses: Tables<"general_expenses">[] = [];
       let purchaseInstallments: Tables<"truck_purchase_installments">[] = [];
       let payables: Tables<"payables">[] = [];
       let receivables: Tables<"receivables">[] = [];
       if (isExec) {
-        const [expensesR, installmentsR, payablesR, receivablesR] = await Promise.all([
+        const [expensesR, generalR, installmentsR, payablesR, receivablesR] = await Promise.all([
           supabase
             .from("truck_expenses")
             .select("*")
             .eq("truck_id", id!)
             .order("created_at", { ascending: false }),
+          supabase
+            .from("general_expenses")
+            .select("*")
+            .eq("truck_id", id!)
+            .order("occurred_at", { ascending: false }),
           supabase
             .from("truck_purchase_installments")
             .select("*")
@@ -595,10 +603,12 @@ export function useTruckDetail(id: string | undefined) {
             .order("due_date", { ascending: true }),
         ]);
         if (expensesR.error) throw expensesR.error;
+        if (generalR.error) throw generalR.error;
         if (installmentsR.error) throw installmentsR.error;
         if (payablesR.error) throw payablesR.error;
         if (receivablesR.error) throw receivablesR.error;
         expenses = (expensesR.data ?? []) as Tables<"truck_expenses">[];
+        generalExpenses = (generalR.data ?? []) as Tables<"general_expenses">[];
         purchaseInstallments = (installmentsR.data ?? []) as Tables<"truck_purchase_installments">[];
         payables = (payablesR.data ?? []) as Tables<"payables">[];
         receivables = (receivablesR.data ?? []) as Tables<"receivables">[];
@@ -607,6 +617,7 @@ export function useTruckDetail(id: string | undefined) {
       return {
         truck,
         expenses,
+        generalExpenses,
         services,
         history,
         notes,

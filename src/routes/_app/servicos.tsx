@@ -62,7 +62,8 @@ function ServiceItem({ s }: { s: ServiceItem }) {
             <span
               className={cn("font-semibold", isLate ? "text-destructive" : "text-muted-foreground")}
             >
-              Previsão {dateBR(s.expected_at)} · {mdRelative(s.expected_at)}
+              Previsão {dateBR(s.expected_at)}
+              {!isConcluido && ` · ${mdRelative(s.expected_at)}`}
             </span>
           ) : null}
           {s.completed_at ? (

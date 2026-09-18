@@ -167,6 +167,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
   general_expenses: [
     "general-expenses",
     "finance-mobile",
+    "truck-detail",
     "truck-expenses",
     "truck-expenses-sum",
     "dashboard-snapshot",

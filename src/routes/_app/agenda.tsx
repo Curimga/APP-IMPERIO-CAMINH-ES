@@ -20,6 +20,7 @@ import {
   Repeat,
 } from "lucide-react";
 import { useAgendaRange } from "@/lib/mobile/queries";
+import { PagamentosTab } from "@/components/mobile/pagamentos-tab";
 import type { CalendarEventItem } from "@/lib/mobile/queries";
 import { MobileCard, SkeletonRows, EmptyState, PageHeader } from "@/components/mobile/ui";
 import { mdBR, mdTime, mdRelative, spaTodayISO, spaDate } from "@/lib/mobile/dates";
@@ -152,7 +153,7 @@ function Agenda() {
   const nav = useNavigate();
   const qc = useQueryClient();
 
-  const [view, setView] = useState<"calendario" | "lista">("calendario");
+  const [view, setView] = useState<"calendario" | "lista" | "pagamentos">("calendario");
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -226,7 +227,13 @@ function Agenda() {
       </div>
 
       <div className="grid grid-cols-2 rounded-xl bg-surface-secondary p-1">
-        {(["calendario", "lista"] as const).map((v) => (
+        {(
+          [
+            "calendario",
+            "lista",
+            ...(showAmount ? (["pagamentos"] as const) : ([] as const)),
+          ] as const
+        ).map((v) => (
           <button
             key={v}
             type="button"
@@ -335,8 +342,10 @@ function Agenda() {
             </span>
           </div>
         </MobileCard>
+      ) : view === "pagamentos" ? (
+          <PagamentosTab />
       ) : (
-        <MobileCard className="divide-y">
+          <MobileCard className="divide-y">
           {listUpcoming.length === 0 ? (
             <EmptyState title="Nada nos próximos 30 dias" hint="Aproveite para agendar!" />
           ) : (

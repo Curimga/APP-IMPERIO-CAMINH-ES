@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   expenseKindLabel,
+  generalExpenseAmount,
   maySeeCpfCnpj,
   maySeeTruckFinance,
+  mergeTruckExpenses,
   normalizeTruckIdParam,
   resolveTruckSale,
   truckDetailPath,
@@ -80,6 +82,43 @@ describe("truck-detail — financeiro", () => {
       paid: 1,
       pending: 1,
     });
+  });
+
+  it("mescla despesas do caminhão com despesas gerais vinculadas", () => {
+    const lines = mergeTruckExpenses(
+      [
+        { id: "t1", kind: "manutencao", description: "Troca de óleo", amount: 100, status: "pago", occurred_at: "2026-09-10" },
+        { id: "t2", kind: "combustivel", description: null, amount: 50, status: null, occurred_at: "2026-09-05" },
+      ],
+      [
+        { id: "g1", category: "reforma", description: "Funilaria", amount: 500, imperio_amount: 300, shared: true, status: "pago", occurred_at: "2026-09-12" },
+        { id: "g2", category: "pecas_caminhao", description: "Retrovisor", amount: 80, imperio_amount: null, shared: false, status: "pendente", occurred_at: "2026-09-01" },
+      ],
+    );
+    expect(lines.map((l) => l.id)).toEqual(["geral-g1", "truck-t1", "truck-t2", "geral-g2"]);
+    expect(lines.find((l) => l.id === "geral-g1")?.amount).toBe(300);
+    expect(lines.find((l) => l.id === "geral-g2")?.amount).toBe(80);
+    expect(lines.find((l) => l.id === "geral-g1")?.source).toBe("geral");
+    expect(lines.find((l) => l.id === "truck-t1")?.source).toBe("truck");
+  });
+
+  it("considera só a parte do Império em despesa geral compartilhada", () => {
+    expect(generalExpenseAmount({ id: "g", shared: true, amount: 500, imperio_amount: 200 })).toBe(200);
+    expect(generalExpenseAmount({ id: "g", shared: false, amount: 500 })).toBe(500);
+    expect(generalExpenseAmount({ id: "g", shared: false, amount: 500, imperio_amount: 300 })).toBe(300);
+    expect(generalExpenseAmount({ id: "g", shared: true, amount: 500, imperio_amount: null })).toBe(0);
+  });
+
+  it("resume o total somando despesas do caminhão e gerais vinculadas", () => {
+    const s = truckExpenseSummary(
+      mergeTruckExpenses(
+        [{ id: "t1", amount: 100, status: "pago", occurred_at: "2026-09-10" }],
+        [{ id: "g1", amount: 500, imperio_amount: 300, shared: true, status: "pago", occurred_at: "2026-09-12" }],
+      ),
+    );
+    expect(s.total).toBe(400);
+    expect(s.count).toBe(2);
+    expect(s.paid).toBe(2);
   });
 });
 
