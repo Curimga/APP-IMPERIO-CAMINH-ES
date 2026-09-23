@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { isFinancialNotification } from "@/lib/mobile/queries";
 import { notificationLinkTarget } from "@/lib/mobile/notification-link";
+import { markNotificationsRead } from "@/lib/mobile/actions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +60,7 @@ export function NotificationsBell() {
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+    await markNotificationsRead(items.filter((i) => !i.read).map((i) => i.id));
     load();
   };
 

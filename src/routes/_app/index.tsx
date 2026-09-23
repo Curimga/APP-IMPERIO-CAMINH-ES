@@ -629,7 +629,7 @@ function AppHome() {
                 label="Em estoque"
                 ctx={`${pct(emEstoque)}%`}
                 tone="gold"
-                onClick={openAllGarage}
+                onClick={() => openFilter("estoque")}
               />
               <DashCard
                 icon={BadgeCheck}
@@ -645,7 +645,7 @@ function AppHome() {
                 label="Em serviço"
                 ctx={`${pct(emServico)}%`}
                 tone="warning"
-                onClick={() => openFilter("oficina")}
+                onClick={() => openFilter("servico")}
               />
               <DashCard
                 icon={AlarmClock}

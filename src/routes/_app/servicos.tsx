@@ -192,7 +192,7 @@ function Servicos() {
   const [deadlineFor, setDeadlineFor] = useState<ServiceItem | null>(null);
   const { data, isLoading, isError } = useServices();
 
-  const all = data ?? [];
+  const all = search.truck_id ? (data ?? []).filter((s) => s.truck_id === search.truck_id) : (data ?? []);
   const andamento = all.filter((s) => s.status === "em_andamento");
   const atrasados = all.filter(
     (s) =>

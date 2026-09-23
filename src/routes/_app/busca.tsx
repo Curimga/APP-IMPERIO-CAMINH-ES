@@ -101,7 +101,7 @@ function BuscaPage() {
                 {results.customers.map((c) => (
                   <ListRow
                     key={c.id}
-                    to={`/clientes`}
+                    onClick={() => navigate({ to: "/clientes", search: { q: c.name } })}
                     icon={<User className="h-5 w-5 text-gold-dark" />}
                     title={c.name}
                     subtitle={[c.city, c.phone].filter(Boolean).join(" · ")}
@@ -120,7 +120,7 @@ function BuscaPage() {
                 {results.services.map((s) => (
                   <ListRow
                     key={s.id}
-                    to={`/servicos`}
+                    onClick={() => navigate({ to: "/servicos", search: { truck_id: s.truck?.id, tab: undefined } })}
                     icon={<Wrench className="h-5 w-5 text-gold-dark" />}
                     title={s.title}
                     subtitle={

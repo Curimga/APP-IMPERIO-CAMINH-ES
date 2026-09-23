@@ -52,6 +52,7 @@ function Pendencias() {
       chip: "bg-destructive/15 text-destructive border-destructive/40",
       label: "Serviços atrasados",
       to: "/servicos",
+      search: { tab: "atrasados" as const },
       count: p.atrasados.length,
       items: p.atrasados.slice(0, 3).map((s) => ({
         title: s.title,
@@ -63,6 +64,7 @@ function Pendencias() {
       chip: "bg-warning/15 text-warning-foreground border-warning/40",
       label: "Garantias a vencer",
       to: "/vendidos",
+      search: undefined,
       count: p.garantias.length,
       items: p.garantias.slice(0, 3).map((t) => ({
         title: `${t.brand} ${t.model}`,
@@ -74,6 +76,7 @@ function Pendencias() {
       chip: "bg-gold/15 text-gold-dark border-gold/40",
       label: "Vencimentos de hoje",
       to: "/agenda",
+      search: { view: "pagamentos" as const },
       count: p.monetarios.length,
       items: p.monetarios.slice(0, 3).map((e) => ({
         title: e.title,
@@ -85,6 +88,7 @@ function Pendencias() {
       chip: "bg-info/15 text-info border-info/40",
       label: "Alertas importantes",
       to: "/notificacoes",
+      search: undefined,
       count: p.criticas.length,
       items: p.criticas.slice(0, 3).map((n) => ({ title: n.title, subtitle: "não lida" })),
     },
@@ -102,7 +106,7 @@ function Pendencias() {
                 {r.label}
                 <span className="text-muted-foreground">· {r.count}</span>
               </SectionTitle>
-              <Link to={r.to as never}>
+              <Link to={r.to as never} search={r.search as never}>
                 <MobileCard className="divide-y divide-border/60">
                   {r.items.map((it) => (
                     <div key={it.title} className="flex items-center gap-3 px-3 py-2.5">

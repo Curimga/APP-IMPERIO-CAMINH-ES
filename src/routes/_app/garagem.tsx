@@ -34,6 +34,8 @@ export const Route = createFileRoute("/_app/garagem")({
 const FILTER_KEY = "imperio:garagem-filtro";
 type Filter = "todos" | string;
 type View = "cards" | "list";
+const STOCK_FILTER_STATUSES = new Set(["disponivel", "consignado"]);
+const SERVICE_FILTER_STATUSES = new Set(["oficina", "pintura", "interna", "despachante", "manutencao"]);
 
 function readSavedFilter(): Filter {
   try {
@@ -275,7 +277,9 @@ function Garagem() {
 
   const filtered = useMemo(() => {
     let list = trucks;
-    if (filter !== "todos") list = list.filter((t) => t.status === filter);
+    if (filter === "estoque") list = list.filter((t) => STOCK_FILTER_STATUSES.has(t.status));
+    else if (filter === "servico") list = list.filter((t) => SERVICE_FILTER_STATUSES.has(t.status));
+    else if (filter !== "todos") list = list.filter((t) => t.status === filter);
     if (q.trim()) {
       const t = q.trim().toLowerCase();
       list = list.filter((x) =>

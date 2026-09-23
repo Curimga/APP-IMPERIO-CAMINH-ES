@@ -498,7 +498,7 @@ function TruckDetail() {
             </div>
           ) : <EmptyLine text="Nenhuma venda ou reserva vinculada a este caminhão." />}
           {sale.saleNotes ? <p className="mt-3 rounded-xl bg-muted p-3 text-[13px] text-muted-foreground">{sale.saleNotes}</p> : null}
-          {sale.customer ? <Link to="/clientes" className="mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold"><UserRound className="h-4 w-4" />Abrir clientes</Link> : null}
+          {sale.customer ? <Link to="/clientes" search={{ q: sale.customer.name }} className="mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold"><UserRound className="h-4 w-4" />Abrir cliente</Link> : null}
         </MobileCard>
       ) : null}
 

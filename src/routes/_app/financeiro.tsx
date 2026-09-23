@@ -164,7 +164,7 @@ function Financeiro() {
 
           {/* Contas a receber / pagar */}
           <div className="grid grid-cols-2 gap-2">
-            <MobileCard className="p-3">
+            <MobileCard className="p-3" onClick={() => navigate({ to: "/agenda", search: { view: "pagamentos" } })}>
               <div className="flex items-center gap-1.5 text-[12px] font-bold text-success uppercase">
                 <TrendingUp className="h-3.5 w-3.5" /> A receber
               </div>
@@ -172,7 +172,7 @@ function Financeiro() {
                 {valuemaybe(receivablesOpen)}
               </div>
             </MobileCard>
-            <MobileCard className="p-3">
+            <MobileCard className="p-3" onClick={() => navigate({ to: "/agenda", search: { view: "pagamentos" } })}>
               <div className="flex items-center gap-1.5 text-[12px] font-bold text-destructive uppercase">
                 <TrendingDown className="h-3.5 w-3.5" /> A pagar
               </div>

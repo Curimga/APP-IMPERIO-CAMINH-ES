@@ -46,6 +46,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/agenda")({
+  validateSearch: (s: Record<string, unknown>) => {
+    const r: { view?: "calendario" | "lista" | "pagamentos" } = {};
+    if (s.view === "calendario" || s.view === "lista" || s.view === "pagamentos") r.view = s.view;
+    return r;
+  },
   component: Agenda,
 });
 
@@ -150,12 +155,15 @@ const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 function Agenda() {
   const { roles } = useAuth();
   const showAmount = isFinanceExecutive(roles);
+  const search = Route.useSearch();
   const today = spaTodayISO();
   const nav = useNavigate();
   const qc = useQueryClient();
   const invalidateMobile = useInvalidateMobile();
 
-  const [view, setView] = useState<"calendario" | "lista" | "pagamentos">("calendario");
+  const [view, setView] = useState<"calendario" | "lista" | "pagamentos">(
+    search.view === "pagamentos" && showAmount ? "pagamentos" : search.view === "lista" ? "lista" : "calendario",
+  );
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -249,7 +257,7 @@ function Agenda() {
               view === v ? "bg-card shadow-sm text-foreground" : "text-muted-foreground",
             )}
           >
-            {v === "calendario" ? "Calendário" : "Lista de compromissos"}
+            {v === "calendario" ? "Calendário" : v === "pagamentos" ? "Pagamentos" : "Lista de compromissos"}
           </button>
         ))}
       </div>

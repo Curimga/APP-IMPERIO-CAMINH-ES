@@ -10,6 +10,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/clientes")({
+  validateSearch: (s: Record<string, unknown>) => {
+    const r: { q?: string } = {};
+    if (typeof s.q === "string") r.q = s.q;
+    return r;
+  },
   component: Clientes,
 });
 
@@ -175,7 +180,8 @@ function CustomerSheet({ c, onClose }: { c: CustomerItem; onClose: () => void })
 }
 
 function Clientes() {
-  const [q, setQ] = useState("");
+  const search = Route.useSearch();
+  const [q, setQ] = useState(search.q ?? "");
   const [active, setActive] = useState<CustomerItem | null>(null);
   const { data, isLoading, isError } = useCustomers(q);
 

@@ -242,15 +242,54 @@ export interface EventInput {
   reminder_minutes?: number | null;
 }
 
+function addRecurrenceStep(date: Date, recurrence: string): Date {
+  const next = new Date(date);
+  if (recurrence === "diario") next.setDate(next.getDate() + 1);
+  else if (recurrence === "semanal") next.setDate(next.getDate() + 7);
+  else if (recurrence === "mensal") next.setMonth(next.getMonth() + 1);
+  return next;
+}
+
+function localDateTimeValue(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`;
+}
+
+function recurrenceEvents(input: EventInput, ownerId: string | null): TablesInsert<"calendar_events">[] {
+  const recurrence = input.recurrence;
+  if (!recurrence || !["diario", "semanal", "mensal"].includes(recurrence)) {
+    return [{ ...input, type: input.type ?? "compromisso", priority: input.priority ?? "media", owner_id: ownerId }];
+  }
+
+  const first = new Date(input.starts_at);
+  if (Number.isNaN(first.getTime())) {
+    return [{ ...input, type: input.type ?? "compromisso", priority: input.priority ?? "media", owner_id: ownerId }];
+  }
+
+  const until = new Date(first);
+  until.setMonth(until.getMonth() + 3);
+
+  const rows: TablesInsert<"calendar_events">[] = [];
+  let cursor = new Date(first);
+  while (cursor <= until && rows.length < 120) {
+    rows.push({
+      ...input,
+      starts_at: localDateTimeValue(cursor),
+      type: input.type ?? "compromisso",
+      priority: input.priority ?? "media",
+      owner_id: ownerId,
+    });
+    cursor = addRecurrenceStep(cursor, recurrence);
+  }
+  return rows;
+}
+
 export async function createEvent(input: EventInput): Promise<void> {
-  const { error } = await supabase.from("calendar_events").insert({
-    ...input,
-    type: input.type ?? "compromisso",
-    priority: input.priority ?? "media",
-    owner_id: (await supabase.auth.getUser()).data.user?.id ?? null,
-  });
+  const ownerId = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const rows = recurrenceEvents(input, ownerId);
+  const { error } = await supabase.from("calendar_events").insert(rows);
   if (error) throw new Error(error.message);
-  toast.success("Compromisso criado");
+  toast.success(rows.length > 1 ? `${rows.length} compromissos criados` : "Compromisso criado");
 }
 
 export async function updateEvent(id: string, patch: Partial<EventInput>): Promise<void> {
