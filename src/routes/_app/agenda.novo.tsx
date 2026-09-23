@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
 import { haptic, hapticSuccess, hapticError } from "@/lib/mobile/haptic";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 
 export const Route = createFileRoute("/_app/agenda/novo")({
   validateSearch: (s: Record<string, unknown>) => {
@@ -71,6 +72,7 @@ function NewEvent() {
   const nav = useNavigate();
   const search = Route.useSearch();
   const editing = search.edit;
+  const invalidateMobile = useInvalidateMobile();
 
   const { data: trucks } = useTrucks();
   const { data: existing, isLoading: loadingEvent } = useEvent(editing);
@@ -135,6 +137,7 @@ function NewEvent() {
     try {
       if (editing) await updateEvent(editing, payload);
       else await createEvent(payload);
+      invalidateMobile(["calendar_events"]);
       hapticSuccess();
       toast.success(editing ? "Compromisso atualizado" : "Compromisso criado");
       nav({ to: "/agenda" });
@@ -150,6 +153,7 @@ function NewEvent() {
     if (!editing) return;
     try {
       await deleteEvent(editing);
+      invalidateMobile(["calendar_events"]);
       hapticSuccess();
       nav({ to: "/agenda" });
     } catch (e) {

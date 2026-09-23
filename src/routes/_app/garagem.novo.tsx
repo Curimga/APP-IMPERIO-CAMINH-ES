@@ -18,10 +18,19 @@ type Form = {
   plate: string;
   color: string;
   chassis: string;
+  renavam: string;
   mileage: string;
   fuel: string;
   transmission: string;
+  origin: string;
+  supplier: string;
+  consigned: boolean;
+  purchase_date: string;
   purchase_price: string;
+  purchase_payment_method: string;
+  purchase_installments_count: string;
+  purchase_total_paid: string;
+  purchase_total_pending: string;
   expected_price: string;
   description: string;
 };
@@ -33,13 +42,24 @@ const EMPTY: Form = {
   plate: "",
   color: "",
   chassis: "",
+  renavam: "",
   mileage: "",
   fuel: "",
   transmission: "",
+  origin: "",
+  supplier: "",
+  consigned: false,
+  purchase_date: "",
   purchase_price: "",
+  purchase_payment_method: "",
+  purchase_installments_count: "",
+  purchase_total_paid: "",
+  purchase_total_pending: "",
   expected_price: "",
   description: "",
 };
+
+const PAYMENT_METHODS = ["PIX", "BOLETO", "TRANSFERENCIA", "DINHEIRO", "CARTAO", "OUTRO"] as const;
 
 const toNumber = (v: string) => {
   const n = Number(v.replace(/[^\d.]/g, ""));
@@ -57,6 +77,11 @@ function NewTruck() {
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const setSel = (k: keyof Form) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const toggle = (k: keyof Form) => () => setForm((f) => ({ ...f, [k]: !f[k] }));
+
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setError(null);
@@ -73,15 +98,28 @@ function NewTruck() {
         plate: form.plate.trim().toUpperCase() || null,
         color: form.color.trim() || null,
         chassis: form.chassis.trim() || null,
+        renavam: form.renavam.trim() || null,
         mileage: form.mileage ? toNumber(form.mileage) : null,
         fuel: form.fuel.trim() || null,
         transmission: form.transmission.trim() || null,
+        origin: form.origin.trim() || null,
+        supplier: form.supplier.trim() || null,
+        consigned: form.consigned,
+        purchase_date: form.purchase_date || null,
         purchase_price: form.purchase_price ? toNumber(form.purchase_price) : null,
+        purchase_payment_method: form.purchase_payment_method || null,
+        purchase_installments_count: form.purchase_installments_count
+          ? toNumber(form.purchase_installments_count)
+          : null,
+        purchase_total_paid: form.purchase_total_paid ? toNumber(form.purchase_total_paid) : null,
+        purchase_total_pending: form.purchase_total_pending
+          ? toNumber(form.purchase_total_pending)
+          : null,
         expected_price: form.expected_price ? toNumber(form.expected_price) : null,
         description: form.description.trim() || null,
-        status: "disponivel",
+        status: form.consigned ? "consignado" : "disponivel",
       });
-      toast.success("Caminhão cadastrado");
+      toast.success(form.consigned ? "Caminhão consignado cadastrado" : "Caminhão cadastrado");
       nav({ to: "/garagem/$truckId", params: { truckId: id } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao cadastrar");
@@ -162,14 +200,24 @@ function NewTruck() {
               />
             </Field>
           </div>
-          <Field label="Chassi">
-            <input
-              className={inputClass}
-              value={form.chassis}
-              onChange={set("chassis")}
-              autoComplete="off"
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Chassi">
+              <input
+                className={inputClass}
+                value={form.chassis}
+                onChange={set("chassis")}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Renavam">
+              <input
+                className={inputClass}
+                value={form.renavam}
+                onChange={set("renavam")}
+                placeholder="12345678901"
+              />
+            </Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Combustível">
               <input
@@ -188,6 +236,58 @@ function NewTruck() {
               />
             </Field>
           </div>
+          <Field label="Origem">
+            <input
+              className={inputClass}
+              value={form.origin}
+              onChange={set("origin")}
+              placeholder="Ex.: leilão, concessionária, particular"
+            />
+          </Field>
+          <Field label="Fornecedor / Vendedor">
+            <input
+              className={inputClass}
+              value={form.supplier}
+              onChange={set("supplier")}
+              placeholder="Ex.: Vendtruck"
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={toggle("consigned")}
+            className={
+              "flex w-full items-center justify-between rounded-xl border px-3.5 py-3 text-left " +
+              (form.consigned ? "border-gold bg-gold/10" : "bg-card")
+            }
+          >
+            <div>
+              <div className="text-[15px] font-semibold">Caminhão consignado</div>
+              <div className="text-xs text-muted-foreground">
+                Permanecerá na garagem do proprietário e terá o status "consignado".
+              </div>
+            </div>
+            <span
+              className={
+                "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
+                (form.consigned ? "bg-gold" : "bg-muted")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all " +
+                  (form.consigned ? "left-[22px]" : "left-0.5")
+                }
+              />
+            </span>
+          </button>
+          <Field label="Data de compra">
+            <input
+              className={inputClass}
+              type="date"
+              value={form.purchase_date}
+              onChange={set("purchase_date")}
+            />
+          </Field>
         </MobileCard>
 
         {isExec && (
@@ -201,6 +301,49 @@ function NewTruck() {
                 placeholder="450000"
               />
             </Field>
+            <Field label="Forma de pagamento da compra">
+              <select
+                className={inputClass}
+                value={form.purchase_payment_method}
+                onChange={setSel("purchase_payment_method")}
+              >
+                <option value="">Selecionar</option>
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Nº de parcelas">
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                value={form.purchase_installments_count}
+                onChange={set("purchase_installments_count")}
+                placeholder="0"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Total pago (R$)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={form.purchase_total_paid}
+                  onChange={set("purchase_total_paid")}
+                  placeholder="0,00"
+                />
+              </Field>
+              <Field label="Total a pagar (R$)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={form.purchase_total_pending}
+                  onChange={set("purchase_total_pending")}
+                  placeholder="0,00"
+                />
+              </Field>
+            </div>
             <Field label="Preço de venda estimado (R$)">
               <input
                 className={inputClass}

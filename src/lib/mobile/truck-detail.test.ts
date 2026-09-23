@@ -105,7 +105,8 @@ describe("truck-detail — financeiro", () => {
   it("considera só a parte do Império em despesa geral compartilhada", () => {
     expect(generalExpenseAmount({ id: "g", shared: true, amount: 500, imperio_amount: 200 })).toBe(200);
     expect(generalExpenseAmount({ id: "g", shared: false, amount: 500 })).toBe(500);
-    expect(generalExpenseAmount({ id: "g", shared: false, amount: 500, imperio_amount: 300 })).toBe(300);
+    // Não compartilhada conta o amount integral, mesmo com imperio_amount preenchido (regra do CRM/banco).
+    expect(generalExpenseAmount({ id: "g", shared: false, amount: 500, imperio_amount: 300 })).toBe(500);
     expect(generalExpenseAmount({ id: "g", shared: true, amount: 500, imperio_amount: null })).toBe(0);
   });
 

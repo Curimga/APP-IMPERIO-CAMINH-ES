@@ -171,12 +171,13 @@ export interface TruckExpenseSource {
 }
 
 /**
- * Valor efetivo de uma despesa geral — mesma regra do CRM/dashboard
- * (`imperioShare`): compartilhada conta só a parte do Império.
+ * Valor efetivo de uma despesa geral — mesma regra do banco
+ * (`fn_general_expense_effective_amount`) e dos relatórios do CRM
+ * (`imperioShare`): compartilhada conta só a parte do Império; não
+ * compartilhada conta o `amount` integral.
  */
 export function generalExpenseAmount(r: TruckExpenseSource): number {
-  if (r.shared) return Number(r.imperio_amount ?? 0);
-  return Number(r.imperio_amount ?? r.amount ?? 0);
+  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.amount ?? 0);
 }
 
 /**

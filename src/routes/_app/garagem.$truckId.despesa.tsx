@@ -3,19 +3,24 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
 import { useTrucks } from "@/lib/mobile/queries";
-import { createTruckExpense } from "@/lib/mobile/actions";
+import { createGeneralExpense } from "@/lib/mobile/actions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { truckTitle } from "@/lib/truck-title";
 import { todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 
 export const Route = createFileRoute("/_app/garagem/$truckId/despesa")({
   component: RegisterExpense,
 });
 
-const KINDS: { v: Enums<"expense_kind">; label: string }[] = [
+/**
+ * Categorias de despesa no padrão do CRM (`app_truck_expense_kind`).
+ * O CRM guarda estas mesmas categorias em `general_expenses.category`.
+ */
+const KINDS: { v: Enums<"app_truck_expense_kind">; label: string }[] = [
   { v: "manutencao", label: "Manutenção" },
   { v: "combustivel", label: "Combustível" },
   { v: "documentacao", label: "Documentação" },
@@ -23,18 +28,35 @@ const KINDS: { v: Enums<"expense_kind">; label: string }[] = [
   { v: "impostos", label: "Impostos" },
   { v: "reforma", label: "Reforma" },
   { v: "pecas_caminhao", label: "Peças" },
+  { v: "lavagem", label: "Lavagem" },
+  { v: "pneu", label: "Pneu" },
+  { v: "colaborador", label: "Colaborador" },
+  { v: "caminhao", label: "Caminhão" },
   { v: "outros", label: "Outros" },
 ];
+
+const STATUS_OPTIONS: { v: string; label: string }[] = [
+  { v: "pago", label: "Pago" },
+  { v: "pendente", label: "Pendente" },
+];
+
+const PAYMENT_METHODS = ["PIX", "BOLETO", "TRANSFERENCIA", "DINHEIRO", "CARTAO", "OUTRO"] as const;
 
 function RegisterExpense() {
   const nav = useNavigate();
   const { truckId } = useParams({ from: Route.id });
   const { data: trucks } = useTrucks();
+  const invalidateMobile = useInvalidateMobile();
   const [selectedTruckId, setSelectedTruckId] = useState<string | null>(truckId);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [kind, setKind] = useState<Enums<"expense_kind">>("manutencao");
+  const [kind, setKind] = useState<Enums<"app_truck_expense_kind">>("manutencao");
+  const [supplier, setSupplier] = useState("");
+  const [status, setStatus] = useState<string>("pago");
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [occurredAt, setOccurredAt] = useState(todayISO());
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,14 +78,20 @@ function RegisterExpense() {
     }
     setSaving(true);
     try {
-      await createTruckExpense({
+      await createGeneralExpense({
         truck_id: selectedTruckId,
-        amount: Number(val.toFixed(2)),
+        category: kind,
         description: description.trim() || null,
-        kind,
+        notes: notes.trim() || null,
+        amount: Number(val.toFixed(2)),
+        supplier: supplier.trim() || null,
+        status: status || null,
+        payment_method: paymentMethod || null,
         occurred_at: `${occurredAt}T12:00:00`,
+        due_date: dueDate || null,
       });
       toast.success("Despesa registrada");
+      invalidateMobile(["general_expenses", "trucks"]);
       nav({ to: "/garagem/$truckId", params: { truckId: selectedTruckId } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao registrar despesa");
@@ -110,7 +138,7 @@ function RegisterExpense() {
               placeholder="0,00"
             />
           </Field>
-          <Field label="Tipo">
+          <Field label="Tipo *">
             <div className="flex flex-wrap gap-1.5">
               {KINDS.map((k) => (
                 <button
@@ -135,13 +163,75 @@ function RegisterExpense() {
               placeholder="Ex.: troca de pneus"
             />
           </Field>
-          <Field label="Data">
+          <Field label="Fornecedor">
             <input
               className={inputClass}
-              type="date"
-              value={occurredAt}
-              max={todayISO()}
-              onChange={(e) => setOccurredAt(e.target.value)}
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              placeholder="Ex.: Borracharia Silva"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Status">
+              <div className="flex gap-1.5">
+                {STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s.v}
+                    type="button"
+                    onClick={() => setStatus(s.v)}
+                    className={cn(
+                      "flex-1 rounded-xl border px-3 py-2 text-[13px] font-semibold",
+                      status === s.v
+                        ? s.v === "pago"
+                          ? "border-success bg-success text-success-foreground"
+                          : "border-gold bg-gold text-gold-foreground"
+                        : "bg-background",
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Pagamento">
+              <select
+                className={inputClass}
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              >
+                <option value="">Selecionar</option>
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data">
+              <input
+                className={inputClass}
+                type="date"
+                value={occurredAt}
+                max={todayISO()}
+                onChange={(e) => setOccurredAt(e.target.value)}
+              />
+            </Field>
+            <Field label="Vencimento">
+              <input
+                className={inputClass}
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Observações">
+            <textarea
+              className={inputClass + " min-h-20 resize-y py-2"}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </Field>
         </MobileCard>

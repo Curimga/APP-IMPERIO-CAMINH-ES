@@ -1,7 +1,11 @@
 -- PROPOSTA — NÃO EXECUTAR SEM AUTORIZAÇÃO
--- Auditoria BLOQUEADA por falta de acesso ao banco do CRM (qsjvsqkwrjcqljfsmbuj).
+-- Auditoria BLOQUEADA: sem acesso ao projeto oficial lzortptqkhpapzegdftz.supabase.co.
 -- Este arquivo é apenas o roteiro + SQL proposto. Deve ser revisto/dono pelo time do CRM.
 -- Nenhuma instrução abaixo foi executada.
+-- Estado atual no APP (camada de cliente, sem alteração no banco):
+--   * queries omite colunas financeiras p/ não-exec (perm.ts/isAdmin);
+--   * hub Realtime não assina tabelas financeiras p/ financeiro/secretária;
+--   * ver docs/AUDITORIA-REALTIME.md.
 
 -- ---------------------------------------------------------------------------
 -- PARTE 1 — DIAGNÓSTICO (somente leitura; rodar com a role de análise no CRM)

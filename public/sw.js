@@ -10,7 +10,7 @@
  *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
 const CACHE_PREFIX = "imperio-";
-const VERSION = "imperio-v5-2026.09-truck-card-navigation";
+const VERSION = "imperio-v7-2026.09.23-realtime-sync";
 const APP_SHELL = "/";
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">

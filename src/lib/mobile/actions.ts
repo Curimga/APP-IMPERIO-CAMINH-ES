@@ -1,6 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { TruckStatus } from "@/lib/truck-status";
+import {
+  restoreStatusAfterService,
+  serviceCategoryToTruckStatus,
+} from "@/lib/mobile/service-truck";
 import type { Enums, Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 /**
@@ -18,7 +22,16 @@ export interface TruckInput {
   mileage?: number | null;
   fuel?: string | null;
   transmission?: string | null;
+  renavam?: string | null;
+  origin?: string | null;
+  supplier?: string | null;
+  consigned?: boolean;
+  purchase_date?: string | null;
   purchase_price?: number | null;
+  purchase_payment_method?: string | null;
+  purchase_installments_count?: number | null;
+  purchase_total_paid?: number | null;
+  purchase_total_pending?: number | null;
   expected_price?: number | null;
   description?: string | null;
   status?: TruckStatus;
@@ -59,19 +72,38 @@ export async function setTruckStatus(id: string, status: TruckStatus): Promise<v
   toast.success("Status atualizado");
 }
 
-export interface ExpenseInput {
-  truck_id: string;
-  amount: number;
+export interface GeneralExpenseInput {
+  truck_id?: string | null;
+  category?: string | null;
   description?: string | null;
-  kind?: Enums<"expense_kind">;
-  occurred_at?: string;
+  notes?: string | null;
+  amount: number;
+  payment_method?: string | null;
+  status?: string | null;
   supplier?: string | null;
+  occurred_at?: string;
+  due_date?: string | null;
 }
 
-export async function createTruckExpense(input: ExpenseInput): Promise<void> {
-  const { error } = await supabase.from("truck_expenses").insert({
-    ...input,
+/**
+ * Despesa no padrão do CRM: grava em `general_expenses` vinculada ao caminhão.
+ * O CRM alimenta `trucks.expenses_total` a partir desta tabela (ver bug das
+ * despesas) — por isso a mesma ação é usada no lançamento de despesa do caminhão.
+ */
+export async function createGeneralExpense(input: GeneralExpenseInput): Promise<void> {
+  const { error } = await supabase.from("general_expenses").insert({
+    truck_id: input.truck_id ?? null,
+    category: input.category || undefined,
+    description: input.description?.trim() || input.category || "Despesa",
+    notes: input.notes?.trim() || null,
+    amount: input.amount,
+    shared: false,
+    imperio_amount: input.amount,
+    payment_method: input.payment_method || null,
+    status: input.status || null,
+    supplier: input.supplier?.trim() || null,
     occurred_at: input.occurred_at ?? new Date().toISOString(),
+    due_date: input.due_date || null,
     created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
   });
   if (error) throw new Error(error.message);
@@ -82,27 +114,117 @@ export interface ServiceInput {
   truck_id: string;
   title: string;
   description?: string | null;
+  category?: string | null;
+  supplier_id?: string | null;
   notes?: string | null;
   expected_at?: string | null;
   status?: Enums<"service_status">;
   value?: number | null;
+  total_value?: number | null;
+  down_payment?: number | null;
 }
 
-export async function createService(input: ServiceInput): Promise<void> {
-  const { error } = await supabase.from("services").insert({
-    ...input,
-    status: input.status ?? "em_andamento",
-    created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-  });
+export async function createService(input: ServiceInput): Promise<string> {
+  const { data, error } = await supabase
+    .from("services")
+    .insert({
+      ...input,
+      description: input.description?.trim() || null,
+      status: input.status ?? "em_andamento",
+      created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  // Mesmo efeito colateral do CRM: serviço ativo → caminhão reflete o serviço.
+  await syncServiceTruckState({
+    serviceId: data.id,
+    truckId: input.truck_id,
+    category: input.category ?? null,
+    previousTruckStatus: null,
+    newStatus: input.status ?? "em_andamento",
+  });
   toast.success("Serviço criado");
+  return data.id;
+}
+
+export interface ServiceTruckSyncInput {
+  serviceId: string;
+  truckId?: string | null;
+  category?: string | null;
+  previousTruckStatus?: string | null;
+  newStatus: Enums<"service_status">;
+}
+
+/**
+ * Sincroniza o status do caminhão com o estado do serviço — mesma regra do CRM
+ * (`syncServiceSideEffects`/`completeService`):
+ *  - ativo (em_andamento/pendente): salva o status anterior do caminhão (1ª vez)
+ *    e move o caminhão para o status da categoria do serviço (padrão "oficina");
+ *  - concluído: restaura o status anterior (ou "disponivel").
+ */
+export async function syncServiceTruckState(input: ServiceTruckSyncInput): Promise<void> {
+  const { serviceId, truckId, category, previousTruckStatus, newStatus } = input;
+  if (!truckId || newStatus === "cancelado") return;
+  const changedAt = new Date().toISOString();
+
+  if (newStatus === "concluido") {
+    const target = restoreStatusAfterService(previousTruckStatus);
+    const { error } = await supabase
+      .from("trucks")
+      .update({ status: target, updated_at: changedAt })
+      .eq("id", truckId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const target = serviceCategoryToTruckStatus(category);
+  let previous = previousTruckStatus;
+  if (!previous) {
+    const { data, error } = await supabase
+      .from("trucks")
+      .select("status")
+      .eq("id", truckId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const current = data?.status;
+    if (current && current !== target) previous = current;
+    if (previous) {
+      const { error: prevErr } = await supabase
+        .from("services")
+        .update({ truck_previous_status: previous })
+        .eq("id", serviceId);
+      if (prevErr) throw new Error(prevErr.message);
+    }
+  }
+  const { error } = await supabase
+    .from("trucks")
+    .update({ status: target, updated_at: changedAt })
+    .eq("id", truckId);
+  if (error) throw new Error(error.message);
 }
 
 export async function setServiceStatus(id: string, status: Enums<"service_status">): Promise<void> {
+  const { data: current, error: loadError } = await supabase
+    .from("services")
+    .select("id, truck_id, category, truck_previous_status, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+
   const patch: TablesUpdate<"services"> = { status, updated_at: new Date().toISOString() };
   if (status === "concluido") patch.completed_at = new Date().toISOString();
   const { error } = await supabase.from("services").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
+
+  await syncServiceTruckState({
+    serviceId: id,
+    truckId: current?.truck_id ?? null,
+    category: current?.category ?? null,
+    previousTruckStatus: current?.truck_previous_status ?? null,
+    newStatus: status,
+  });
   toast.success("Serviço atualizado");
 }
 

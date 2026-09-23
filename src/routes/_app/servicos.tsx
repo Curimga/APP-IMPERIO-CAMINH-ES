@@ -10,6 +10,7 @@ import { mdRelative } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 
 export const Route = createFileRoute("/_app/servicos")({
   validateSearch: (s: Record<string, unknown>) => {
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/_app/servicos")({
 type Tab = "andamento" | "atrasados" | "concluidos";
 
 function ServiceItem({ s }: { s: ServiceItem }) {
+  const invalidateMobile = useInvalidateMobile();
   const isLate =
     s.status === "em_andamento" &&
     s.expected_at &&
@@ -82,6 +84,7 @@ function ServiceItem({ s }: { s: ServiceItem }) {
               onClick={async () => {
                 try {
                   await setServiceStatus(s.id, "concluido");
+                  invalidateMobile(["services", "trucks"]);
                   toast.success("Serviço concluído");
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Falha");
@@ -98,6 +101,7 @@ function ServiceItem({ s }: { s: ServiceItem }) {
               onClick={async () => {
                 try {
                   await setServiceStatus(s.id, "em_andamento");
+                  invalidateMobile(["services", "trucks"]);
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Falha");
                 }

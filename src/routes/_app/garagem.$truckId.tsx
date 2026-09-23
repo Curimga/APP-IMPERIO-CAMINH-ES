@@ -32,7 +32,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { canRegisterExpense } from "@/lib/mobile/perm";
 import {
   expenseKindLabel,
-  generalExpenseAmount,
   maySeeCpfCnpj,
   maySeeTruckFinance,
   mergeTruckExpenses,
@@ -45,6 +44,7 @@ import {
 } from "@/lib/mobile/truck-detail";
 import { toast } from "sonner";
 import { haptic } from "@/lib/mobile/haptic";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { isFavTruck, notifyRecents, pushRecentTruck, toggleFavTruck } from "@/lib/mobile/recent";
 
 export const Route = createFileRoute("/_app/garagem/$truckId")({
@@ -96,6 +96,7 @@ function km(value: number | null | undefined) {
 
 function StatusSheet({ open, onOpenChange, truck }: { open: boolean; onOpenChange: (v: boolean) => void; truck: TruckWithPhotos }) {
   const [saving, setSaving] = useState(false);
+  const invalidateMobile = useInvalidateMobile();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-2xl p-0 pb-8">
@@ -118,6 +119,7 @@ function StatusSheet({ open, onOpenChange, truck }: { open: boolean; onOpenChang
                 setSaving(true);
                 try {
                   await setTruckStatus(truck.id, s.v as TruckStatus);
+                  invalidateMobile(["trucks"]);
                   onOpenChange(false);
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Falha ao atualizar status");

@@ -53,11 +53,13 @@ export async function fetchDashboardSnapshot() {
 }
 
 /**
- * Império's effective share of a general expense.
+ * Império's effective share of a general expense — mesma regra do banco
+ * (`fn_general_expense_effective_amount`) e dos relatórios do CRM
+ * (`monthly-report-data` / `weekly-report-data`): compartilhada → `imperio_amount`,
+ * não compartilhada → `amount`.
  */
 export function imperioShare(r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) {
-  if (r.shared) return Number(r.imperio_amount ?? 0);
-  return Number(r.imperio_amount ?? r.amount ?? 0);
+  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.amount ?? 0);
 }
 
 const dayStart = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
@@ -67,7 +69,6 @@ const sameWeek = (a: string, b: Date) => {
   const end = new Date(start); end.setDate(end.getDate() + 7);
   return da >= start && da < end;
 };
-const sameMonth = (a: string, b: Date) => { const d = new Date(a); return d.getMonth() === b.getMonth() && d.getFullYear() === b.getFullYear(); };
 const sameYear = (a: string, b: Date) => new Date(a).getFullYear() === b.getFullYear();
 
 export function computeExecutiveKpis(s: DashboardSnapshot) {
@@ -78,12 +79,16 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
 
   const revDay = sold.filter((t) => sameDay(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
   const revWeek = sold.filter((t) => sameWeek(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
-  const revMonth = sold.filter((t) => sameMonth(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
   const revYear = sold.filter((t) => sameYear(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
 
-  const grossProfit = sold.reduce((s, t) => s + (Number(t.sold_price ?? 0) - Number(t.purchase_price ?? 0)), 0);
-  const totalExpenses = sumMoney((sold || []).map(t => t?.expenses_total));
-  const netProfit = money(grossProfit - totalExpenses);
+  // Resultados do mês corrente espelham o relatório mensal do CRM.
+  const monthReport = computeMonthReport(s, today);
+  const revMonth = monthReport.receita;
+  const opex = monthReport.opex;
+  const netProfit = monthReport.lucroLiquido;
+  const grossProfit = monthReport.lucroBruto;
+
+  const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const margins = sold
     .map((t) => {
       const revenue = Number(t.sold_price ?? 0);
@@ -102,9 +107,6 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
   const avgRoi = rois.length ? rois.reduce((a, b) => a + b, 0) / rois.length : 0;
   const ticketAvg = sold.length ? sold.reduce((s, t) => s + Number(t.sold_price ?? 0), 0) / sold.length : 0;
 
-  const generalOpex = (s.generalExp ?? []).reduce((sum, r) => sum + imperioShare(r), 0);
-  const opex = s.payables.filter((p) => p.status === "pago").reduce((s, r) => s + Number(r.amount ?? 0), 0) + generalOpex;
-  const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const balance = s.banks.reduce((s, b) => s + Number(b.current_balance ?? 0), 0);
 
   const openReceivable = s.receivables.filter((r) => !r.received_at).reduce((s, r) => s + Number(r.amount ?? 0), 0);
@@ -126,22 +128,187 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
   };
 }
 
+/* ============================================================
+   RELATÓRIOS FINANCEIROS (mensal e semanal) — exclusivo Executivo
+   ============================================================ */
+
+export interface PeriodReport {
+  key: string;
+  label: string;
+  rangeLabel: string;
+  receita: number;
+  custoCompra: number;
+  despesasCaminhao: number;
+  lucroBruto: number;
+  margemBruta: number;
+  opex: number;
+  lucroLiquido: number;
+  margemLiquida: number;
+  vendas: number;
+  compras: number;
+  entradas: number;
+  saidas: number;
+}
+
+const parseLocalDay = (iso: string | null | undefined): Date | null => {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const dmy = (d: Date | null) => (d ? `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}` : "—");
+
+/**
+ * Relatório de um período ([start, end] — ambos datas-caldeário, inclusive).
+ *
+ * Espelho EXATO do CRM (`relatorios/mensal-executivo` e `relatorios/semanal`):
+ * - Receita: soma de `sold_price` dos caminhões com `sold_at` no período.
+ * - Custo de compra: soma de `purchase_price` desses caminhões.
+ * - Despesas de preparação: soma de `expenses_total` desses caminhões.
+ * - Lucro bruto: Receita − Custo de compra − Despesas de preparação.
+ * - Opex: contas a pagar VINCULADAS a caminhão (truck_id) no período pelo
+ *   `occurred_at` + despesas gerais no período pelo `occurred_at` (parte da
+ *   Império). NÃO são usadas contas sem vínculo nem o flag pago/paid_at.
+ * - Lucro líquido: Lucro bruto − Opex.
+ * - Compras: soma de `purchase_price` dos caminhões com `purchase_date` no período.
+ * - Entradas/Saídas: recebíveis pagos / contas pagas com vencimento no período.
+ */
+export function computePeriodReport(s: DashboardSnapshot, start: Date, end: Date): PeriodReport {
+  const from = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const until = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  until.setHours(23, 59, 59, 999);
+  const inPeriod = (iso?: string | null) => {
+    const d = parseLocalDay(iso);
+    return !!d && d >= from && d <= until;
+  };
+
+  const sold = (s.trucks ?? []).filter((t) => inPeriod(t?.sold_at));
+  const receita = money(sold.reduce((sum, t) => sum + Number(t?.sold_price ?? 0), 0));
+  const custoCompra = money(sold.reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
+  const despesasCaminhao = money(sold.reduce((sum, t) => sum + Number(t?.expenses_total ?? 0), 0));
+  const lucroBruto = money(receita - custoCompra - despesasCaminhao);
+
+  const opexTruck = (s.payables ?? [])
+    .filter((p) => p?.truck_id && inPeriod(p.occurred_at))
+    .reduce((sum, p) => sum + Number(p?.amount ?? 0), 0);
+  const opexGen = (s.generalExp ?? [])
+    .filter((r) => inPeriod(r.occurred_at))
+    .reduce((sum, r) => sum + imperioShare(r), 0);
+  const opex = money(opexTruck + opexGen);
+  const lucroLiquido = money(lucroBruto - opex);
+
+  const compras = money((s.trucks ?? [])
+    .filter((t) => inPeriod(t?.purchase_date))
+    .reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
+
+  const entradas = money((s.receivables ?? [])
+    .filter((r) => inPeriod(r.due_date))
+    .filter((r) => r?.status === "recebido" || !!r?.received_at)
+    .reduce((sum, r) => sum + Number(r?.amount ?? 0), 0));
+  const saidas = money((s.payables ?? [])
+    .filter((p) => inPeriod(p.due_date))
+    .filter((p) => p?.status === "pago" || !!p?.paid_at)
+    .reduce((sum, p) => sum + Number(p?.amount ?? 0), 0));
+
+  return {
+    key: "",
+    label: "",
+    rangeLabel: "",
+    receita,
+    custoCompra,
+    despesasCaminhao,
+    lucroBruto,
+    margemBruta: receita > 0 ? (lucroBruto / receita) * 100 : 0,
+    opex,
+    lucroLiquido,
+    margemLiquida: receita > 0 ? (lucroLiquido / receita) * 100 : 0,
+    vendas: sold.length,
+    compras,
+    entradas,
+    saidas,
+  };
+}
+
+/** Segunda-feira da semana (CRM: `getStartOfWeek` — dia 0 = domingo retroage 6). */
+const startOfWeek = (ref: Date) => {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const day = d.getDay();
+  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const weekOfYear = (d: Date) => {
+  const base = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - base.getTime()) / 86400000 + base.getDay() + 1) / 7);
+};
+
+/** Relatório mensal referente a um mês específico (qualquer dia do mês). */
+export function computeMonthReport(s: DashboardSnapshot, ref: Date): PeriodReport {
+  const start = new Date(ref.getFullYear(), ref.getMonth(), 1);
+  const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  return {
+    ...computePeriodReport(s, start, end),
+    key: monthKey(ref),
+    label: monthLabel(monthKey(ref)),
+    rangeLabel: `${dmy(start)} – ${dmy(end)}`,
+  };
+}
+
+/** Relatório semanal (segunda a domingo, como o CRM) contendo `ref`. */
+export function computeWeekReport(s: DashboardSnapshot, ref: Date): PeriodReport {
+  const start = startOfWeek(ref);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return {
+    ...computePeriodReport(s, start, end),
+    key: `${start.getFullYear()}-W${String(weekOfYear(start)).padStart(2, "0")}`,
+    label: `Semana ${weekOfYear(start)}`,
+    rangeLabel: `${dmy(start)} – ${dmy(end)}`,
+  };
+}
+
+/** Séries mensais (mais antigas primeiro) — relatório mensal do Executivo. */
+export function computeMonthlyReports(s: DashboardSnapshot, months = 12): PeriodReport[] {
+  const today = s.refs.today;
+  const out: PeriodReport[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    out.push(computeMonthReport(s, new Date(today.getFullYear(), today.getMonth() - i, 1)));
+  }
+  return out;
+}
+
+/** Séries semanais (mais antigas primeiro) — relatório semanal do Executivo. */
+export function computeWeeklyReports(s: DashboardSnapshot, weeks = 8): PeriodReport[] {
+  const today = s.refs.today;
+  const out: PeriodReport[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    out.push(computeWeekReport(s, new Date(today.getFullYear(), today.getMonth(), today.getDate() - i * 7)));
+  }
+  return out;
+}
+
 export function computeMonthlySeries(s: DashboardSnapshot, months = 12) {
   const today = s.refs.today;
   const arr: { key: string; mes: string; vendas: number; receita: number; lucro: number; despesas: number; entradas: number; saidas: number }[] = [];
   for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    const k = monthKey(d);
-    const soldM = (s.trucks || []).filter((t) => t?.status === "vendido" && monthKey(new Date(t.sold_at || t.updated_at)) === k);
-    const vendas = soldM.length;
-    const receita = soldM.reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
-    const custo = soldM.reduce((s, t) => s + Number(t.purchase_price ?? 0) + Number(t.expenses_total ?? 0), 0);
-    const lucro = receita - custo;
-    const despesasPay = (s.payables || []).filter((p) => monthKey(new Date(p.occurred_at || p.due_date)) === k).reduce((s, p) => s + Number(p.amount ?? 0), 0);
-    const despesasGen = (s.generalExp ?? []).filter((r) => monthKey(new Date(r.occurred_at)) === k).reduce((sum, r) => sum + imperioShare(r), 0);
-    const despesas = despesasPay + despesasGen;
-    const entradas = (s.receivables || []).filter((p) => monthKey(new Date(p.occurred_at || p.due_date)) === k).reduce((s, p) => s + Number(p.amount ?? 0), 0);
-    arr.push({ key: k, mes: monthLabel(k), vendas, receita, lucro, despesas, entradas, saidas: despesas });
+    const r = computeMonthReport(s, new Date(today.getFullYear(), today.getMonth() - i, 1));
+    arr.push({
+      key: r.key,
+      mes: r.label,
+      vendas: r.vendas,
+      receita: r.receita,
+      lucro: r.lucroLiquido,
+      despesas: r.opex,
+      entradas: r.entradas,
+      saidas: r.saidas,
+    });
   }
   return arr;
 }

@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteEvent } from "@/lib/mobile/actions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { haptic } from "@/lib/mobile/haptic";
 import { useAuth } from "@/hooks/use-auth";
 import { isFinanceExecutive } from "@/lib/mobile/perm";
@@ -152,6 +153,7 @@ function Agenda() {
   const today = spaTodayISO();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const invalidateMobile = useInvalidateMobile();
 
   const [view, setView] = useState<"calendario" | "lista" | "pagamentos">("calendario");
   const [cursor, setCursor] = useState(() => {
@@ -201,6 +203,7 @@ function Agenda() {
   const del = useMutation({
     mutationFn: () => deleteEvent(activeEvent!.id),
     onSuccess: () => {
+      invalidateMobile(["calendar_events"]);
       qc.invalidateQueries({ queryKey: ["agenda"] });
       qc.invalidateQueries({ queryKey: ["agenda-range"] });
     },

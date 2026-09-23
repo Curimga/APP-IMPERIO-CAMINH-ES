@@ -443,6 +443,10 @@ export function useTruckDetail(id: string | undefined) {
       };
       if (!truck) return empty;
 
+      // `deals.value` é financeiro: sai do banco apenas para o Executivo.
+      const dealSelect = isExec
+        ? "id, truck_id, customer_id, stage, title, notes, value, priority, owner_id, occurred_at, created_at, updated_at"
+        : "id, truck_id, customer_id, stage, title, notes, priority, owner_id, occurred_at, created_at, updated_at";
       const [servicesR, historyR, notesR, truckDocsR, dealsR, warrantyR] = await Promise.all([
         supabase
           .from("services")
@@ -468,7 +472,7 @@ export function useTruckDetail(id: string | undefined) {
           .order("created_at", { ascending: false }),
         supabase
           .from("deals")
-          .select("id, truck_id, customer_id, stage, title, notes, value, priority, owner_id, occurred_at, created_at, updated_at")
+          .select(dealSelect)
           .eq("truck_id", id!)
           .order("updated_at", { ascending: false })
           .limit(30),
@@ -489,7 +493,9 @@ export function useTruckDetail(id: string | undefined) {
       const history = (historyR.data ?? []) as Tables<"truck_status_history">[];
       const notes = (notesR.data ?? []) as Tables<"truck_notes">[];
       const truckDocuments = (truckDocsR.data ?? []) as Tables<"truck_documents">[];
-      const deals = (dealsR.data ?? []) as TruckDealRef[];
+      const deals = ((dealsR.data ?? []) as unknown as TruckDealRef[]).map(
+        (d) => (isExec ? d : d ? { ...d, value: null } : d),
+      );
       const warranty = (warrantyR.data ?? null) as Tables<"truck_warranties"> | null;
       const dealIds = deals.map((d) => d.id);
 
@@ -782,6 +788,22 @@ export function useServices() {
         .limit(200);
       if (error) throw error;
       return (data ?? []) as ServiceItem[];
+    },
+  });
+}
+
+/** Fornecedores — seleção em formulários (id + nome). */
+export function useSuppliers() {
+  return useQuery({
+    queryKey: ["suppliers-options"],
+    queryFn: async (): Promise<SupplierName[]> => {
+      const { data, error } = await supabase
+        .from("suppliers")
+        .select("id, name")
+        .order("name", { ascending: true })
+        .limit(300);
+      if (error) throw error;
+      return (data ?? []) as SupplierName[];
     },
   });
 }
