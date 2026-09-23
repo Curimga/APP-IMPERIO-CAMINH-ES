@@ -12,8 +12,13 @@ import {
  * (relatorios/mensal-executivo e relatorios/semanal):
  * - Receita = sold_price dos caminhões com sold_at no período (sem status).
  * - Custo = purchase_price + expenses_total; Lucro bruto = Receita − Custo.
- * - Opex = payables com truck_id pelo occurred_at + despesas gerais pelo
- *   occurred_at (shared → imperio_amount, senão amount).
+ * - Opex MENSAL = payables com truck_id pelo occurred_at + despesas gerais
+ *   administrativas (não-compra e sem vínculo de caminhão).
+ * - Opex SEMANAL = truck_expenses do período + despesas gerais não-compra
+ *   (inclui vínculo de caminhão, com as gerais sobrepondo truck_expenses iguais).
+ * - Despesas gerais de COMPRA (custo_aquisicao / parcela) nunca entram no opex;
+ *   entram em Compras, junto com o purchase_price dos caminhões comprados
+ *   (fora do "offline" e que ainda não viraram despesa de compra).
  * - Lucro líquido = Lucro bruto − Opex.
  * - Semana = segunda a domingo (getStartOfWeek do CRM).
  */
@@ -86,7 +91,20 @@ function withPayable(snap: DashboardSnapshot, over: Partial<{ id: string; amount
   } as unknown as DashboardSnapshot;
 }
 
-function withGeneralExpense(snap: DashboardSnapshot, over: Partial<{ amount: number; imperio_amount: number; c4_amount: number; shared: boolean; occurred_at: string }>) {
+function withGeneralExpense(
+  snap: DashboardSnapshot,
+  over: Partial<{
+    id: string;
+    amount: number;
+    imperio_amount: number;
+    c4_amount: number;
+    shared: boolean;
+    occurred_at: string;
+    truck_id: string | null;
+    category: string;
+    purchase_installment_id: string | null;
+  }>,
+) {
   return {
     ...snap,
     generalExp: [
@@ -100,6 +118,23 @@ function withGeneralExpense(snap: DashboardSnapshot, over: Partial<{ amount: num
         c4_amount: 250,
         shared: true,
         occurred_at: "2026-09-03",
+        ...over,
+      } as never,
+    ],
+  } as unknown as DashboardSnapshot;
+}
+
+function withTruckExpense(snap: DashboardSnapshot, over: Partial<{ id: string; amount: number; truck_id: string; occurred_at: string; kind: string }>) {
+  return {
+    ...snap,
+    expenses: [
+      ...((snap.expenses ?? []) as never[]),
+      {
+        id: "e1",
+        kind: "mecanica",
+        amount: 700,
+        truck_id: "t1",
+        occurred_at: "2026-09-04",
         ...over,
       } as never,
     ],
@@ -176,10 +211,25 @@ describe("computeMonthReport — relatório mensal do Executivo (espelho CRM)", 
     expect(r.opex).toBe(3000);
   });
 
-  it("despesa geral não compartilhada conta o amount inteiro (espelho do CRM)", () => {
+  it("despesa geral não compartilhada conta pelo imperio_amount (espelho do CRM)", () => {
     const snap = withGeneralExpense(baseSnap(), { amount: 5000, imperio_amount: 3000, shared: false });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
-    expect(r.opex).toBe(5000);
+    expect(r.opex).toBe(3000);
+  });
+
+  it("despesa de COMPRA (custo_aquisicao) não entra no opex — vai para Compras", () => {
+    let snap = baseSnap();
+    snap = withGeneralExpense(snap, { category: "custo_aquisicao", amount: 50000, imperio_amount: 50000, shared: false });
+    snap = withGeneralExpense(snap, { id: "g2", category: "custo_aquisicao", purchase_installment_id: "inst1", amount: 30000, imperio_amount: 30000, shared: false });
+    const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    expect(r.opex).toBe(0);
+    expect(r.compras).toBe(80000);
+  });
+
+  it("despesa geral com vínculo de caminhão não entra no opex mensal", () => {
+    const snap = withGeneralExpense(baseSnap(), { truck_id: "t1", amount: 1500, imperio_amount: 1500, shared: false });
+    const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    expect(r.opex).toBe(0);
   });
 
   it("compras somam purchase_price dos caminhões com purchase_date no mês", () => {
@@ -187,6 +237,14 @@ describe("computeMonthReport — relatório mensal do Executivo (espelho CRM)", 
     snap = withTruck(snap, { id: "t2", status: "disponivel", sold_at: null, purchase_date: "2026-09-03", purchase_price: 60000 });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
     expect(r.compras).toBe(140000);
+  });
+
+  it("compras não duplica caminhão que já virou despesa de compra", () => {
+    let snap = withTruck(baseSnap(), { status: "disponivel", sold_at: null, purchase_date: "2026-09-03", purchase_price: 60000 });
+    snap = withGeneralExpense(snap, { id: "g2", category: "custo_aquisicao", truck_id: "t1", amount: 60000, imperio_amount: 60000, shared: false });
+    const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    expect(r.compras).toBe(60000);
+    expect(r.opex).toBe(0);
   });
 
   it("entradas/saídas consideram somente quitados com vencimento no período", () => {
@@ -226,6 +284,34 @@ describe("computeWeekReport — relatório semanal (segunda a domingo)", () => {
     const snap = withTruck(baseSnap(), { sold_at: "2026-09-14", updated_at: "2026-09-14" });
     const r = computeWeekReport(snap, new Date(2026, 8, 10));
     expect(r.vendas).toBe(0);
+  });
+
+  it("despesas da semana = truck_expenses do período + gerais não-compra", () => {
+    let snap = withTruckExpense(baseSnap(), { amount: 700, occurred_at: "2026-09-08" });
+    snap = withTruckExpense(snap, { id: "e2", amount: 300, occurred_at: "2026-09-12" });
+    snap = withGeneralExpense(snap, { occurred_at: "2026-09-08", amount: 2000, imperio_amount: 1000, shared: true });
+    const r = computeWeekReport(snap, new Date(2026, 8, 10));
+    expect(r.opex).toBe(2000); // 700 + 300 + 1000
+  });
+
+  it("não conta truck_expense fora da semana", () => {
+    const snap = withTruckExpense(baseSnap(), { amount: 700, occurred_at: "2026-09-14" });
+    const r = computeWeekReport(snap, new Date(2026, 8, 10));
+    expect(r.opex).toBe(0);
+  });
+
+  it("semanal NÃO usa boletos/contas de caminhão (base é truck_expenses)", () => {
+    const snap = withPayable(baseSnap(), { amount: 5000, truck_id: "t1", occurred_at: "2026-09-08", due_date: "2026-10-01" });
+    const r = computeWeekReport(snap, new Date(2026, 8, 10));
+    expect(r.opex).toBe(0);
+  });
+
+  it("despesa de compra não entra no opex semanal e vai para Compras", () => {
+    let snap = baseSnap();
+    snap = withGeneralExpense(snap, { occurred_at: "2026-09-09", category: "custo_aquisicao", amount: 40000, imperio_amount: 40000, shared: false });
+    const r = computeWeekReport(snap, new Date(2026, 8, 10));
+    expect(r.opex).toBe(0);
+    expect(r.compras).toBe(40000);
   });
 });
 

@@ -26,7 +26,7 @@ export async function fetchDashboardSnapshot() {
     supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id"),
     supabase.from("employees").select("id,full_name,salary,commission_amount,status").eq("status", "ativo"),
     supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id").gte("starts_at", today.toISOString()).lte("starts_at", next30),
-    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description").gte("occurred_at", start12m.slice(0, 10)),
+    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id").gte("occurred_at", start12m.slice(0, 10)),
     supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at"),
     supabase.from("truck_purchase_installments").select("*"),
   ]);
@@ -53,13 +53,13 @@ export async function fetchDashboardSnapshot() {
 }
 
 /**
- * Império's effective share of a general expense — mesma regra do banco
- * (`fn_general_expense_effective_amount`) e dos relatórios do CRM
- * (`monthly-report-data` / `weekly-report-data`): compartilhada → `imperio_amount`,
- * não compartilhada → `amount`.
+ * Valor efetivo da Império numa despesa geral — mesma regra dos relatórios do
+ * CRM (`monthly-report-data` / `weekly-report-data` / `general-expenses-report`):
+ * compartilhada → `imperio_amount` (senão 0); não compartilhada →
+ * `imperio_amount` (senão `amount`).
  */
 export function imperioShare(r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) {
-  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.amount ?? 0);
+  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.imperio_amount ?? r.amount ?? 0);
 }
 
 const dayStart = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
@@ -170,21 +170,32 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 const dmy = (d: Date | null) => (d ? `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}` : "—");
 
 /**
- * Relatório de um período ([start, end] — ambos datas-caldeário, inclusive).
+ * Relatório de um período ([start, end] — ambos datas-calendário, inclusive).
  *
  * Espelho EXATO do CRM (`relatorios/mensal-executivo` e `relatorios/semanal`):
  * - Receita: soma de `sold_price` dos caminhões com `sold_at` no período.
  * - Custo de compra: soma de `purchase_price` desses caminhões.
  * - Despesas de preparação: soma de `expenses_total` desses caminhões.
  * - Lucro bruto: Receita − Custo de compra − Despesas de preparação.
- * - Opex: contas a pagar VINCULADAS a caminhão (truck_id) no período pelo
- *   `occurred_at` + despesas gerais no período pelo `occurred_at` (parte da
- *   Império). NÃO são usadas contas sem vínculo nem o flag pago/paid_at.
+ * - Opex (mode "month"): contas a pagar VINCULADAS a caminhão (truck_id) no
+ *   período pelo `occurred_at` + despesas gerais administrativas (não-compra e
+ *   sem vínculo de caminhão). Opex (mode "week"): `truck_expenses` do período +
+ *   despesas gerais não-compra (inclui vínculo de caminhão), com as gerais
+ *   sobrepondo `truck_expenses` idênticas (mesmo truck_id|data|valor).
+ * - Despesas gerais de COMPRA (`custo_aquisicao`/parcela de compra) NUNCA entram
+ *   no opex — entram em Compras.
  * - Lucro líquido: Lucro bruto − Opex.
- * - Compras: soma de `purchase_price` dos caminhões com `purchase_date` no período.
+ * - Compras: `purchase_price` dos caminhões com `purchase_date` no período
+ *   (fora do "offline" e que ainda não viraram despesa de compra) + despesas
+ *   gerais de compra no período.
  * - Entradas/Saídas: recebíveis pagos / contas pagas com vencimento no período.
  */
-export function computePeriodReport(s: DashboardSnapshot, start: Date, end: Date): PeriodReport {
+export function computePeriodReport(
+  s: DashboardSnapshot,
+  start: Date,
+  end: Date,
+  mode: "week" | "month" = "month",
+): PeriodReport {
   const from = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const until = new Date(end.getFullYear(), end.getMonth(), end.getDate());
   until.setHours(23, 59, 59, 999);
@@ -193,24 +204,52 @@ export function computePeriodReport(s: DashboardSnapshot, start: Date, end: Date
     return !!d && d >= from && d <= until;
   };
 
+  const isPurchaseGeneral = (r: Tables<"general_expenses">) =>
+    !!r && (r.category === "custo_aquisicao" || !!r.purchase_installment_id);
+
   const sold = (s.trucks ?? []).filter((t) => inPeriod(t?.sold_at));
   const receita = money(sold.reduce((sum, t) => sum + Number(t?.sold_price ?? 0), 0));
   const custoCompra = money(sold.reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
   const despesasCaminhao = money(sold.reduce((sum, t) => sum + Number(t?.expenses_total ?? 0), 0));
   const lucroBruto = money(receita - custoCompra - despesasCaminhao);
 
-  const opexTruck = (s.payables ?? [])
-    .filter((p) => p?.truck_id && inPeriod(p.occurred_at))
-    .reduce((sum, p) => sum + Number(p?.amount ?? 0), 0);
-  const opexGen = (s.generalExp ?? [])
-    .filter((r) => inPeriod(r.occurred_at))
-    .reduce((sum, r) => sum + imperioShare(r), 0);
-  const opex = money(opexTruck + opexGen);
+  let opex: number;
+  if (mode === "week") {
+    const gerais = (s.generalExp ?? []).filter((r) => !isPurchaseGeneral(r) && inPeriod(r.occurred_at));
+    const overlap = new Set(
+      gerais
+        .filter((r) => r.truck_id)
+        .map((r) => `${r.truck_id}|${(r.occurred_at ?? "").slice(0, 10)}|${imperioShare(r).toFixed(2)}`),
+    );
+    const truck = (s.expenses ?? [])
+      .filter((r) => inPeriod(r.occurred_at))
+      .filter(
+        (r) =>
+          !overlap.has(
+            `${r.truck_id}|${(r.occurred_at ?? "").slice(0, 10)}|${Number(r.amount ?? 0).toFixed(2)}`,
+          ),
+      )
+      .reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+    opex = money(truck + gerais.reduce((sum, r) => sum + imperioShare(r), 0));
+  } else {
+    const truck = (s.payables ?? [])
+      .filter((p) => p?.truck_id && inPeriod(p.occurred_at))
+      .reduce((sum, p) => sum + Number(p?.amount ?? 0), 0);
+    const admin = (s.generalExp ?? [])
+      .filter((r) => !isPurchaseGeneral(r) && !r?.truck_id && inPeriod(r.occurred_at))
+      .reduce((sum, r) => sum + imperioShare(r), 0);
+    opex = money(truck + admin);
+  }
   const lucroLiquido = money(lucroBruto - opex);
 
-  const compras = money((s.trucks ?? [])
-    .filter((t) => inPeriod(t?.purchase_date))
-    .reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
+  const purchaseGenerals = (s.generalExp ?? []).filter((r) => isPurchaseGeneral(r) && inPeriod(r.occurred_at));
+  const purchaseTruckIds = new Set(purchaseGenerals.filter((r) => r.truck_id).map((r) => r.truck_id as string));
+  const compras = money(
+    (s.trucks ?? [])
+      .filter((t) => inPeriod(t?.purchase_date) && !purchaseTruckIds.has(t.id))
+      .reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0)
+      + purchaseGenerals.reduce((sum, r) => sum + imperioShare(r), 0),
+  );
 
   const entradas = money((s.receivables ?? [])
     .filter((r) => inPeriod(r.due_date))
@@ -259,7 +298,7 @@ export function computeMonthReport(s: DashboardSnapshot, ref: Date): PeriodRepor
   const start = new Date(ref.getFullYear(), ref.getMonth(), 1);
   const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
   return {
-    ...computePeriodReport(s, start, end),
+    ...computePeriodReport(s, start, end, "month"),
     key: monthKey(ref),
     label: monthLabel(monthKey(ref)),
     rangeLabel: `${dmy(start)} – ${dmy(end)}`,
@@ -272,7 +311,7 @@ export function computeWeekReport(s: DashboardSnapshot, ref: Date): PeriodReport
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
   return {
-    ...computePeriodReport(s, start, end),
+    ...computePeriodReport(s, start, end, "week"),
     key: `${start.getFullYear()}-W${String(weekOfYear(start)).padStart(2, "0")}`,
     label: `Semana ${weekOfYear(start)}`,
     rangeLabel: `${dmy(start)} – ${dmy(end)}`,
