@@ -210,7 +210,14 @@ export function computePeriodReport(
   const isPurchaseGeneral = (r: Tables<"general_expenses">) =>
     !!r && (r.category === "custo_aquisicao" || !!r.purchase_installment_id);
 
-  const sold = (s.trucks ?? []).filter((t) => inPeriod(t?.sold_at));
+  // Vendas contam somente caminhões com `sold_price` preenchido (CRM: `P`/`je`).
+  // O mensal ainda restringe ao status vendido/repasse (query `ge` do CRM);
+  // o semanal não restringe por status (only `sold_at` + preço).
+  const sold = (s.trucks ?? []).filter((t) => {
+    if (!inPeriod(t?.sold_at) || t?.sold_price == null) return false;
+    if (mode === "month" && t?.status !== "vendido" && t?.status !== "repasse") return false;
+    return true;
+  });
   const receita = money(sold.reduce((sum, t) => sum + Number(t?.sold_price ?? 0), 0));
   const custoCompra = money(sold.reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
   const despesasCaminhao = money(sold.reduce((sum, t) => sum + Number(t?.expenses_total ?? 0), 0));

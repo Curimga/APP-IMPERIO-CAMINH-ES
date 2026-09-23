@@ -200,6 +200,23 @@ describe("computeMonthReport — relatório mensal do Executivo (espelho CRM)", 
     expect(r.vendas).toBe(0);
   });
 
+  it("mensal ignora caminhão vendido sem sold_price e fora de vendido/repasse (espelho do CRM)", () => {
+    let snap = withTruck(baseSnap(), { sold_price: null });
+    snap = withTruck(snap, { id: "t2", status: "negociacao", sold_at: "2026-09-09", sold_price: 150000, purchase_price: 120000 });
+    const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    expect(r.receita).toBe(0);
+    expect(r.compras).toBe(0);
+    expect(r.vendas).toBe(0);
+    expect(r.resultadoGlobal).toBe(0);
+  });
+
+  it("mensal conta caminhão repasse como venda (espelho do CRM)", () => {
+    const snap = withTruck(baseSnap(), { status: "repasse", sold_at: "2026-09-10", sold_price: 100000, purchase_price: 80000 });
+    const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    expect(r.vendas).toBe(1);
+    expect(r.receita).toBe(100000);
+  });
+
   it("não conta caminhões vendidos fora do mês", () => {
     const snap = withTruck(baseSnap(), { sold_at: "2026-08-10", updated_at: "2026-08-10" });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
@@ -307,6 +324,15 @@ describe("computeWeekReport — relatório semanal (segunda a domingo)", () => {
     const snap = withPayable(baseSnap(), { amount: 5000, truck_id: "t1", occurred_at: "2026-09-08", due_date: "2026-10-01" });
     const r = computeWeekReport(snap, new Date(2026, 8, 10));
     expect(r.opex).toBe(0);
+  });
+
+  it("semanal não restringe status e ignora venda sem sold_price (espelho do CRM)", () => {
+    let snap = withTruck(baseSnap(), { status: "negociacao", sold_at: "2026-09-09", sold_price: 100000 });
+    snap = withTruck(snap, { id: "t2", sold_at: "2026-09-09", sold_price: null, purchase_price: 90000, expenses_total: 1000 });
+    const r = computeWeekReport(snap, new Date(2026, 8, 10));
+    expect(r.vendas).toBe(1);
+    expect(r.receita).toBe(100000);
+    expect(r.lucroLiquido).toBe(15000);
   });
 
   it("despesa de compra não entra no opex semanal e vai para Compras", () => {
