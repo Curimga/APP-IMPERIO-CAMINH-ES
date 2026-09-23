@@ -53,13 +53,14 @@ export async function fetchDashboardSnapshot() {
 }
 
 /**
- * Valor efetivo da Império numa despesa geral — mesma regra dos relatórios do
- * CRM (`monthly-report-data` / `weekly-report-data` / `general-expenses-report`):
- * compartilhada → `imperio_amount` (senão 0); não compartilhada →
- * `imperio_amount` (senão `amount`).
+ * Valor efetivo da Império numa despesa geral — espelho EXATO do `F` do CRM
+ * (`monthly-report-data` / `weekly-report-data`): compartilhada →
+ * `imperio_amount` (senão 0); NÃO compartilhada → `amount` (senão
+ * `imperio_amount`). Para não-compartilhada o CRM prioriza o `amount` integral,
+ * mesmo que `imperio_amount` esteja preenchido.
  */
 export function imperioShare(r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) {
-  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.imperio_amount ?? r.amount ?? 0);
+  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.amount ?? r.imperio_amount ?? 0);
 }
 
 const dayStart = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };

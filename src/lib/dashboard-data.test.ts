@@ -16,6 +16,8 @@ import {
  *   administrativas (não-compra e sem vínculo de caminhão).
  * - Opex SEMANAL = truck_expenses do período + despesas gerais não-compra
  *   (inclui vínculo de caminhão, com as gerais sobrepondo truck_expenses iguais).
+ * - Valor das gerais = `F` do CRM: compartilhada → imperio_amount (senão 0);
+ *   NÃO compartilhada → amount (senão imperio_amount).
  * - Despesas gerais de COMPRA (custo_aquisicao / parcela) nunca entram no opex;
  *   entram em Compras, junto com o purchase_price dos caminhões comprados
  *   (fora do "offline" e que ainda não viraram despesa de compra).
@@ -231,10 +233,10 @@ describe("computeMonthReport — relatório mensal do Executivo (espelho CRM)", 
     expect(r.opex).toBe(3000);
   });
 
-  it("despesa geral não compartilhada conta pelo imperio_amount (espelho do CRM)", () => {
+  it("despesa geral não compartilhada conta pelo amount integral mesmo com imperio_amount preenchido (espelho do CRM)", () => {
     const snap = withGeneralExpense(baseSnap(), { amount: 5000, imperio_amount: 3000, shared: false });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
-    expect(r.opex).toBe(3000);
+    expect(r.opex).toBe(5000);
   });
 
   it("despesa de COMPRA (custo_aquisicao) não entra no opex — vai para Compras", () => {
