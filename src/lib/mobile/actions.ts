@@ -53,7 +53,7 @@ export async function createTruck(input: TruckInput): Promise<string> {
 export async function updateTruck(id: string, patch: Partial<TruckInput>): Promise<void> {
   const { error } = await supabase
     .from("trucks")
-    .update(patch as TablesUpdate<"trucks">)
+    .update({ ...patch, updated_at: new Date().toISOString() } as TablesUpdate<"trucks">)
     .eq("id", id);
   if (error) throw new Error(error.message);
 }
@@ -330,6 +330,148 @@ export async function createInventoryItem(input: InventoryItemInput): Promise<st
   if (error) throw new Error(error.message);
   toast.success("Item adicionado ao estoque");
   return data.id;
+}
+
+export interface SettleReceivableInput {
+  id: string;
+  received_at?: string;
+}
+
+/** Marca uma conta a receber como recebida (registro de recebimento). */
+export async function settleReceivable(input: SettleReceivableInput): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("receivables")
+    .update({ status: "recebido", received_at: input.received_at ?? now, updated_at: now })
+    .eq("id", input.id);
+  if (error) throw new Error(error.message);
+  toast.success("Recebimento registrado");
+}
+
+export interface SettlePayableInput {
+  id: string;
+  paid_at?: string;
+}
+
+/** Marca uma conta a pagar como paga (registro de pagamento). */
+export async function settlePayable(input: SettlePayableInput): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("payables")
+    .update({ status: "pago", paid_at: input.paid_at ?? now, updated_at: now })
+    .eq("id", input.id);
+  if (error) throw new Error(error.message);
+  toast.success("Pagamento registrado");
+}
+
+/** Desmarca um recebimento já registrado (volta a ficar em aberto). */
+export async function reopenReceivable(id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("receivables")
+    .update({ status: "aberto", received_at: null, updated_at: now })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  toast.success("Lançamento reaberto");
+}
+
+/** Desmarca um pagamento já registrado (volta a ficar em aberto). */
+export async function reopenPayable(id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("payables")
+    .update({ status: "aberto", paid_at: null, updated_at: now })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  toast.success("Lançamento reaberto");
+}
+
+export interface SetExpensePaidInput {
+  id: string;
+  source: "truck" | "geral";
+  paid: boolean;
+}
+
+/**
+ * Marca/desmarca uma despesa como paga. `truck_expenses` não tem `updated_at`;
+ * `general_expenses` tem. O status "pago" alimenta o resumo da aba Despesas.
+ */
+export async function setExpensePaid(input: SetExpensePaidInput): Promise<void> {
+  const status = input.paid ? "pago" : null;
+  if (input.source === "truck") {
+    const { error } = await supabase
+      .from("truck_expenses")
+      .update({ status })
+      .eq("id", input.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("general_expenses")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", input.id);
+    if (error) throw new Error(error.message);
+  }
+  toast.success(input.paid ? "Despesa marcada como paga" : "Despesa marcada como pendente");
+}
+
+export async function adjustInventoryQuantity(id: string, delta: number): Promise<number> {
+  if (!Number.isFinite(delta) || delta === 0) throw new Error("Ajuste inválido.");
+  const { data: current, error: loadError } = await supabase
+    .from("inventory_items")
+    .select("quantity")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+  const next = Math.max(0, Math.round(Number(current?.quantity ?? 0) + delta));
+  const { error } = await supabase
+    .from("inventory_items")
+    .update({ quantity: next, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  toast.success(delta > 0 ? "Entrada registrada no estoque" : "Saída registrada do estoque");
+  return next;
+}
+
+export async function deleteInventoryItem(id: string): Promise<void> {
+  const { error } = await supabase.from("inventory_items").delete().eq("id", id);
+  if (error)
+    throw new Error(
+      /permission|policy|row-level/i.test(error.message)
+        ? "Exclusão permitida apenas para administradores."
+        : error.message,
+    );
+  toast.success("Item removido do estoque");
+}
+
+export interface CustomerUpdate {
+  name?: string;
+  phone?: string | null;
+  email?: string | null;
+  city?: string | null;
+  document?: string | null;
+  notes?: string | null;
+  status?: Enums<"customer_status">;
+}
+
+export async function updateCustomer(id: string, patch: CustomerUpdate): Promise<void> {
+  const { error } = await supabase
+    .from("customers")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  toast.success("Cliente atualizado");
+}
+
+export async function updateServiceDeadline(
+  id: string,
+  expectedAt: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from("services")
+    .update({ expected_at: expectedAt, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  toast.success("Prazo do serviço atualizado");
 }
 
 /** Registra uma mutação no audit_logs quando disponível. */

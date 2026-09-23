@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Wrench, CheckCircle2, Clock } from "lucide-react";
+import { Plus, Wrench, CheckCircle2, Clock, CalendarDays } from "lucide-react";
 import { useServices } from "@/lib/mobile/queries";
 import type { ServiceItem } from "@/lib/mobile/queries";
-import { setServiceStatus } from "@/lib/mobile/actions";
-import { MobileCard, SkeletonRows, EmptyState } from "@/components/mobile/ui";
+import { setServiceStatus, updateServiceDeadline } from "@/lib/mobile/actions";
+import { MobileCard, SkeletonRows, EmptyState, Field, inputClass, btnGold } from "@/components/mobile/ui";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { dateBR } from "@/lib/format";
-import { mdRelative } from "@/lib/mobile/dates";
+import { mdRelative, spaTodayISO } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -24,7 +25,66 @@ export const Route = createFileRoute("/_app/servicos")({
 
 type Tab = "andamento" | "atrasados" | "concluidos";
 
-function ServiceItem({ s }: { s: ServiceItem }) {
+function DeadlineSheet({ s, onClose }: { s: ServiceItem; onClose: () => void }) {
+  const invalidateMobile = useInvalidateMobile();
+  const [date, setDate] = useState(s.expected_at ? s.expected_at.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await updateServiceDeadline(s.id, date ? `${date}T12:00:00` : null);
+      invalidateMobile(["services", "trucks"]);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao atualizar prazo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="bottom" className="rounded-t-2xl p-0 pb-8">
+        <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+        <SheetHeader className="px-5 pb-2 pt-4 text-left">
+          <SheetTitle className="text-base">Prazo de conclusão</SheetTitle>
+          <SheetDescription>Atualize a previsão do serviço "{s.title}".</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={submit} className="space-y-3 px-5">
+          <Field label="Nova previsão">
+            <input
+              className={inputClass}
+              type="date"
+              value={date}
+              min={spaTodayISO()}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            Deixe a data vazia para remover a previsão do serviço.
+          </p>
+          {error ? (
+            <div
+              className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </div>
+          ) : null}
+          <button type="submit" disabled={saving} className={btnGold + " w-full"}>
+            {saving ? "Salvando..." : "Salvar prazo"}
+          </button>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function ServiceItem({ s, onEditDeadline }: { s: ServiceItem; onEditDeadline: (s: ServiceItem) => void }) {
   const invalidateMobile = useInvalidateMobile();
   const isLate =
     s.status === "em_andamento" &&
@@ -111,6 +171,13 @@ function ServiceItem({ s }: { s: ServiceItem }) {
               Iniciar
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={() => onEditDeadline(s)}
+            className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold text-gold active:bg-muted/60"
+          >
+            <CalendarDays className="h-3.5 w-3.5" /> Prazo
+          </button>
         </div>
       )}
     </div>
@@ -122,6 +189,7 @@ function Servicos() {
   const [tab, setTab] = useState<Tab>(() =>
     search.tab === "atrasados" || search.tab === "concluidos" ? search.tab : "andamento",
   );
+  const [deadlineFor, setDeadlineFor] = useState<ServiceItem | null>(null);
   const { data, isLoading, isError } = useServices();
 
   const all = data ?? [];
@@ -200,10 +268,12 @@ function Servicos() {
       ) : (
         <MobileCard className="divide-y">
           {list.map((s) => (
-            <ServiceItem key={s.id} s={s} />
+            <ServiceItem key={s.id} s={s} onEditDeadline={setDeadlineFor} />
           ))}
         </MobileCard>
       )}
+
+      {deadlineFor ? <DeadlineSheet s={deadlineFor} onClose={() => setDeadlineFor(null)} /> : null}
     </>
   );
 }

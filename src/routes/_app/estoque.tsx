@@ -1,10 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Package, TriangleAlert, Plus, MapPin } from "lucide-react";
+import { useState } from "react";
+import { Package, TriangleAlert, Plus, MapPin, Minus, Trash2 } from "lucide-react";
 import { useInventory } from "@/lib/mobile/queries";
 import type { InventoryItem } from "@/lib/mobile/queries";
+import { adjustInventoryQuantity, deleteInventoryItem } from "@/lib/mobile/actions";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { brl } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/estoque")({
   component: Estoque,
@@ -57,8 +62,120 @@ function ItemRow({ item }: { item: InventoryItem }) {
   );
 }
 
+function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
+  const invalidateMobile = useInvalidateMobile();
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [qty, setQty] = useState(() => Number(item.quantity ?? 0));
+
+  const run = async (fn: () => Promise<number | void>) => {
+    setBusy(true);
+    try {
+      const next = await fn();
+      if (typeof next === "number") setQty(next);
+      invalidateMobile(["inventory_items"]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na operação");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="bottom" className="rounded-t-2xl p-0 pb-8">
+        <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+        <SheetHeader className="px-5 pb-2 pt-4 text-left">
+          <SheetTitle className="text-base">{item.name}</SheetTitle>
+          <SheetDescription>Entrada, saída e remoção do estoque.</SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4 px-5">
+          <div className="grid grid-cols-3 items-center gap-2 text-center">
+            <div className="rounded-xl bg-muted p-3">
+              <div className="text-[11px] text-muted-foreground">Quantidade</div>
+              <div className="text-xl font-bold tabular-nums">
+                {qty} {item.unit ?? "un"}
+              </div>
+            </div>
+            <div className="rounded-xl bg-muted p-3">
+              <div className="text-[11px] text-muted-foreground">Mínimo</div>
+              <div className="text-xl font-bold tabular-nums">{item.min_quantity ?? 0}</div>
+            </div>
+            <div className="rounded-xl bg-muted p-3">
+              <div className="text-[11px] text-muted-foreground">Unitário</div>
+              <div className="text-xl font-bold tabular-nums">{brl(item.unit_price ?? 0)}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(() => adjustInventoryQuantity(item.id, -1))}
+              className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60 disabled:opacity-50"
+            >
+              <Minus className="h-4 w-4" /> Saída de 1
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(() => adjustInventoryQuantity(item.id, 1))}
+              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-gold text-sm font-bold text-gold-foreground active:opacity-80 disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" /> Entrada de 1
+            </button>
+          </div>
+
+          <div className="border-t pt-4">
+            {confirmDelete ? (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Remover <strong>{item.name}</strong> do estoque?
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmDelete(false)}
+                    className="h-11 rounded-xl border bg-background text-sm font-bold active:bg-muted/60 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        await deleteInventoryItem(item.id);
+                        onClose();
+                      })
+                    }
+                    className="h-11 rounded-xl bg-destructive text-sm font-bold text-white active:opacity-80 disabled:opacity-50"
+                  >
+                    {busy ? "Removendo..." : "Remover item"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmDelete(true)}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 text-sm font-bold text-destructive active:opacity-80 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" /> Remover item
+              </button>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function Estoque() {
   const { data, isLoading, isError } = useInventory();
+  const [active, setActive] = useState<InventoryItem | null>(null);
   const items = data ?? [];
   const low = items.filter(
     (i) =>
@@ -94,7 +211,14 @@ function Estoque() {
               <SectionTitle>Atenção — estoque baixo</SectionTitle>
               <MobileCard className="divide-y">
                 {low.map((i) => (
-                  <ItemRow key={i.id} item={i} />
+                  <button
+                    key={i.id}
+                    type="button"
+                    className="flex w-full items-center text-left pressable active:scale-[0.99]"
+                    onClick={() => setActive(i)}
+                  >
+                    <ItemRow item={i} />
+                  </button>
                 ))}
               </MobileCard>
             </>
@@ -102,11 +226,20 @@ function Estoque() {
           <SectionTitle>Itens em estoque ({normal.length})</SectionTitle>
           <MobileCard className="divide-y">
             {normal.map((i) => (
-              <ItemRow key={i.id} item={i} />
+              <button
+                key={i.id}
+                type="button"
+                className="flex w-full items-center text-left pressable active:scale-[0.99]"
+                onClick={() => setActive(i)}
+              >
+                <ItemRow item={i} />
+              </button>
             ))}
           </MobileCard>
         </div>
       )}
+
+      {active ? <ItemSheet item={active} onClose={() => setActive(null)} /> : null}
     </>
   );
 }

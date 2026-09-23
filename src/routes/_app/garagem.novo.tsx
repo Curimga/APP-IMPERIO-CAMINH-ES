@@ -1,13 +1,19 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
-import { createTruck } from "@/lib/mobile/actions";
+import { createTruck, updateTruck } from "@/lib/mobile/actions";
+import { useTruckDetail } from "@/lib/mobile/queries";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/garagem/novo")({
+  validateSearch: (s: Record<string, unknown>) => {
+    const r: { edit?: string } = {};
+    if (typeof s.edit === "string") r.edit = s.edit;
+    return r;
+  },
   component: NewTruck,
 });
 
@@ -68,11 +74,44 @@ const toNumber = (v: string) => {
 
 function NewTruck() {
   const nav = useNavigate();
+  const search = Route.useSearch();
   const { roles } = useAuth();
   const isExec = isFinanceExecutive(roles);
+  const isEdit = !!search.edit;
+  const { data: detail } = useTruckDetail(search.edit || undefined);
   const [form, setForm] = useState<Form>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = detail?.truck;
+    if (!t) return;
+    setForm({
+      brand: t.brand ?? "",
+      model: t.model ?? "",
+      year: t.year != null ? String(t.year) : "",
+      plate: t.plate ?? "",
+      color: t.color ?? "",
+      chassis: t.chassis ?? "",
+      renavam: t.renavam ?? "",
+      mileage: t.mileage != null ? String(t.mileage) : "",
+      fuel: t.fuel ?? "",
+      transmission: t.transmission ?? "",
+      origin: t.origin ?? "",
+      supplier: t.supplier ?? "",
+      consigned: t.consigned ?? false,
+      purchase_date: t.purchase_date ?? "",
+      purchase_price: t.purchase_price != null ? String(t.purchase_price) : "",
+      purchase_payment_method: t.purchase_payment_method ?? "",
+      purchase_installments_count:
+        t.purchase_installments_count != null ? String(t.purchase_installments_count) : "",
+      purchase_total_paid: t.purchase_total_paid != null ? String(t.purchase_total_paid) : "",
+      purchase_total_pending:
+        t.purchase_total_pending != null ? String(t.purchase_total_pending) : "",
+      expected_price: t.expected_price != null ? String(t.expected_price) : "",
+      description: t.description ?? "",
+    });
+  }, [detail]);
 
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -89,40 +128,49 @@ function NewTruck() {
       setError("Informe ao menos a marca e o modelo.");
       return;
     }
+    const payload = {
+      brand: form.brand.trim(),
+      model: form.model.trim(),
+      year: form.year ? toNumber(form.year) : null,
+      plate: form.plate.trim().toUpperCase() || null,
+      color: form.color.trim() || null,
+      chassis: form.chassis.trim() || null,
+      renavam: form.renavam.trim() || null,
+      mileage: form.mileage ? toNumber(form.mileage) : null,
+      fuel: form.fuel.trim() || null,
+      transmission: form.transmission.trim() || null,
+      origin: form.origin.trim() || null,
+      supplier: form.supplier.trim() || null,
+      consigned: form.consigned,
+      purchase_date: form.purchase_date || null,
+      purchase_price: form.purchase_price ? toNumber(form.purchase_price) : null,
+      purchase_payment_method: form.purchase_payment_method || null,
+      purchase_installments_count: form.purchase_installments_count
+        ? toNumber(form.purchase_installments_count)
+        : null,
+      purchase_total_paid: form.purchase_total_paid ? toNumber(form.purchase_total_paid) : null,
+      purchase_total_pending: form.purchase_total_pending
+        ? toNumber(form.purchase_total_pending)
+        : null,
+      expected_price: form.expected_price ? toNumber(form.expected_price) : null,
+      description: form.description.trim() || null,
+    };
     setSaving(true);
     try {
-      const id = await createTruck({
-        brand: form.brand.trim(),
-        model: form.model.trim(),
-        year: form.year ? toNumber(form.year) : null,
-        plate: form.plate.trim().toUpperCase() || null,
-        color: form.color.trim() || null,
-        chassis: form.chassis.trim() || null,
-        renavam: form.renavam.trim() || null,
-        mileage: form.mileage ? toNumber(form.mileage) : null,
-        fuel: form.fuel.trim() || null,
-        transmission: form.transmission.trim() || null,
-        origin: form.origin.trim() || null,
-        supplier: form.supplier.trim() || null,
-        consigned: form.consigned,
-        purchase_date: form.purchase_date || null,
-        purchase_price: form.purchase_price ? toNumber(form.purchase_price) : null,
-        purchase_payment_method: form.purchase_payment_method || null,
-        purchase_installments_count: form.purchase_installments_count
-          ? toNumber(form.purchase_installments_count)
-          : null,
-        purchase_total_paid: form.purchase_total_paid ? toNumber(form.purchase_total_paid) : null,
-        purchase_total_pending: form.purchase_total_pending
-          ? toNumber(form.purchase_total_pending)
-          : null,
-        expected_price: form.expected_price ? toNumber(form.expected_price) : null,
-        description: form.description.trim() || null,
-        status: form.consigned ? "consignado" : "disponivel",
-      });
-      toast.success(form.consigned ? "Caminhão consignado cadastrado" : "Caminhão cadastrado");
-      nav({ to: "/garagem/$truckId", params: { truckId: id } });
+      if (isEdit && search.edit) {
+        await updateTruck(search.edit, payload);
+        toast.success("Caminhão atualizado");
+        nav({ to: "/garagem/$truckId", params: { truckId: search.edit } });
+      } else {
+        const id = await createTruck({
+          ...payload,
+          status: form.consigned ? "consignado" : "disponivel",
+        });
+        toast.success(form.consigned ? "Caminhão consignado cadastrado" : "Caminhão cadastrado");
+        nav({ to: "/garagem/$truckId", params: { truckId: id } });
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao cadastrar");
+      setError(e instanceof Error ? e.message : "Falha ao salvar");
     } finally {
       setSaving(false);
     }
@@ -132,13 +180,14 @@ function NewTruck() {
     <>
       <div className="flex items-center gap-3">
         <Link
-          to="/garagem"
+          to={isEdit && search.edit ? "/garagem/$truckId" : "/garagem"}
+          params={isEdit && search.edit ? { truckId: search.edit } : undefined}
           aria-label="Voltar"
           className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background active:bg-muted/60"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-bold">Cadastrar caminhão</h1>
+        <h1 className="text-xl font-bold">{isEdit ? "Editar caminhão" : "Cadastrar caminhão"}</h1>
       </div>
 
       <form onSubmit={submit} className="space-y-3">
@@ -379,9 +428,13 @@ function NewTruck() {
         )}
 
         <button type="submit" disabled={saving} className={btnGold}>
-          {saving ? "Salvando..." : "Salvar caminhão"}
+          {saving ? "Salvando..." : isEdit ? "Salvar alterações" : "Salvar caminhão"}
         </button>
-        <Link to="/garagem" className={btnGhost + " flex items-center justify-center"}>
+        <Link
+          to={isEdit && search.edit ? "/garagem/$truckId" : "/garagem"}
+          params={isEdit && search.edit ? { truckId: search.edit } : undefined}
+          className={btnGhost + " flex items-center justify-center"}
+        >
           Cancelar
         </Link>
       </form>

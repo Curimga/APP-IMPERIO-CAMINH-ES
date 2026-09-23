@@ -3,9 +3,12 @@ import { useMemo, useState } from "react";
 import { CheckCheck, CircleAlert, Hourglass, Truck } from "lucide-react";
 import { useMobileFinance, useTrucks } from "@/lib/mobile/queries";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
+import { settleReceivable, settlePayable, reopenReceivable, reopenPayable } from "@/lib/mobile/actions";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { brl, dateBR } from "@/lib/format";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -101,8 +104,10 @@ const FILTERS: { key: Filter; label: string }[] = [
 export function PagamentosTab() {
   const { data, isLoading, isError } = useMobileFinance();
   const { data: trucks } = useTrucks();
+  const invalidateMobile = useInvalidateMobile();
   const [filter, setFilter] = useState<Filter>("hoje");
   const [active, setActive] = useState<PaymentRow | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const rows = useMemo(() => toPaymentRows(data?.snap ?? null), [data?.snap]);
 
@@ -220,7 +225,8 @@ export function PagamentosTab() {
           </SheetHeader>
           <div className="px-5 pb-6">
             {active ? (
-              <dl className="space-y-2 text-sm">
+              <>
+                <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Descrição</dt>
                   <dd className="max-w-[55%] truncate font-semibold">{active.description}</dd>
@@ -272,6 +278,64 @@ export function PagamentosTab() {
                   </div>
                 ) : null}
               </dl>
+                <div className="mt-4 space-y-2">
+                {!active.paid ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        if (active.kind === "receber") {
+                          await settleReceivable({ id: active.id });
+                        } else {
+                          await settlePayable({ id: active.id });
+                        }
+                        invalidateMobile(["receivables", "payables"]);
+                        setActive(null);
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Falha ao registrar");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gold text-sm font-bold text-gold-foreground active:opacity-80 disabled:opacity-50"
+                  >
+                    <CheckCheck className="h-4 w-4" />
+                    {saving
+                      ? "Registrando..."
+                      : active.kind === "receber"
+                        ? "Registrar recebimento"
+                        : "Marcar como pago"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        if (active.kind === "receber") {
+                          await reopenReceivable(active.id);
+                        } else {
+                          await reopenPayable(active.id);
+                        }
+                        invalidateMobile(["receivables", "payables"]);
+                        setActive(null);
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Falha ao reabrir");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60 disabled:opacity-50"
+                  >
+                    <Hourglass className="h-4 w-4" />
+                    {saving ? "Processando..." : "Reabrir lançamento"}
+                  </button>
+                )}
+              </div>
+              </>
             ) : null}
           </div>
         </SheetContent>

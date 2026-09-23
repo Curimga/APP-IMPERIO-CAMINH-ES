@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { isFinancialNotification } from "@/lib/mobile/queries";
+import { notificationLinkTarget } from "@/lib/mobile/notification-link";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +93,7 @@ export function NotificationsBell() {
           ) : (
             <ul className="divide-y">
               {items.map((n) => {
+                const target = notificationLinkTarget(n.link);
                 const body = (
                   <div className="flex gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
                     <div className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${PRIORITY_DOT[n.priority] ?? "bg-muted-foreground"}`} />
@@ -109,7 +111,7 @@ export function NotificationsBell() {
                 );
                 return (
                   <li key={n.id} className={n.read ? "opacity-60" : ""}>
-                    {n.link ? <Link to={n.link as any}>{body}</Link> : body}
+                    {target ? <Link to={target as never}>{body}</Link> : body}
                   </li>
                 );
               })}

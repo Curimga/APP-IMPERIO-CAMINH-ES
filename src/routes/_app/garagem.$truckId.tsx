@@ -4,11 +4,13 @@ import type React from "react";
 import {
   ArrowLeft,
   CalendarDays,
+  CheckCheck,
   DollarSign,
   FileText,
   Heart,
   ImageIcon,
   Lock,
+  Pencil,
   UserRound,
   Wrench,
 } from "lucide-react";
@@ -26,10 +28,10 @@ import type { TruckStatus } from "@/lib/truck-status";
 import { brl, dateBR } from "@/lib/format";
 import { mdDaysParked, mdRelative } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
-import { setTruckStatus } from "@/lib/mobile/actions";
+import { setTruckStatus, setExpensePaid } from "@/lib/mobile/actions";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { canRegisterExpense } from "@/lib/mobile/perm";
+import { canRegisterExpense, canManageTrucks } from "@/lib/mobile/perm";
 import {
   expenseKindLabel,
   maySeeCpfCnpj,
@@ -224,6 +226,8 @@ function TruckDetail() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [fav, setFav] = useState(false);
   const [tab, setTab] = useState<TabKey>("ficha");
+  const [expenseBusy, setExpenseBusy] = useState<string | null>(null);
+  const invalidateMobile = useInvalidateMobile();
 
   const truck = data?.truck ?? null;
   const tabs = useMemo(
@@ -277,6 +281,16 @@ function TruckDetail() {
             {indicator ? <MiniPill tone={indicator === "Vendido" ? "success" : indicator === "Reservado" ? "gold" : "muted"}>{indicator}</MiniPill> : null}
           </div>
         </div>
+        {canManageTrucks(roles) ? (
+          <Link
+            to="/garagem/novo"
+            search={{ edit: truck.id }}
+            aria-label="Editar caminhão"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card pressable active:scale-95"
+          >
+            <Pencil className="h-5 w-5 text-muted-foreground" />
+          </Link>
+        ) : null}
         <button
           type="button"
           aria-label={fav ? "Remover dos favoritos" : "Adicionar aos favoritos"}
@@ -413,19 +427,46 @@ function TruckDetail() {
             </div>
             {expenseLines.length === 0 ? <EmptyLine text="Nenhuma despesa registrada." /> : (
               <div className="divide-y divide-border/60">
-                {expenseLines.map((e) => (
-                  <div key={e.id} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0"><div className="font-semibold">{e.description || expenseKindLabel(e.kind)}</div><div className="text-xs text-muted-foreground">{expenseKindLabel(e.kind)} · {e.supplier ?? "sem fornecedor"}{e.source === "geral" ? " · geral" : ""}</div></div>
-                      <div className="text-right"><div className="font-bold">{brl(e.amount)}</div><MiniPill tone={e.status === "pago" ? "success" : "gold"}>{e.status ?? "pendente"}</MiniPill></div>
+                {expenseLines.map((e) => {
+                  const isPaid = e.status === "pago";
+                  const rawId = e.source === "geral" ? e.id.slice("geral-".length) : e.id.slice("truck-".length);
+                  const busy = expenseBusy === e.id;
+                  return (
+                    <div key={e.id} className="py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0"><div className="font-semibold">{e.description || expenseKindLabel(e.kind)}</div><div className="text-xs text-muted-foreground">{expenseKindLabel(e.kind)} · {e.supplier ?? "sem fornecedor"}{e.source === "geral" ? " · geral" : ""}</div></div>
+                        <div className="text-right"><div className="font-bold">{brl(e.amount)}</div><MiniPill tone={isPaid ? "success" : "gold"}>{e.status ?? "pendente"}</MiniPill></div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>Data: {dateBR(e.occurred_at)}</span><span>Venc.: {dateBR(e.due_date)}</span>
+                      </div>
+                      {e.notes ? <p className="mt-2 text-xs text-muted-foreground">{e.notes}</p> : null}
+                      {e.attachment_url ? <a className="mt-2 inline-flex text-xs font-bold text-gold" href={e.attachment_url} target="_blank" rel="noreferrer">Abrir comprovante</a> : null}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={async () => {
+                          setExpenseBusy(e.id);
+                          try {
+                            await setExpensePaid({ id: rawId, source: e.source, paid: !isPaid });
+                            invalidateMobile(["general_expenses", "truck_expenses"]);
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Falha ao atualizar despesa");
+                          } finally {
+                            setExpenseBusy(null);
+                          }
+                        }}
+                        className={cn(
+                          "mt-2 inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-bold pressable active:scale-95 disabled:opacity-50",
+                          isPaid ? "bg-background" : "border-success/40 bg-success/10 text-success",
+                        )}
+                      >
+                        <CheckCheck className={cn("h-3.5 w-3.5", isPaid ? "text-muted-foreground" : "text-success")} />
+                        {busy ? "..." : isPaid ? "Marcar pendente" : "Marcar paga"}
+                      </button>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>Data: {dateBR(e.occurred_at)}</span><span>Venc.: {dateBR(e.due_date)}</span>
-                    </div>
-                    {e.notes ? <p className="mt-2 text-xs text-muted-foreground">{e.notes}</p> : null}
-                    {e.attachment_url ? <a className="mt-2 inline-flex text-xs font-bold text-gold" href={e.attachment_url} target="_blank" rel="noreferrer">Abrir comprovante</a> : null}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </MobileCard>
@@ -507,7 +548,13 @@ function TruckDetail() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-2">
-        <Link to="/servicos" search={{ truck_id: truck.id }} className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"><Wrench className="h-4 w-4" />Criar serviço</Link>
+        <Link
+          to="/servicos/novo"
+          search={{ truck_id: truck.id }}
+          className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
+        >
+          <Wrench className="h-4 w-4" />Criar serviço
+        </Link>
         <Link to="/agenda/novo" search={{ truck_id: truck.id, date: undefined, edit: undefined }} className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"><CalendarDays className="h-4 w-4" />Compromisso</Link>
       </div>
 

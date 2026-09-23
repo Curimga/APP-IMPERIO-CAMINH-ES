@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bell, CheckCheck, AlertTriangle, Wrench, DollarSign, Calendar, TrendingUp, Package, Users } from "lucide-react";
 import { useNotifications } from "@/lib/mobile/queries";
+import { notificationLinkTarget } from "@/lib/mobile/notification-link";
 import { markNotificationsRead } from "@/lib/mobile/actions";
 import { MobileCard, SkeletonRows, EmptyState } from "@/components/mobile/ui";
 import { mdBR, mdTime } from "@/lib/mobile/dates";
@@ -121,11 +122,14 @@ function Notificacoes() {
                     {n.message || n.title}
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
-                    {n.link ? (
-                      <Link to={n.link} className="text-gold" onClick={(e) => e.stopPropagation()}>
-                        Ver detalhes
-                      </Link>
-                    ) : null}
+                    {(() => {
+                      const target = notificationLinkTarget(n.link);
+                      return target ? (
+                        <Link to={target as never} className="text-gold" onClick={(e) => e.stopPropagation()}>
+                          Ver detalhes
+                        </Link>
+                      ) : null;
+                    })()}
                     {n.created_at ? (
                       <>
                         {" · "}
