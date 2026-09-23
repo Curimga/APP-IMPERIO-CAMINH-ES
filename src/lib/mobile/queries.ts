@@ -1001,9 +1001,9 @@ function useAuthSession() {
  * Capital imobilizado (caminhões em estoque com valor investido).
  * Exclusivo do Executivo.
  *
- * Mesma definição do CRM mobile (`app.financeiro` / home do executivo): conta
- * os 8 status em estoque (não inclui reservado, negociacao, manutencao e
- * vendido), custo = `purchase_price` + `expenses_total`.
+ * Mesma definição do CRM desktop (Home exec / Relatórios → Estoque e
+ * Compras, `truck-status.ts`): conta os 8 status em estoque, custo =
+ * `purchase_price` + `expenses_total`.
  */
 export function useCapitalImobilizado() {
   const { roles } = useAuth();
@@ -1014,9 +1014,9 @@ export function useCapitalImobilizado() {
     "patio",
     "oficina",
     "pintura",
-    "interna",
     "despachante",
-    "repasse",
+    "reservado",
+    "negociacao",
   ];
   return useQuery({
     queryKey: ["capital-imobilizado", isExec],
