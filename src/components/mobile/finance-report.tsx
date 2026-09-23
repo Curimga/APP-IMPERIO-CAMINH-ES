@@ -104,12 +104,12 @@ function WaterfallCard({ report, mode, reveal }: { report: PeriodReport; mode: P
           <div className="my-1 flex items-center gap-2">
             <span className="h-px flex-1 bg-border" />
             <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              Resultado global · {report.margemGlobal.toFixed(1)}%
+              Resultado líquido global · {report.margemGlobal.toFixed(1)}%
             </span>
             <span className="h-px flex-1 bg-border" />
           </div>
           <div className="flex items-center justify-between gap-3 py-1.5">
-            <span className="text-[13px] font-semibold">Resultado global</span>
+            <span className="text-[13px] font-semibold">Resultado líquido global</span>
             <Lucro value={report.resultadoGlobal} reveal={reveal} className="text-[16px] font-extrabold" />
           </div>
         </>
@@ -119,12 +119,12 @@ function WaterfallCard({ report, mode, reveal }: { report: PeriodReport; mode: P
           <div className="my-1 flex items-center gap-2">
             <span className="h-px flex-1 bg-border" />
             <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              Lucro bruto · {report.margemBruta.toFixed(1)}%
+              Lucro líquido (caminhões) · {report.margemBruta.toFixed(1)}%
             </span>
             <span className="h-px flex-1 bg-border" />
           </div>
           <div className="flex items-center justify-between gap-3 py-1.5">
-            <span className="text-[13px] font-semibold">Lucro bruto</span>
+            <span className="text-[13px] font-semibold">Lucro líquido (caminhões)</span>
             <Lucro value={report.lucroBruto} reveal={reveal} className="text-[16px] font-extrabold" />
           </div>
           <WaterfallRow
@@ -136,12 +136,12 @@ function WaterfallCard({ report, mode, reveal }: { report: PeriodReport; mode: P
           <div className="my-1 flex items-center gap-2">
             <span className="h-px flex-1 bg-border" />
             <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              Lucro líquido · {report.margemLiquida.toFixed(1)}%
+              Resultado líquido global · {report.margemLiquida.toFixed(1)}%
             </span>
             <span className="h-px flex-1 bg-border" />
           </div>
           <div className="flex items-center justify-between gap-3 py-1.5">
-            <span className="text-[13px] font-semibold">Lucro líquido (resultado)</span>
+            <span className="text-[13px] font-semibold">Resultado líquido global</span>
             <Lucro value={report.lucroLiquido} reveal={reveal} className="text-[16px] font-extrabold" />
           </div>
         </>
@@ -265,7 +265,7 @@ export function FinanceReport({ snap, reveal }: { snap: DashboardSnapshot; revea
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <MoneyStat label="Faturamento" value={<Value value={current.receita} reveal={reveal} />} accent="gold" />
-              <MoneyStat label="Lucro bruto" value={<Value value={current.lucroBruto} reveal={reveal} />} accent="info" />
+              <MoneyStat label="Lucro líquido (caminhões)" value={<Value value={current.lucroBruto} reveal={reveal} />} accent="info" />
               {mode === "mes" ? (
                 <>
                   <MoneyStat label="Despesas diretas" value={<Value value={current.despesasCaminhao} reveal={reveal} />} accent="muted" />
@@ -280,7 +280,7 @@ export function FinanceReport({ snap, reveal }: { snap: DashboardSnapshot; revea
                     accent={current.lucroLiquido >= 0 ? "success" : "destructive"}
                   />
                   <MoneyStat
-                    label="Resultado global"
+                    label="Resultado líquido global"
                     value={
                       <span className={cn(current.resultadoGlobal >= 0 ? "text-success" : "text-destructive")}>
                         <Value value={current.resultadoGlobal} reveal={reveal} />
@@ -293,7 +293,7 @@ export function FinanceReport({ snap, reveal }: { snap: DashboardSnapshot; revea
                 <>
                   <MoneyStat label="Despesas" value={<Value value={current.opex} reveal={reveal} />} accent="muted" />
                   <MoneyStat
-                    label="Lucro líquido"
+                    label="Resultado líquido global"
                     value={
                       <span className={cn(current.lucroLiquido >= 0 ? "text-success" : "text-destructive")}>
                         <Value value={current.lucroLiquido} reveal={reveal} />
