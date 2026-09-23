@@ -65,7 +65,7 @@ function WaterfallRow({
   );
 }
 
-function WaterfallCard({ report, reveal }: { report: PeriodReport; reveal: boolean }) {
+function WaterfallCard({ report, mode, reveal }: { report: PeriodReport; mode: PeriodMode; reveal: boolean }) {
   return (
     <MobileCard className="p-4">
       <SectionTitle className="mb-1">
@@ -75,36 +75,84 @@ function WaterfallCard({ report, reveal }: { report: PeriodReport; reveal: boole
       </SectionTitle>
       <WaterfallRow label="Receita total" raw={report.receita} sign="plus" reveal={reveal} />
       <WaterfallRow label="Custo de compra dos caminhões" raw={-report.custoCompra} sign="minus" reveal={reveal} />
-      <WaterfallRow label="Despesas de preparação" raw={-report.despesasCaminhao} sign="minus" reveal={reveal} />
-      <div className="my-1 flex items-center gap-2">
-        <span className="h-px flex-1 bg-border" />
-        <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-          Lucro bruto · {report.margemBruta.toFixed(1)}%
-        </span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <div className="flex items-center justify-between gap-3 py-1.5">
-        <span className="text-[13px] font-semibold">Lucro bruto</span>
-        <Lucro value={report.lucroBruto} reveal={reveal} className="text-[16px] font-extrabold" />
-      </div>
-      <WaterfallRow label="Despesas operacionais (contas de caminhão + gerais)" raw={-report.opex} sign="minus" reveal={reveal} />
-      <div className="my-1 flex items-center gap-2">
-        <span className="h-px flex-1 bg-border" />
-        <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-          Lucro líquido · {report.margemLiquida.toFixed(1)}%
-        </span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <div className="flex items-center justify-between gap-3 py-1.5">
-        <span className="text-[13px] font-semibold">Lucro líquido</span>
-        <Lucro value={report.lucroLiquido} reveal={reveal} className="text-[16px] font-extrabold" />
-      </div>
+      {mode === "mes" ? (
+        <>
+          <div className="my-1 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Lucro bruto · {report.margemBruta.toFixed(1)}%
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-[13px] font-semibold">Lucro bruto (Receita − Compra)</span>
+            <Lucro value={report.lucroBruto} reveal={reveal} className="text-[16px] font-extrabold" />
+          </div>
+          <WaterfallRow label="Despesas diretas (preparação)" raw={-report.despesasCaminhao} sign="minus" reveal={reveal} />
+          <div className="my-1 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Lucro líquido (caminhões) · {report.margemLiquida.toFixed(1)}%
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-[13px] font-semibold">Lucro líquido (caminhões)</span>
+            <Lucro value={report.lucroLiquido} reveal={reveal} className="text-[16px] font-extrabold" />
+          </div>
+          <WaterfallRow label="Despesas gerais / OPEX" raw={-report.opex} sign="minus" reveal={reveal} />
+          <div className="my-1 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Resultado global · {report.margemGlobal.toFixed(1)}%
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-[13px] font-semibold">Resultado global</span>
+            <Lucro value={report.resultadoGlobal} reveal={reveal} className="text-[16px] font-extrabold" />
+          </div>
+        </>
+      ) : (
+        <>
+          <WaterfallRow label="Despesas de preparação" raw={-report.despesasCaminhao} sign="minus" reveal={reveal} />
+          <div className="my-1 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Lucro bruto · {report.margemBruta.toFixed(1)}%
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-[13px] font-semibold">Lucro bruto</span>
+            <Lucro value={report.lucroBruto} reveal={reveal} className="text-[16px] font-extrabold" />
+          </div>
+          <WaterfallRow
+            label="Despesas da semana (caminhões + gerais)"
+            raw={-report.opex}
+            sign="minus"
+            reveal={reveal}
+          />
+          <div className="my-1 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Lucro líquido · {report.margemLiquida.toFixed(1)}%
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-[13px] font-semibold">Lucro líquido (resultado)</span>
+            <Lucro value={report.lucroLiquido} reveal={reveal} className="text-[16px] font-extrabold" />
+          </div>
+        </>
+      )}
     </MobileCard>
   );
 }
 
-function PeriodRow({ item }: { item: PeriodReport }) {
-  const lucro = item.lucroLiquido;
+function PeriodRow({ item, mode }: { item: PeriodReport; mode: PeriodMode }) {
+  const lucro = mode === "mes" ? item.resultadoGlobal : item.lucroLiquido;
+  const margem = mode === "mes" ? item.margemGlobal : item.margemLiquida;
   return (
     <div className="flex items-center gap-2 py-2.5">
       <div className="min-w-0 flex-1">
@@ -124,7 +172,7 @@ function PeriodRow({ item }: { item: PeriodReport }) {
               lucro > 0 ? "bg-success" : lucro < 0 ? "bg-destructive" : "bg-muted-foreground/40",
             )}
             style={{
-              width: `${Math.min(100, Math.max(item.margemLiquida, 0))}%`,
+              width: `${Math.min(100, Math.max(margem, 0))}%`,
               transform: lucro < 0 ? "scaleX(-1)" : undefined,
               transformOrigin: lucro < 0 ? "right" : "left",
             }}
@@ -134,14 +182,14 @@ function PeriodRow({ item }: { item: PeriodReport }) {
       <div className="shrink-0 text-right">
         <Lucro value={lucro} reveal className="text-[14px] font-bold" />
         <div className={cn("text-[10px] font-semibold tabular-nums", lucro >= 0 ? "text-success" : "text-destructive")}>
-          {lucro >= 0 ? "+" : ""}{item.margemLiquida.toFixed(1)}%
+          {lucro >= 0 ? "+" : ""}{margem.toFixed(1)}%
         </div>
       </div>
     </div>
   );
 }
 
-function PeriodCard({ header, items }: { header: string; items: PeriodReport[] }) {
+function PeriodCard({ header, items, mode }: { header: string; items: PeriodReport[]; mode: PeriodMode }) {
   if (items.length === 0)
     return (
       <MobileCard className="p-4 text-center text-[13px] text-muted-foreground">
@@ -154,7 +202,7 @@ function PeriodCard({ header, items }: { header: string; items: PeriodReport[] }
       <SectionTitle className="mb-1">{header}</SectionTitle>
       <div className="divide-y divide-border/60">
         {list.map((item) => (
-          <PeriodRow key={item.key || item.rangeLabel} item={item} />
+          <PeriodRow key={item.key || item.rangeLabel} item={item} mode={mode} />
         ))}
       </div>
     </MobileCard>
@@ -216,22 +264,49 @@ export function FinanceReport({ snap, reveal }: { snap: DashboardSnapshot; revea
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <MoneyStat label="Receita" value={<Value value={current.receita} reveal={reveal} />} accent="gold" />
+              <MoneyStat label="Faturamento" value={<Value value={current.receita} reveal={reveal} />} accent="gold" />
               <MoneyStat label="Lucro bruto" value={<Value value={current.lucroBruto} reveal={reveal} />} accent="info" />
-              <MoneyStat label="Despesas" value={<Value value={current.opex} reveal={reveal} />} accent="muted" />
-              <MoneyStat
-                label="Lucro líquido"
-                value={
-                  <span className={cn(current.lucroLiquido >= 0 ? "text-success" : "text-destructive")}>
-                    <Value value={current.lucroLiquido} reveal={reveal} />
-                  </span>
-                }
-                accent={current.lucroLiquido >= 0 ? "success" : "destructive"}
-              />
+              {mode === "mes" ? (
+                <>
+                  <MoneyStat label="Despesas diretas" value={<Value value={current.despesasCaminhao} reveal={reveal} />} accent="muted" />
+                  <MoneyStat label="Despesas gerais / OPEX" value={<Value value={current.opex} reveal={reveal} />} accent="muted" />
+                  <MoneyStat
+                    label="Lucro líquido (caminhões)"
+                    value={
+                      <span className={cn(current.lucroLiquido >= 0 ? "text-success" : "text-destructive")}>
+                        <Value value={current.lucroLiquido} reveal={reveal} />
+                      </span>
+                    }
+                    accent={current.lucroLiquido >= 0 ? "success" : "destructive"}
+                  />
+                  <MoneyStat
+                    label="Resultado global"
+                    value={
+                      <span className={cn(current.resultadoGlobal >= 0 ? "text-success" : "text-destructive")}>
+                        <Value value={current.resultadoGlobal} reveal={reveal} />
+                      </span>
+                    }
+                    accent={current.resultadoGlobal >= 0 ? "success" : "destructive"}
+                  />
+                </>
+              ) : (
+                <>
+                  <MoneyStat label="Despesas" value={<Value value={current.opex} reveal={reveal} />} accent="muted" />
+                  <MoneyStat
+                    label="Lucro líquido"
+                    value={
+                      <span className={cn(current.lucroLiquido >= 0 ? "text-success" : "text-destructive")}>
+                        <Value value={current.lucroLiquido} reveal={reveal} />
+                      </span>
+                    }
+                    accent={current.lucroLiquido >= 0 ? "success" : "destructive"}
+                  />
+                </>
+              )}
             </div>
           </MobileCard>
 
-          <WaterfallCard report={current} reveal={reveal} />
+          <WaterfallCard report={current} mode={mode} reveal={reveal} />
 
           {/* Compras e fluxo de caixa (espelho do CRM) */}
           <MobileCard className="p-4">
@@ -264,6 +339,7 @@ export function FinanceReport({ snap, reveal }: { snap: DashboardSnapshot; revea
           <PeriodCard
             header={isNew ? "Comparativo dos últimos 12 meses" : "Comparativo das últimas 8 semanas"}
             items={isNew ? months : weeks}
+            mode={mode}
           />
         </>
       )}

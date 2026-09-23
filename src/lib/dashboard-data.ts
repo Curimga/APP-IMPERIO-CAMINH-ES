@@ -144,11 +144,14 @@ export interface PeriodReport {
   receita: number;
   custoCompra: number;
   despesasCaminhao: number;
+  custoTotal: number;
   lucroBruto: number;
   margemBruta: number;
   opex: number;
   lucroLiquido: number;
   margemLiquida: number;
+  resultadoGlobal: number;
+  margemGlobal: number;
   vendas: number;
   compras: number;
   entradas: number;
@@ -211,7 +214,7 @@ export function computePeriodReport(
   const receita = money(sold.reduce((sum, t) => sum + Number(t?.sold_price ?? 0), 0));
   const custoCompra = money(sold.reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
   const despesasCaminhao = money(sold.reduce((sum, t) => sum + Number(t?.expenses_total ?? 0), 0));
-  const lucroBruto = money(receita - custoCompra - despesasCaminhao);
+  const custoTotal = money(custoCompra + despesasCaminhao);
 
   let opex: number;
   if (mode === "week") {
@@ -240,7 +243,24 @@ export function computePeriodReport(
       .reduce((sum, r) => sum + imperioShare(r), 0);
     opex = money(truck + admin);
   }
-  const lucroLiquido = money(lucroBruto - opex);
+
+  // Definitions do CRM:
+  // - Semanal: Lucro bruto = Receita − Custo − Preparação (="Lucro líquido dos
+  //   caminhões"); Resultado (líquido global) = Lucro bruto − Despesas.
+  // - Mensal:  Lucro bruto = Receita − Compra; Lucro Líquido (Caminhões) =
+  //   Lucro bruto − Despesas Diretas; Resultado Global = Lucro bruto − OPEX.
+  let lucroBruto: number;
+  let lucroLiquido: number;
+  let resultadoGlobal: number;
+  if (mode === "week") {
+    lucroBruto = money(receita - custoCompra - despesasCaminhao);
+    lucroLiquido = money(lucroBruto - opex);
+    resultadoGlobal = lucroLiquido;
+  } else {
+    lucroBruto = money(receita - custoCompra);
+    lucroLiquido = money(lucroBruto - despesasCaminhao);
+    resultadoGlobal = money(lucroBruto - opex);
+  }
 
   const purchaseGenerals = (s.generalExp ?? []).filter((r) => isPurchaseGeneral(r) && inPeriod(r.occurred_at));
   const purchaseTruckIds = new Set(purchaseGenerals.filter((r) => r.truck_id).map((r) => r.truck_id as string));
@@ -267,11 +287,14 @@ export function computePeriodReport(
     receita,
     custoCompra,
     despesasCaminhao,
+    custoTotal,
     lucroBruto,
     margemBruta: receita > 0 ? (lucroBruto / receita) * 100 : 0,
     opex,
     lucroLiquido,
     margemLiquida: receita > 0 ? (lucroLiquido / receita) * 100 : 0,
+    resultadoGlobal,
+    margemGlobal: receita > 0 ? (resultadoGlobal / receita) * 100 : 0,
     vendas: sold.length,
     compras,
     entradas,

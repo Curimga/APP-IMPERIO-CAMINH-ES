@@ -160,7 +160,7 @@ function withReceivable(snap: DashboardSnapshot, over: Partial<{ id: string; amo
 }
 
 describe("computeMonthReport — relatório mensal do Executivo (espelho CRM)", () => {
-  it("calcula receita, lucro bruto e lucro líquido de um mês", () => {
+  it("calcula faturamento, lucro bruto, liquido e resultado global de um mês", () => {
     let snap = baseSnap();
     snap = withTruck(snap, {});
     snap = withPayable(snap, {});
@@ -170,11 +170,14 @@ describe("computeMonthReport — relatório mensal do Executivo (espelho CRM)", 
     expect(r.receita).toBe(100000);
     expect(r.custoCompra).toBe(80000);
     expect(r.despesasCaminhao).toBe(5000);
-    expect(r.lucroBruto).toBe(15000);
-    expect(r.margemBruta).toBeCloseTo(15, 5);
+    expect(r.custoTotal).toBe(85000);
+    expect(r.lucroBruto).toBe(20000); // Lucro Bruto = Venda − Compra (CRM mensal)
+    expect(r.margemBruta).toBeCloseTo(20, 5);
     expect(r.opex).toBe(3000); // 2000 payable com truck + 1000 imperio_share
-    expect(r.lucroLiquido).toBe(12000);
-    expect(r.margemLiquida).toBeCloseTo(12, 5);
+    expect(r.lucroLiquido).toBe(15000); // Lucro Líquido (caminhões) = Bruto − Despesas Diretas
+    expect(r.margemLiquida).toBeCloseTo(15, 5);
+    expect(r.resultadoGlobal).toBe(17000); // Resultado Global = Bruto − OPEX
+    expect(r.margemGlobal).toBeCloseTo(17, 5);
     expect(r.vendas).toBe(1);
   });
 
