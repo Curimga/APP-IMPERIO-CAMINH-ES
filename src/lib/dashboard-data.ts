@@ -69,6 +69,7 @@ const sameWeek = (a: string, b: Date) => {
   const end = new Date(start); end.setDate(end.getDate() + 7);
   return da >= start && da < end;
 };
+const sameMonth = (a: string, b: Date) => { const d = new Date(a); return d.getMonth() === b.getMonth() && d.getFullYear() === b.getFullYear(); };
 const sameYear = (a: string, b: Date) => new Date(a).getFullYear() === b.getFullYear();
 
 export function computeExecutiveKpis(s: DashboardSnapshot) {
@@ -79,14 +80,18 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
 
   const revDay = sold.filter((t) => sameDay(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
   const revWeek = sold.filter((t) => sameWeek(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
+  const revMonth = sold.filter((t) => sameMonth(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
   const revYear = sold.filter((t) => sameYear(t.sold_at || t.updated_at, today)).reduce((s, t) => s + Number(t.sold_price ?? 0), 0);
 
-  // Resultados do mês corrente espelham o relatório mensal do CRM.
-  const monthReport = computeMonthReport(s, today);
-  const revMonth = monthReport.receita;
-  const opex = monthReport.opex;
-  const netProfit = monthReport.lucroLiquido;
-  const grossProfit = monthReport.lucroBruto;
+  // KPIs idênticos ao CRM (`computeExecutiveKpis` do dashboard): lucro bruto e
+  // líquido são ACUMULADOS de todos os vendidos (lifetime); opex = contas pagas
+  // (status "pago") + despesas gerais dos últimos 12 meses. Espelho EXATO do CRM.
+  const grossProfit = sold.reduce((s, t) => s + (Number(t.sold_price ?? 0) - Number(t.purchase_price ?? 0)), 0);
+  const totalExpenses = sumMoney((sold || []).map((t) => t?.expenses_total));
+  const netProfit = money(grossProfit - totalExpenses);
+
+  const generalOpex = (s.generalExp ?? []).reduce((sum, r) => sum + imperioShare(r), 0);
+  const opex = s.payables.filter((p) => p.status === "pago").reduce((s, r) => s + Number(r.amount ?? 0), 0) + generalOpex;
 
   const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const margins = sold
@@ -109,8 +114,8 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
 
   const balance = s.banks.reduce((s, b) => s + Number(b.current_balance ?? 0), 0);
 
-  const openReceivable = s.receivables.filter((r) => !r.received_at).reduce((s, r) => s + Number(r.amount ?? 0), 0);
-  const openPayable = s.payables.filter((p) => !p.paid_at).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const openReceivable = s.receivables.filter((r) => r.status === "aberto").reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const openPayable = s.payables.filter((p) => p.status === "aberto").reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const openPurchase = (s.purchaseInst ?? []).filter((p) => p.status === "pendente").reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const profitForecast = money(openReceivable - openPayable - openPurchase);
 
@@ -366,11 +371,11 @@ export function computeAlerts(s: DashboardSnapshot, kpis: ReturnType<typeof comp
     alerts.push({ id: `aging-${a.id}`, severity: "warning", title: `Caminhão parado há ${a.dias} dias`, description: `${a.label} · capital imobilizado de ${brl(a.capital)}`, link: `/estoque/${a.id}` }),
   );
 
-  (s.payables || []).filter((p) => !p?.paid_at && p.due_date <= todayStr).slice(0, 5).forEach((p) =>
+  (s.payables || []).filter((p) => p?.status === "aberto" && p.due_date <= todayStr).slice(0, 5).forEach((p) =>
     alerts.push({ id: `pay-${p.id}`, severity: "critical", title: `Conta vencida · ${brl(Number(p.amount))}`, description: `Vencimento em ${dateBR(p.due_date)}`, link: "/financeiro/contas-pagar" }),
   );
 
-  (s.receivables || []).filter((r) => !r?.received_at && r.due_date <= todayStr).slice(0, 5).forEach((r) =>
+  (s.receivables || []).filter((r) => r?.status === "aberto" && r.due_date <= todayStr).slice(0, 5).forEach((r) =>
     alerts.push({ id: `rec-${r.id}`, severity: "warning", title: `Boleto vencido · ${brl(Number(r.amount))}`, description: `Vencimento em ${dateBR(r.due_date)}`, link: "/financeiro/contas-receber" }),
   );
 
@@ -439,7 +444,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   };
 
   // FINANCEIRO — contas a pagar
-  (s.payables || []).filter((p) => !p?.paid_at).forEach((p) => {
+  (s.payables || []).filter((p) => p?.status === "aberto").forEach((p) => {
     const b = bucketOf(p.due_date);
     if (!b) return;
     out.push({
@@ -456,7 +461,7 @@ export function computeDailyAlerts(s: DashboardSnapshot, horizonDays = 7): Daily
   });
 
   // FINANCEIRO — contas a receber
-  (s.receivables || []).filter((r) => !r?.received_at).forEach((r) => {
+  (s.receivables || []).filter((r) => r?.status === "aberto").forEach((r) => {
     const b = bucketOf(r.due_date);
     if (!b) return;
     out.push({
