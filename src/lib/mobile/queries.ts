@@ -998,23 +998,35 @@ function useAuthSession() {
 }
 
 /**
- * Capital imobilizado (caminhões não vendidos com valor investido).
+ * Capital imobilizado (caminhões em estoque com valor investido).
  * Exclusivo do Executivo.
  *
- * Mesma definição do CRM (Relatórios → Estoque/Compras): conta como imobilizado
- * todo caminhão com status !== "vendido" (inclui manutencao, negociacao,
- * reservado, etc.), com custo = `purchase_price` + `expenses_total`.
+ * Mesma definição do CRM mobile (`app.financeiro` / home do executivo): conta
+ * os 8 status em estoque (não inclui reservado, negociacao, manutencao e
+ * vendido), custo = `purchase_price` + `expenses_total`.
  */
 export function useCapitalImobilizado() {
   const { roles } = useAuth();
   const isExec = isAdmin(roles);
+  const inStockStatuses = [
+    "disponivel",
+    "consignado",
+    "patio",
+    "oficina",
+    "pintura",
+    "interna",
+    "despachante",
+    "repasse",
+  ];
   return useQuery({
     queryKey: ["capital-imobilizado", isExec],
     enabled: isExec,
     queryFn: async () => {
       const { data, error } = await supabase.from("trucks").select("*");
       if (error) throw error;
-      const trucks = ((data ?? []) as Tables<"trucks">[]).filter((t) => t.status !== "vendido");
+      const trucks = ((data ?? []) as Tables<"trucks">[]).filter((t) =>
+        inStockStatuses.includes(t.status),
+      );
       const total = trucks.reduce(
         (s, t) => s + Number(t.purchase_price ?? 0) + Number(t.expenses_total ?? 0),
         0,
