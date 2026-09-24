@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CheckCheck, CircleAlert, Hourglass, Truck } from "lucide-react";
+import { CheckCheck, CircleAlert, Hourglass, Plus, Truck } from "lucide-react";
 import { useMobileFinance, useTrucks } from "@/lib/mobile/queries";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
 import { settleReceivable, settlePayable, reopenReceivable, reopenPayable } from "@/lib/mobile/actions";
@@ -144,20 +144,29 @@ export function PagamentosTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={cn(
-              "shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-bold pressable active:scale-95",
-              filter === f.key ? "bg-gold text-gold-foreground" : "bg-background border-border",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                "shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-bold pressable active:scale-95",
+                filter === f.key ? "bg-gold text-gold-foreground" : "bg-background border-border",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <Link
+          to="/financeiro/novo"
+          aria-label="Novo lançamento"
+          className="flex h-9 shrink-0 items-center gap-1 rounded-xl bg-gold px-3 text-[13px] font-bold text-gold-foreground active:opacity-80"
+        >
+          <Plus className="h-4 w-4" /> Novo
+        </Link>
       </div>
 
       {isLoading ? (

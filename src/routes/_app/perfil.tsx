@@ -25,8 +25,12 @@ function Perfil() {
   const initial = (profile?.full_name?.[0] ?? user?.email?.[0] ?? "U").toUpperCase();
 
   const logout = async () => {
-    await signOut();
-    nav({ to: "/login" });
+    try {
+      await signOut();
+      nav({ to: "/login" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao sair da conta. Tente novamente.");
+    }
   };
 
   return (

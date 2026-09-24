@@ -10,7 +10,7 @@
  *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
 const CACHE_PREFIX = "imperio-";
-const VERSION = "imperio-v8-2026.09.23-buttons-real";
+const VERSION = "imperio-v9-2026.09.24-auditoria-funcional";
 const APP_SHELL = "/";
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">

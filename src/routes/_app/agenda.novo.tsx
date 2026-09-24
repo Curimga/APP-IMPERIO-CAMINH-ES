@@ -16,7 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { truckTitle } from "@/lib/truck-title";
-import { spaTodayISO, mdTime } from "@/lib/mobile/dates";
+import { spaTodayISO, mdTime, spaToUtcISO, isoToSpaISO } from "@/lib/mobile/dates";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
@@ -93,9 +93,10 @@ function NewEvent() {
 
   useEffect(() => {
     if (!existing) return;
+    const local = isoToSpaISO(existing.starts_at) || `${existing.starts_at?.slice(0, 10) ?? ""}T09:00:00`;
     setTitle(existing.title ?? "");
-    setDate((existing.starts_at ?? "").slice(0, 10));
-    setTime(mdTime(existing.starts_at) === "—" ? "09:00" : mdTime(existing.starts_at));
+    setDate(local.slice(0, 10));
+    setTime(mdTime(local) === "—" ? "09:00" : mdTime(local));
     setAllDay(Boolean(existing.all_day));
     setType(existing.type ?? "compromisso");
     setRecurrence(existing.recurrence ?? "");
@@ -125,7 +126,7 @@ function NewEvent() {
     const payload = {
       title: title.trim(),
       description: description.trim() || null,
-      starts_at: allDay ? `${date}T09:00:00` : `${date}T${time || "09:00"}:00`,
+      starts_at: spaToUtcISO(allDay ? `${date}T09:00:00` : `${date}T${time || "09:00"}:00`),
       type,
       related_truck_id: truckId,
       amount: Number.isFinite(value) && value > 0 ? value : null,

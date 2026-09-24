@@ -36,7 +36,7 @@ function DeadlineSheet({ s, onClose }: { s: ServiceItem; onClose: () => void }) 
     setError(null);
     setSaving(true);
     try {
-      await updateServiceDeadline(s.id, date ? `${date}T12:00:00` : null);
+      await updateServiceDeadline(s.id, date || null);
       invalidateMobile(["services", "trucks"]);
       onClose();
     } catch (e) {

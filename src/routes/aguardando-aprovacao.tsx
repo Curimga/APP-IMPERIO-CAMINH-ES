@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { BrandWordmark } from "@/components/brand";
 import { Clock, ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/aguardando-aprovacao")({
   component: PendingPage,
@@ -49,8 +50,12 @@ function PendingPage() {
           <Button
             variant="outline"
             onClick={async () => {
-              await signOut();
-              nav({ to: "/login" });
+              try {
+                await signOut();
+                nav({ to: "/login" });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Falha ao sair. Tente novamente.");
+              }
             }}
           >
             Sair

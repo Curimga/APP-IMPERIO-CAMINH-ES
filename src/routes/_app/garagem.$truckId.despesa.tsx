@@ -87,7 +87,7 @@ function RegisterExpense() {
         supplier: supplier.trim() || null,
         status: status || null,
         payment_method: paymentMethod || null,
-        occurred_at: `${occurredAt}T12:00:00`,
+        occurred_at: occurredAt || null,
         due_date: dueDate || null,
       });
       toast.success("Despesa registrada");

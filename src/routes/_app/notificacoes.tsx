@@ -7,6 +7,7 @@ import { MobileCard, SkeletonRows, EmptyState } from "@/components/mobile/ui";
 import { mdBR, mdTime } from "@/lib/mobile/dates";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { toast } from "sonner";
 import type { Enums } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_app/notificacoes")({
@@ -49,8 +50,13 @@ function Notificacoes() {
     setReadIds((prev) => new Set([...prev, ...toRead]));
     try {
       await markNotificationsRead(toRead);
-    } catch {
-      /* silencioso */
+    } catch (e) {
+      setReadIds((prev) => {
+        const next = new Set(prev);
+        toRead.forEach((id) => next.delete(id));
+        return next;
+      });
+      toast.error(e instanceof Error ? e.message : "Falha ao marcar notificações como lidas");
     }
   };
 
@@ -58,8 +64,13 @@ function Notificacoes() {
     setReadIds((prev) => new Set(prev).add(id));
     try {
       await markNotificationsRead([id]);
-    } catch {
-      /* silencioso */
+    } catch (e) {
+      setReadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast.error(e instanceof Error ? e.message : "Falha ao marcar como lida");
     }
   };
 

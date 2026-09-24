@@ -34,6 +34,43 @@ export function spaSetDate(iso: string, dateISO: string): string {
   return `${dateISO}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
 }
 
+/**
+ * Extrai apenas a parte "YYYY-MM-DD" (colunas `date` do banco) de qualquer
+ * valor — se já for só data, devolve inalterado. Nunca envia datetime completo
+ * para colunas `date` (regra do CRM).
+ */
+export function dateOnly(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  return m ? m[1] : value;
+}
+
+/**
+ * Converte uma hora LOCAL "YYYY-MM-DDTHH:mm[:ss]" (fuso America/Sao_Paulo do
+ * usuário) para ISO UTC — mesmo contrato do CRM, que salva
+ * `new Date(form.starts_at).toISOString()`. Strings que já carregam fuso
+ * ("Z" ou offset) são normalizadas para o instante UTC.
+ */
+export function spaToUtcISO(value: string): string {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) return new Date(value).toISOString();
+  const dt = spaDate(value);
+  if (Number.isNaN(dt.getTime())) return value;
+  return dt.toISOString();
+}
+
+/**
+ * ISO/UTC → "YYYY-MM-DDTHH:mm:ss" na hora local — para formulários de edição.
+ * Uma ISO gravada em UTC (ex.: 12:00Z) volta como 09:00 local, sem o
+ * deslocamento de um dia que `slice(0, 10)` causaria.
+ */
+export function isoToSpaISO(value: string | null | undefined): string {
+  if (!value) return "";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+}
+
 export type MDate = string | Date | null | undefined;
 
 /** dd/mm/yyyy a partir de qualquer entrada, sem deslocamento. */
