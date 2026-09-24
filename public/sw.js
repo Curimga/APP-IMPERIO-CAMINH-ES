@@ -10,7 +10,7 @@
  *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
 const CACHE_PREFIX = "imperio-";
-const VERSION = "imperio-v11-2026.09.24-crown-icon";
+const VERSION = "imperio-v12-2026.09.24-crown-icon-url-bump";
 const APP_SHELL = "/";
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">
@@ -47,7 +47,7 @@ self.addEventListener("install", (e) => {
   e.waitUntil(
     caches
       .open(VERSION)
-      .then((c) => c.addAll(["/", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable.png", "/icons/apple-touch-icon.png", "/manifest.webmanifest"]))
+      .then((c) => c.addAll(["/", "/icons/crown-192.png", "/icons/crown-512.png", "/icons/crown-maskable-512.png", "/apple-touch-icon.png", "/manifest.webmanifest"]))
       .then(() => self.skipWaiting())
   );
 });
