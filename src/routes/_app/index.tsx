@@ -59,6 +59,8 @@ const STATUS_DOT: Record<string, string> = {
   repasse: "bg-teal-600",
 };
 
+const FLEET_EXCLUDED_STATUSES = new Set(["vendido", "repasse"]);
+
 type Tone = "default" | "gold" | "success" | "destructive" | "muted" | "info" | "warning";
 
 const toneDot: Record<Tone, string> = {
@@ -516,7 +518,7 @@ function AppHome() {
   const all = dash.trucks;
   const services = dash.services;
   const events = dash.events;
-  const fleet = all.length;
+  const fleet = all.filter((t) => !FLEET_EXCLUDED_STATUSES.has(t.status)).length;
   const statusCount = (s: string) => all.filter((t) => t.status === s).length;
   const emEstoque = statusCount("disponivel") + statusCount("consignado");
   const reservados = statusCount("reservado");
@@ -526,7 +528,7 @@ function AppHome() {
     statusCount("interna") +
     statusCount("despachante") +
     statusCount("manutencao");
-  const operating = fleet - statusCount("vendido");
+  const operating = fleet;
   const svcRunning = (services ?? []).filter((s) => s.status === "em_andamento").length;
   const delayedServices = (services ?? []).filter(
     (s) => s.status === "em_andamento" && s.expected_at && mdRelative(s.expected_at).startsWith("atrasado"),
@@ -753,7 +755,7 @@ function AppHome() {
               m.set(t.status, (m.get(t.status) ?? 0) + 1);
               return m;
             }, new Map()).entries()]
-              .filter(([s, c]) => c > 0 && s !== "vendido")
+              .filter(([s, c]) => c > 0 && !FLEET_EXCLUDED_STATUSES.has(s))
               .sort((a, b) => b[1] - a[1])}
           />
 
