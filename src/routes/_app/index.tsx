@@ -847,11 +847,7 @@ function Attention({
 
   items.push(
     ...(trucks ?? [])
-      .filter((t) =>
-        ["disponivel", "consignado", "patio", "oficina", "pintura", "interna", "despachante", "repasse"].includes(
-          t.status,
-        ),
-      )
+      .filter((t) => !t.sold_at && !FLEET_EXCLUDED_STATUSES.has(t.status))
       .map((t) => ({ truck: t, days: mdDaysParked(t.purchase_date ?? t.created_at) }))
       .filter(({ days }) => days > 90)
       .sort((a, b) => b.days - a.days)

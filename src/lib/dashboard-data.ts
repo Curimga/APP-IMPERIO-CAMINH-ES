@@ -422,7 +422,7 @@ export function computeTopTrucks(s: DashboardSnapshot, n = 6) {
 export function computeAgingStock(s: DashboardSnapshot) {
   const today = s.refs.today.getTime();
   return (s.trucks || [])
-    .filter((t) => t?.status === "disponivel" || t.status === "consignado")
+    .filter((t) => !t?.sold_at && (t?.status === "disponivel" || t.status === "consignado"))
     .map((t) => {
       const start = new Date(t.purchase_date ?? t.created_at).getTime();
       const days = Math.max(0, Math.floor((today - start) / 86400000));
