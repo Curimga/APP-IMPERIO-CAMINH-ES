@@ -4,11 +4,13 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
 import { useTrucks, useSuppliers } from "@/lib/mobile/queries";
 import { createService } from "@/lib/mobile/actions";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { truckTitle } from "@/lib/truck-title";
 import { spaTodayISO } from "@/lib/mobile/dates";
-import { toast } from "sonner";
+import { parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { Enums } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_app/servicos/novo")({
   validateSearch: (s: Record<string, unknown>) => {
@@ -21,9 +23,16 @@ export const Route = createFileRoute("/_app/servicos/novo")({
 
 const CATEGORIES = ["mecanica", "funilaria", "pintura", "eletrica", "despachante", "pneus"] as const;
 
+const STATUS_OPTIONS: { v: Enums<"service_status">; label: string }[] = [
+  { v: "pendente", label: "Pendente" },
+  { v: "em_andamento", label: "Em andamento" },
+  { v: "concluido", label: "Concluído" },
+];
+
 function NewService() {
   const nav = useNavigate();
   const search = Route.useSearch();
+  const invalidateMobile = useInvalidateMobile();
   const { data: trucks } = useTrucks();
   const { data: suppliers } = useSuppliers();
   const [truckId, setTruckId] = useState<string | null>(search.truck_id ?? null);
@@ -33,6 +42,7 @@ function NewService() {
   const [supplierId, setSupplierId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [expectedAt, setExpectedAt] = useState("");
+  const [status, setStatus] = useState<Enums<"service_status">>("em_andamento");
   const [value, setValue] = useState("");
   const [totalValue, setTotalValue] = useState("");
   const [downPayment, setDownPayment] = useState("");
@@ -63,16 +73,14 @@ function NewService() {
     return labels[v] ?? v;
   };
 
-  const toNum = (v: string) => {
-    const n = Number(v.replace(/[^\d.]/g, ""));
-    return Number.isFinite(n) && n > 0 ? n : null;
-  };
-
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setError(null);
     if (!truckId) return setError("Selecione o caminhão.");
     if (!title.trim()) return setError("Informe o título do serviço.");
+    const valueNum = value ? parseMoney(value) : null;
+    const totalValueNum = totalValue ? parseMoney(totalValue) : null;
+    const downPaymentNum = downPayment ? parseMoney(downPayment) : null;
     setSaving(true);
     try {
       await createService({
@@ -83,12 +91,12 @@ function NewService() {
         supplier_id: supplierId || null,
         notes: notes.trim() || null,
         expected_at: expectedAt ? `${expectedAt}T12:00:00` : null,
-        value: toNum(value),
-        total_value: toNum(totalValue),
-        down_payment: toNum(downPayment),
-        status: "em_andamento",
+        value: valueNum,
+        total_value: totalValueNum,
+        down_payment: downPaymentNum,
+        status,
       });
-      toast.success("Serviço criado");
+      invalidateMobile(["services", "trucks"]);
       nav({ to: "/servicos", search: { truck_id: undefined } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao criar serviço");
@@ -148,6 +156,23 @@ function NewService() {
                   )}
                 >
                   {categoryLabel(c)}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Situação">
+            <div className="flex flex-wrap gap-1.5">
+              {STATUS_OPTIONS.map((s) => (
+                <button
+                  key={s.v}
+                  type="button"
+                  onClick={() => setStatus(s.v)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-[13px] font-semibold",
+                    status === s.v ? "border-gold bg-gold text-gold-foreground" : "bg-background",
+                  )}
+                >
+                  {s.label}
                 </button>
               ))}
             </div>

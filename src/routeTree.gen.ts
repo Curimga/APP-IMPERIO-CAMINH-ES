@@ -31,6 +31,7 @@ import { Route as AppClientesNovoRouteImport } from './routes/_app/clientes.novo
 import { Route as AppEstoqueNovoRouteImport } from './routes/_app/estoque.novo'
 import { Route as AppGaragemTruckIdRouteImport } from './routes/_app/garagem.$truckId'
 import { Route as AppGaragemNovoRouteImport } from './routes/_app/garagem.novo'
+import { Route as AppPagamentosNovoRouteImport } from './routes/_app/pagamentos.novo'
 import { Route as AppServicosNovoRouteImport } from './routes/_app/servicos.novo'
 import { Route as AppGaragemTruckIdDespesaRouteImport } from './routes/_app/garagem.$truckId.despesa'
 
@@ -143,6 +144,11 @@ const AppGaragemNovoRoute = AppGaragemNovoRouteImport.update({
   path: '/novo',
   getParentRoute: () => AppGaragemRoute,
 } as any)
+const AppPagamentosNovoRoute = AppPagamentosNovoRouteImport.update({
+  id: '/pagamentos/novo',
+  path: '/pagamentos/novo',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppServicosNovoRoute = AppServicosNovoRouteImport.update({
   id: '/novo',
   path: '/novo',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/estoque/novo': typeof AppEstoqueNovoRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
+  '/pagamentos/novo': typeof AppPagamentosNovoRoute
   '/servicos/novo': typeof AppServicosNovoRoute
   '/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
 }
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/estoque/novo': typeof AppEstoqueNovoRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
+  '/pagamentos/novo': typeof AppPagamentosNovoRoute
   '/servicos/novo': typeof AppServicosNovoRoute
   '/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
 }
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   '/_app/estoque/novo': typeof AppEstoqueNovoRoute
   '/_app/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/_app/garagem/novo': typeof AppGaragemNovoRoute
+  '/_app/pagamentos/novo': typeof AppPagamentosNovoRoute
   '/_app/servicos/novo': typeof AppServicosNovoRoute
   '/_app/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
 }
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
     | '/estoque/novo'
     | '/garagem/$truckId'
     | '/garagem/novo'
+    | '/pagamentos/novo'
     | '/servicos/novo'
     | '/garagem/$truckId/despesa'
   fileRoutesByTo: FileRoutesByTo
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
     | '/estoque/novo'
     | '/garagem/$truckId'
     | '/garagem/novo'
+    | '/pagamentos/novo'
     | '/servicos/novo'
     | '/garagem/$truckId/despesa'
   id:
@@ -307,6 +318,7 @@ export interface FileRouteTypes {
     | '/_app/estoque/novo'
     | '/_app/garagem/$truckId'
     | '/_app/garagem/novo'
+    | '/_app/pagamentos/novo'
     | '/_app/servicos/novo'
     | '/_app/garagem/$truckId/despesa'
   fileRoutesById: FileRoutesById
@@ -474,6 +486,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGaragemNovoRouteImport
       parentRoute: typeof AppGaragemRoute
     }
+    '/_app/pagamentos/novo': {
+      id: '/_app/pagamentos/novo'
+      path: '/pagamentos/novo'
+      fullPath: '/pagamentos/novo'
+      preLoaderRoute: typeof AppPagamentosNovoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/servicos/novo': {
       id: '/_app/servicos/novo'
       path: '/novo'
@@ -578,6 +597,7 @@ interface AppRouteChildren {
   AppServicosRoute: typeof AppServicosRouteWithChildren
   AppVendidosRoute: typeof AppVendidosRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppPagamentosNovoRoute: typeof AppPagamentosNovoRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -594,6 +614,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppServicosRoute: AppServicosRouteWithChildren,
   AppVendidosRoute: AppVendidosRoute,
   AppIndexRoute: AppIndexRoute,
+  AppPagamentosNovoRoute: AppPagamentosNovoRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

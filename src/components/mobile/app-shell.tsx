@@ -10,6 +10,7 @@ import {
   User,
   Package,
   Activity,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -230,6 +231,12 @@ function useFabActions() {
       description: "Indicadores e lançamentos",
       icon: <Activity className="h-5 w-5" />,
       to: "/financeiro",
+    });
+    actions.push({
+      label: "Criar pagamento",
+      description: "Pagar ou receber",
+      icon: <Wallet className="h-5 w-5" />,
+      to: "/pagamentos/novo",
     });
   }
   return actions;

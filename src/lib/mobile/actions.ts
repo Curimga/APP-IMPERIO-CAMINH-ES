@@ -425,6 +425,72 @@ export async function reopenPayable(id: string): Promise<void> {
   toast.success("Lançamento reaberto");
 }
 
+export interface PaymentInput {
+  kind: "pagar" | "receber";
+  description: string;
+  amount: number;
+  due_date: string;
+  supplier?: string | null;
+  customer_id?: string | null;
+  truck_id?: string | null;
+  installment_number?: number | null;
+  installment_total?: number | null;
+  payment_method?: Enums<"payment_method"> | null;
+  notes?: string | null;
+}
+
+/**
+ * Cria um lançamento financeiro nas tabelas reais do CRM.
+ *
+ * - "pagar"  → `payables`   (conta a pagar, status `aberto`)
+ * - "receber" → `receivables` (conta a receber, status `aberto`)
+ *
+ * O CRM (módulo Financeiro / aba Pagamentos) lê dessas mesmas tabelas, então o
+ * lançamento aparece imediatamente após a confirmação do INSERT.
+ */
+export async function createPayment(input: PaymentInput): Promise<string> {
+  const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
+
+  if (input.kind === "pagar") {
+    const { data, error } = await supabase
+      .from("payables")
+      .insert({
+        description: input.description.trim(),
+        amount: input.amount,
+        due_date: input.due_date,
+        supplier: input.supplier?.trim() || null,
+        truck_id: input.truck_id ?? null,
+        notes: input.notes?.trim() || null,
+        payment_method: input.payment_method ?? null,
+        status: "aberto",
+        created_by: createdBy,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return data.id;
+  }
+
+  const { data, error } = await supabase
+    .from("receivables")
+    .insert({
+      description: input.description.trim(),
+      amount: input.amount,
+      due_date: input.due_date,
+      customer_id: input.customer_id ?? null,
+      truck_id: input.truck_id ?? null,
+      notes: input.notes?.trim() || null,
+      installment_number: input.installment_number ?? null,
+      installment_total: input.installment_total ?? null,
+      status: "aberto",
+      created_by: createdBy,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return data.id;
+}
+
 export interface SetExpensePaidInput {
   id: string;
   source: "truck" | "geral";
