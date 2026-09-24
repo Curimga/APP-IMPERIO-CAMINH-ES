@@ -13,3 +13,5 @@ pnpm-debug.log*
 .vercel
 *.tsbuildinfo
 preview*.log
+# Cache do TanStack Router (gerado em tempo de dev/build)
+.tanstack/
