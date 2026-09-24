@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, Wrench, CheckCircle2, Clock, CalendarDays } from "lucide-react";
 import { useServices } from "@/lib/mobile/queries";
@@ -20,8 +20,13 @@ export const Route = createFileRoute("/_app/servicos")({
     if (s.tab === "atrasados" || s.tab === "concluidos") r.tab = s.tab;
     return r;
   },
-  component: Servicos,
+  component: ServicosRoute,
 });
+
+function ServicosRoute() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return pathname === "/servicos/novo" ? <Outlet /> : <Servicos />;
+}
 
 type Tab = "andamento" | "atrasados" | "concluidos";
 

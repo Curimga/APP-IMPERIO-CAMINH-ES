@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   Plus,
@@ -51,8 +51,13 @@ export const Route = createFileRoute("/_app/agenda")({
     if (s.view === "calendario" || s.view === "lista" || s.view === "pagamentos") r.view = s.view;
     return r;
   },
-  component: Agenda,
+  component: AgendaRoute,
 });
+
+function AgendaRoute() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return pathname === "/agenda/novo" ? <Outlet /> : <Agenda />;
+}
 
 /* ============================================================
    Auxiliares de exibição

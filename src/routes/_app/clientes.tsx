@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { Search, Plus, Phone, Mail, MapPin, Pencil } from "lucide-react";
 import { useCustomers } from "@/lib/mobile/queries";
@@ -15,8 +15,13 @@ export const Route = createFileRoute("/_app/clientes")({
     if (typeof s.q === "string") r.q = s.q;
     return r;
   },
-  component: Clientes,
+  component: ClientesRoute,
 });
+
+function ClientesRoute() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return pathname === "/clientes/novo" ? <Outlet /> : <Clientes />;
+}
 
 function ClientItem({ c }: { c: CustomerItem }) {
   const initial = (c.name ?? "?").trim()[0]?.toUpperCase() ?? "?";
