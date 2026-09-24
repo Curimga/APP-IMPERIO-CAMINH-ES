@@ -21,7 +21,15 @@ export const Route = createFileRoute("/_app/servicos/novo")({
   component: NewService,
 });
 
-const CATEGORIES = ["mecanica", "funilaria", "pintura", "eletrica", "despachante", "pneus"] as const;
+const CATEGORIES = [
+  "interna",
+  "pintura",
+  "despachante",
+  "mecanica",
+  "funilaria",
+  "eletrica",
+  "pneus",
+] as const;
 
 const STATUS_OPTIONS: { v: Enums<"service_status">; label: string }[] = [
   { v: "pendente", label: "Pendente" },
@@ -63,6 +71,7 @@ function NewService() {
   const selectedSupplier = supplierOptions.find((s) => s.id === supplierId);
   const categoryLabel = (v: string) => {
     const labels: Record<string, string> = {
+      interna: "Interna",
       mecanica: "Mecânica",
       funilaria: "Funilaria",
       pintura: "Pintura",

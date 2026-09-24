@@ -25,47 +25,58 @@ function ClientesRoute() {
 
 function ClientItem({ c }: { c: CustomerItem }) {
   const initial = (c.name ?? "?").trim()[0]?.toUpperCase() ?? "?";
+  const hasDetails = Boolean(c.phone || c.city || c.email);
   return (
-    <div className="flex items-center gap-3 px-3 py-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/15 font-bold text-gold">
+    <div className="flex w-full items-start gap-3 px-3.5 py-3.5 sm:px-4 sm:py-4">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/15 text-[15px] font-bold text-gold sm:h-12 sm:w-12 sm:text-base">
         {initial}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-semibold">{c.name}</div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted-foreground">
-          {c.phone ? (
-            <span className="flex items-center gap-1">
-              <Phone className="h-3 w-3" />
-              {c.phone}
-            </span>
-          ) : null}
-          {c.city ? (
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {c.city}
-            </span>
-          ) : null}
-          {c.email ? (
-            <span className="flex items-center gap-1 truncate">
-              <Mail className="h-3 w-3" />
-              {c.email}
-            </span>
-          ) : null}
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold leading-5 sm:text-base">{c.name}</div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {c.status ? (
+              <span
+                className={cn(
+                  "max-w-24 truncate rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize leading-4 sm:max-w-32 sm:text-[11px]",
+                  c.status === "ativo"
+                    ? "border-success/30 bg-success/15 text-success"
+                    : "border-border bg-muted text-muted-foreground",
+                )}
+              >
+                {c.status.replace("_", " ")}
+              </span>
+            ) : null}
+            <Pencil className="h-4 w-4 text-muted-foreground/50" />
+          </div>
         </div>
+        {hasDetails ? (
+          <div className="mt-1.5 grid min-w-0 grid-cols-1 gap-1 text-[11px] leading-4 text-muted-foreground sm:grid-cols-2 sm:text-xs">
+            {c.phone ? (
+              <span className="flex min-w-0 items-center gap-1.5 truncate">
+                <Phone className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{c.phone}</span>
+              </span>
+            ) : null}
+            {c.city ? (
+              <span className="flex min-w-0 items-center gap-1.5 truncate">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{c.city}</span>
+              </span>
+            ) : null}
+            {c.email ? (
+              <span className="flex min-w-0 items-center gap-1.5 truncate sm:col-span-2">
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{c.email}</span>
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-1.5 text-[11px] text-muted-foreground sm:text-xs">Sem contato cadastrado</div>
+        )}
       </div>
-      {c.status ? (
-        <span
-          className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize",
-            c.status === "ativo"
-              ? "border-success/30 bg-success/15 text-success"
-              : "border-border bg-muted text-muted-foreground",
-          )}
-        >
-          {c.status}
-        </span>
-      ) : null}
-      <Pencil className="h-4 w-4 shrink-0 text-muted-foreground/50" />
     </div>
   );
 }
