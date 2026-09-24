@@ -29,7 +29,6 @@ import { Route as AppVendidosRouteImport } from './routes/_app/vendidos'
 import { Route as AppAgendaNovoRouteImport } from './routes/_app/agenda.novo'
 import { Route as AppClientesNovoRouteImport } from './routes/_app/clientes.novo'
 import { Route as AppEstoqueNovoRouteImport } from './routes/_app/estoque.novo'
-import { Route as AppFinanceiroNovoRouteImport } from './routes/_app/financeiro.novo'
 import { Route as AppGaragemTruckIdRouteImport } from './routes/_app/garagem.$truckId'
 import { Route as AppGaragemNovoRouteImport } from './routes/_app/garagem.novo'
 import { Route as AppServicosNovoRouteImport } from './routes/_app/servicos.novo'
@@ -134,11 +133,6 @@ const AppEstoqueNovoRoute = AppEstoqueNovoRouteImport.update({
   path: '/novo',
   getParentRoute: () => AppEstoqueRoute,
 } as any)
-const AppFinanceiroNovoRoute = AppFinanceiroNovoRouteImport.update({
-  id: '/novo',
-  path: '/novo',
-  getParentRoute: () => AppFinanceiroRoute,
-} as any)
 const AppGaragemTruckIdRoute = AppGaragemTruckIdRouteImport.update({
   id: '/$truckId',
   path: '/$truckId',
@@ -170,7 +164,7 @@ export interface FileRoutesByFullPath {
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
   '/estoque': typeof AppEstoqueRouteWithChildren
-  '/financeiro': typeof AppFinanceiroRouteWithChildren
+  '/financeiro': typeof AppFinanceiroRoute
   '/garagem': typeof AppGaragemRouteWithChildren
   '/menu': typeof AppMenuRoute
   '/notificacoes': typeof AppNotificacoesRoute
@@ -181,7 +175,6 @@ export interface FileRoutesByFullPath {
   '/agenda/novo': typeof AppAgendaNovoRoute
   '/clientes/novo': typeof AppClientesNovoRoute
   '/estoque/novo': typeof AppEstoqueNovoRoute
-  '/financeiro/novo': typeof AppFinanceiroNovoRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
   '/servicos/novo': typeof AppServicosNovoRoute
@@ -195,7 +188,7 @@ export interface FileRoutesByTo {
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
   '/estoque': typeof AppEstoqueRouteWithChildren
-  '/financeiro': typeof AppFinanceiroRouteWithChildren
+  '/financeiro': typeof AppFinanceiroRoute
   '/garagem': typeof AppGaragemRouteWithChildren
   '/menu': typeof AppMenuRoute
   '/notificacoes': typeof AppNotificacoesRoute
@@ -207,7 +200,6 @@ export interface FileRoutesByTo {
   '/agenda/novo': typeof AppAgendaNovoRoute
   '/clientes/novo': typeof AppClientesNovoRoute
   '/estoque/novo': typeof AppEstoqueNovoRoute
-  '/financeiro/novo': typeof AppFinanceiroNovoRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
   '/servicos/novo': typeof AppServicosNovoRoute
@@ -223,7 +215,7 @@ export interface FileRoutesById {
   '/_app/busca': typeof AppBuscaRoute
   '/_app/clientes': typeof AppClientesRouteWithChildren
   '/_app/estoque': typeof AppEstoqueRouteWithChildren
-  '/_app/financeiro': typeof AppFinanceiroRouteWithChildren
+  '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/garagem': typeof AppGaragemRouteWithChildren
   '/_app/menu': typeof AppMenuRoute
   '/_app/notificacoes': typeof AppNotificacoesRoute
@@ -235,7 +227,6 @@ export interface FileRoutesById {
   '/_app/agenda/novo': typeof AppAgendaNovoRoute
   '/_app/clientes/novo': typeof AppClientesNovoRoute
   '/_app/estoque/novo': typeof AppEstoqueNovoRoute
-  '/_app/financeiro/novo': typeof AppFinanceiroNovoRoute
   '/_app/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/_app/garagem/novo': typeof AppGaragemNovoRoute
   '/_app/servicos/novo': typeof AppServicosNovoRoute
@@ -263,7 +254,6 @@ export interface FileRouteTypes {
     | '/agenda/novo'
     | '/clientes/novo'
     | '/estoque/novo'
-    | '/financeiro/novo'
     | '/garagem/$truckId'
     | '/garagem/novo'
     | '/servicos/novo'
@@ -289,7 +279,6 @@ export interface FileRouteTypes {
     | '/agenda/novo'
     | '/clientes/novo'
     | '/estoque/novo'
-    | '/financeiro/novo'
     | '/garagem/$truckId'
     | '/garagem/novo'
     | '/servicos/novo'
@@ -316,7 +305,6 @@ export interface FileRouteTypes {
     | '/_app/agenda/novo'
     | '/_app/clientes/novo'
     | '/_app/estoque/novo'
-    | '/_app/financeiro/novo'
     | '/_app/garagem/$truckId'
     | '/_app/garagem/novo'
     | '/_app/servicos/novo'
@@ -472,13 +460,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEstoqueNovoRouteImport
       parentRoute: typeof AppEstoqueRoute
     }
-    '/_app/financeiro/novo': {
-      id: '/_app/financeiro/novo'
-      path: '/novo'
-      fullPath: '/financeiro/novo'
-      preLoaderRoute: typeof AppFinanceiroNovoRouteImport
-      parentRoute: typeof AppFinanceiroRoute
-    }
     '/_app/garagem/$truckId': {
       id: '/_app/garagem/$truckId'
       path: '/$truckId'
@@ -546,18 +527,6 @@ const AppEstoqueRouteWithChildren = AppEstoqueRoute._addFileChildren(
   AppEstoqueRouteChildren,
 )
 
-interface AppFinanceiroRouteChildren {
-  AppFinanceiroNovoRoute: typeof AppFinanceiroNovoRoute
-}
-
-const AppFinanceiroRouteChildren: AppFinanceiroRouteChildren = {
-  AppFinanceiroNovoRoute: AppFinanceiroNovoRoute,
-}
-
-const AppFinanceiroRouteWithChildren = AppFinanceiroRoute._addFileChildren(
-  AppFinanceiroRouteChildren,
-)
-
 interface AppGaragemTruckIdRouteChildren {
   AppGaragemTruckIdDespesaRoute: typeof AppGaragemTruckIdDespesaRoute
 }
@@ -600,7 +569,7 @@ interface AppRouteChildren {
   AppBuscaRoute: typeof AppBuscaRoute
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
-  AppFinanceiroRoute: typeof AppFinanceiroRouteWithChildren
+  AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppGaragemRoute: typeof AppGaragemRouteWithChildren
   AppMenuRoute: typeof AppMenuRoute
   AppNotificacoesRoute: typeof AppNotificacoesRoute
@@ -616,7 +585,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBuscaRoute: AppBuscaRoute,
   AppClientesRoute: AppClientesRouteWithChildren,
   AppEstoqueRoute: AppEstoqueRouteWithChildren,
-  AppFinanceiroRoute: AppFinanceiroRouteWithChildren,
+  AppFinanceiroRoute: AppFinanceiroRoute,
   AppGaragemRoute: AppGaragemRouteWithChildren,
   AppMenuRoute: AppMenuRoute,
   AppNotificacoesRoute: AppNotificacoesRoute,

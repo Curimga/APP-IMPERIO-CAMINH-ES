@@ -10,7 +10,6 @@ import {
   ArrowUpRight,
   LayoutDashboard,
   FileBarChart2,
-  Plus,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useMobileFinance, useCapitalImobilizado } from "@/lib/mobile/queries";
@@ -84,22 +83,14 @@ function Financeiro() {
     <>
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold tracking-tight">Financeiro</h1>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/financeiro/novo"
-            className="flex h-10 items-center gap-1.5 rounded-xl bg-gold px-3 text-sm font-bold text-gold-foreground active:opacity-80"
-          >
-            <Plus className="h-4 w-4" /> Novo
-          </Link>
-          <button
-            type="button"
-            onClick={() => setReveal((v) => !v)}
-            aria-label={reveal ? "Ocultar valores" : "Mostrar valores"}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background active:bg-muted/60"
-          >
-            {reveal ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setReveal((v) => !v)}
+          aria-label={reveal ? "Ocultar valores" : "Mostrar valores"}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background active:bg-muted/60"
+        >
+          {reveal ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        </button>
       </div>
 
       {/* Alternador Indicadores / Relatórios */}

@@ -827,54 +827,6 @@ export function useCustomers(q: string) {
   });
 }
 
-export interface FinancialCategoryItem {
-  id: string;
-  name: string;
-  kind: string;
-  color: string | null;
-}
-
-export interface BankAccountItem {
-  id: string;
-  name: string;
-  bank: string | null;
-  active: boolean;
-  current_balance: number;
-}
-
-/** Categorias financeiras (`financial_categories`) — selects do lançamento. */
-export function useFinancialCategories() {
-  return useQuery({
-    queryKey: ["financial_categories"],
-    queryFn: async (): Promise<FinancialCategoryItem[]> => {
-      const { data, error } = await supabase
-        .from("financial_categories")
-        .select("id, name, kind, color")
-        .order("name", { ascending: true })
-        .limit(200);
-      if (error) throw error;
-      return (data ?? []) as FinancialCategoryItem[];
-    },
-  });
-}
-
-/** Contas bancárias ativas (`bank_accounts`) — selects do lançamento. */
-export function useBankAccounts() {
-  return useQuery({
-    queryKey: ["bank_accounts"],
-    queryFn: async (): Promise<BankAccountItem[]> => {
-      const { data, error } = await supabase
-        .from("bank_accounts")
-        .select("id, name, bank, active, current_balance")
-        .eq("active", true)
-        .order("name", { ascending: true })
-        .limit(100);
-      if (error) throw error;
-      return (data ?? []) as BankAccountItem[];
-    },
-  });
-}
-
 /** Financas: snapshot do dashboard + itens financeiros essenciais. */
 export function useMobileFinance() {
   const { roles } = useAuth();

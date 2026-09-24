@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/mobile/haptic";
-import { toast } from "sonner";
 
 /**
  * "Puxar para atualizar" — dispara `onRefresh` quando o usuário puxa o topo
@@ -50,18 +49,15 @@ export function PullToRefresh({ onRefresh }: { onRefresh: () => Promise<void> | 
         try {
           const result = onRefresh();
           if (result && typeof (result as Promise<void>).then === "function") {
-            (result as Promise<void>)
-              .catch(() => toast.error("Não foi possível atualizar agora."))
-              .finally(() => {
-                animating.current = false;
-                setState("idle");
-              });
+            (result as Promise<void>).finally(() => {
+              animating.current = false;
+              setState("idle");
+            });
           } else {
             animating.current = false;
             setState("idle");
           }
         } catch {
-          toast.error("Não foi possível atualizar agora.");
           animating.current = false;
           setState("idle");
         }

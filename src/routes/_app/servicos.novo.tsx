@@ -19,8 +19,7 @@ export const Route = createFileRoute("/_app/servicos/novo")({
   component: NewService,
 });
 
-/** Categorias no MESMO vocabulário do CRM (alinham com truck-status). */
-const CATEGORIES = ["oficina", "pintura", "despachante", "interna", "patio", "reservado", "outro"] as const;
+const CATEGORIES = ["mecanica", "funilaria", "pintura", "eletrica", "despachante", "pneus"] as const;
 
 function NewService() {
   const nav = useNavigate();
@@ -54,13 +53,12 @@ function NewService() {
   const selectedSupplier = supplierOptions.find((s) => s.id === supplierId);
   const categoryLabel = (v: string) => {
     const labels: Record<string, string> = {
-      oficina: "Oficina",
+      mecanica: "Mecânica",
+      funilaria: "Funilaria",
       pintura: "Pintura",
+      eletrica: "Elétrica",
       despachante: "Despachante",
-      interna: "Serviço interno",
-      patio: "No pátio",
-      reservado: "Reservado",
-      outro: "Outro",
+      pneus: "Pneus",
     };
     return labels[v] ?? v;
   };
@@ -84,7 +82,7 @@ function NewService() {
         category: category.trim() || null,
         supplier_id: supplierId || null,
         notes: notes.trim() || null,
-        expected_at: expectedAt || null,
+        expected_at: expectedAt ? `${expectedAt}T12:00:00` : null,
         value: toNum(value),
         total_value: toNum(totalValue),
         down_payment: toNum(downPayment),

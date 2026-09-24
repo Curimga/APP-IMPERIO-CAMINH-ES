@@ -5,9 +5,6 @@ import {
   restoreStatusAfterService,
   serviceCategoryToTruckStatus,
 } from "@/lib/mobile/service-truck";
-import { dateOnly, spaTodayISO, spaToUtcISO } from "@/lib/mobile/dates";
-import { buildPayableRows, buildReceivableRows, type PaymentInput } from "@/lib/mobile/payment-rows";
-import type { AppRole } from "@/hooks/use-auth";
 import type { Enums, Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 /**
@@ -84,7 +81,7 @@ export interface GeneralExpenseInput {
   payment_method?: string | null;
   status?: string | null;
   supplier?: string | null;
-  occurred_at?: string | null;
+  occurred_at?: string;
   due_date?: string | null;
 }
 
@@ -105,7 +102,7 @@ export async function createGeneralExpense(input: GeneralExpenseInput): Promise<
     payment_method: input.payment_method || null,
     status: input.status || null,
     supplier: input.supplier?.trim() || null,
-    occurred_at: dateOnly(input.occurred_at) ?? spaTodayISO(),
+    occurred_at: input.occurred_at ?? new Date().toISOString(),
     due_date: input.due_date || null,
     created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
   });
@@ -133,7 +130,6 @@ export async function createService(input: ServiceInput): Promise<string> {
     .insert({
       ...input,
       description: input.description?.trim() || null,
-      expected_at: input.expected_at ? dateOnly(input.expected_at) : null,
       status: input.status ?? "em_andamento",
       created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
     })
@@ -218,7 +214,7 @@ export async function setServiceStatus(id: string, status: Enums<"service_status
   if (loadError) throw new Error(loadError.message);
 
   const patch: TablesUpdate<"services"> = { status, updated_at: new Date().toISOString() };
-  if (status === "concluido") patch.completed_at = spaTodayISO();
+  if (status === "concluido") patch.completed_at = new Date().toISOString();
   const { error } = await supabase.from("services").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
 
@@ -278,7 +274,7 @@ function recurrenceEvents(input: EventInput, ownerId: string | null): TablesInse
   while (cursor <= until && rows.length < 120) {
     rows.push({
       ...input,
-      starts_at: spaToUtcISO(localDateTimeValue(cursor)),
+      starts_at: localDateTimeValue(cursor),
       type: input.type ?? "compromisso",
       priority: input.priority ?? "media",
       owner_id: ownerId,
@@ -290,17 +286,14 @@ function recurrenceEvents(input: EventInput, ownerId: string | null): TablesInse
 
 export async function createEvent(input: EventInput): Promise<void> {
   const ownerId = (await supabase.auth.getUser()).data.user?.id ?? null;
-  const rows = recurrenceEvents({ ...input, starts_at: spaToUtcISO(input.starts_at) }, ownerId);
+  const rows = recurrenceEvents(input, ownerId);
   const { error } = await supabase.from("calendar_events").insert(rows);
   if (error) throw new Error(error.message);
   toast.success(rows.length > 1 ? `${rows.length} compromissos criados` : "Compromisso criado");
 }
 
 export async function updateEvent(id: string, patch: Partial<EventInput>): Promise<void> {
-  const normalized = patch.starts_at
-    ? { ...patch, starts_at: spaToUtcISO(patch.starts_at) }
-    : patch;
-  const { error } = await supabase.from("calendar_events").update(normalized).eq("id", id);
+  const { error } = await supabase.from("calendar_events").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
   toast.success("Compromisso atualizado");
 }
@@ -383,40 +376,12 @@ export interface SettleReceivableInput {
   received_at?: string;
 }
 
-/**
- * Guarda de segurança da mutação financeira (Executivo/admin).
- *
- * A UI já esconde o módulo para Financeiro/Secretaria, mas a mutation também
- * confere o cargo no banco antes de gravar — ninguém sem papel admin executa
- * lançamentos financeiros, mesmo chamando a função diretamente.
- */
-async function assertFinanceExecutive(): Promise<void> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) throw new Error(userError.message);
-  const user = userData.user;
-  if (!user) throw new Error("Sessão expirada. Entre novamente para continuar.");
-  const { data: rolesData, error: rolesError } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id);
-  if (rolesError) throw new Error(rolesError.message);
-  const roles = ((rolesData ?? []) as { role: AppRole }[]).map((r) => r.role);
-  if (!roles.includes("admin")) {
-    throw new Error("Apenas o Executivo pode lançar ou quitar lançamentos financeiros.");
-  }
-}
-
 /** Marca uma conta a receber como recebida (registro de recebimento). */
 export async function settleReceivable(input: SettleReceivableInput): Promise<void> {
-  await assertFinanceExecutive();
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("receivables")
-    .update({
-      status: "recebido",
-      received_at: dateOnly(input.received_at) ?? spaTodayISO(),
-      updated_at: now,
-    })
+    .update({ status: "recebido", received_at: input.received_at ?? now, updated_at: now })
     .eq("id", input.id);
   if (error) throw new Error(error.message);
   toast.success("Recebimento registrado");
@@ -429,15 +394,10 @@ export interface SettlePayableInput {
 
 /** Marca uma conta a pagar como paga (registro de pagamento). */
 export async function settlePayable(input: SettlePayableInput): Promise<void> {
-  await assertFinanceExecutive();
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("payables")
-    .update({
-      status: "pago",
-      paid_at: dateOnly(input.paid_at) ?? spaTodayISO(),
-      updated_at: now,
-    })
+    .update({ status: "pago", paid_at: input.paid_at ?? now, updated_at: now })
     .eq("id", input.id);
   if (error) throw new Error(error.message);
   toast.success("Pagamento registrado");
@@ -445,7 +405,6 @@ export async function settlePayable(input: SettlePayableInput): Promise<void> {
 
 /** Desmarca um recebimento já registrado (volta a ficar em aberto). */
 export async function reopenReceivable(id: string): Promise<void> {
-  await assertFinanceExecutive();
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("receivables")
@@ -457,7 +416,6 @@ export async function reopenReceivable(id: string): Promise<void> {
 
 /** Desmarca um pagamento já registrado (volta a ficar em aberto). */
 export async function reopenPayable(id: string): Promise<void> {
-  await assertFinanceExecutive();
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("payables")
@@ -465,35 +423,6 @@ export async function reopenPayable(id: string): Promise<void> {
     .eq("id", id);
   if (error) throw new Error(error.message);
   toast.success("Lançamento reaberto");
-}
-
-/**
- * Cria conta(s) a pagar — mutação financeira exclusiva do Executivo.
- * `payables` é a MESMA tabela do CRM; as colunas `date` recebem apenas
- * "YYYY-MM-DD" e as linhas de parcela são montadas por `buildPayableRows`.
- */
-export async function createPayable(input: PaymentInput): Promise<number> {
-  await assertFinanceExecutive();
-  const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
-  const rows = buildPayableRows({ ...input, kind: "pagar" }, userId);
-  const { error } = await supabase.from("payables").insert(rows);
-  if (error) throw new Error(error.message);
-  toast.success(rows.length > 1 ? `${rows.length} contas a pagar criadas` : "Conta a pagar criada");
-  return rows.length;
-}
-
-/**
- * Cria conta(s) a receber — mutação financeira exclusiva do Executivo.
- * Mesmo contrato da tabela `receivables` do CRM (parcelas numeradas).
- */
-export async function createReceivable(input: PaymentInput): Promise<number> {
-  await assertFinanceExecutive();
-  const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
-  const rows = buildReceivableRows({ ...input, kind: "receber" }, userId);
-  const { error } = await supabase.from("receivables").insert(rows);
-  if (error) throw new Error(error.message);
-  toast.success(rows.length > 1 ? `${rows.length} contas a receber criadas` : "Conta a receber criada");
-  return rows.length;
 }
 
 export interface SetExpensePaidInput {
@@ -578,7 +507,7 @@ export async function updateServiceDeadline(
 ): Promise<void> {
   const { error } = await supabase
     .from("services")
-    .update({ expected_at: dateOnly(expectedAt), updated_at: new Date().toISOString() })
+    .update({ expected_at: expectedAt, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(error.message);
   toast.success("Prazo do serviço atualizado");

@@ -170,12 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await clearAuthenticatedAppState();
           setLoading(false);
         }
-        if (signOutError)
-          throw new Error(
-            signOutError instanceof Error
-              ? `Falha ao encerrar a sessão: ${signOutError.message}`
-              : "Falha ao encerrar a sessão com segurança.",
-          );
+        if (signOutError) throw new Error("Falha ao encerrar a sessão com segurança.");
       },
       refresh: async () => {
         const { data } = await supabase.auth.getSession();
