@@ -10,7 +10,7 @@
  *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
 const CACHE_PREFIX = "imperio-";
-const VERSION = "imperio-v10-2026.09.24-revert-clean";
+const VERSION = "imperio-v11-2026.09.24-crown-icon";
 const APP_SHELL = "/";
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">
