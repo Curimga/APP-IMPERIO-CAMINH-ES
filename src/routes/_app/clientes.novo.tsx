@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
 import { createCustomer } from "@/lib/mobile/actions";
-import { toast } from "sonner";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 
 export const Route = createFileRoute("/_app/clientes/novo")({
   component: NewClient,
@@ -21,6 +21,7 @@ const EMPTY: Form = { name: "", phone: "", email: "", city: "", document: "", no
 
 function NewClient() {
   const nav = useNavigate();
+  const invalidateMobile = useInvalidateMobile();
   const [form, setForm] = useState<Form>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +43,7 @@ function NewClient() {
         document: form.document.trim() || null,
         notes: form.notes.trim() || null,
       });
-      toast.success("Cliente cadastrado");
+      invalidateMobile(["customers"]);
       nav({ to: "/clientes" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao cadastrar cliente");

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { truckTitle } from "@/lib/truck-title";
 import { spaTodayISO, mdTime } from "@/lib/mobile/dates";
-import { toast } from "sonner";
+import { parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
 import { haptic, hapticSuccess, hapticError } from "@/lib/mobile/haptic";
@@ -121,7 +121,7 @@ function NewEvent() {
       hapticError();
       return;
     }
-    const value = Number(String(amount).replace(/\s/g, "").replace(".", "").replace(",", "."));
+    const value = parseMoney(amount);
     const payload = {
       title: title.trim(),
       description: description.trim() || null,
@@ -139,7 +139,6 @@ function NewEvent() {
       else await createEvent(payload);
       invalidateMobile(["calendar_events"]);
       hapticSuccess();
-      toast.success(editing ? "Compromisso atualizado" : "Compromisso criado");
       nav({ to: "/agenda" });
     } catch (e) {
       hapticError();
