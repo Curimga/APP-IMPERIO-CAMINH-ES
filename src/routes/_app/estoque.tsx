@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { Package, TriangleAlert, Plus, MapPin, Minus, Trash2 } from "lucide-react";
 import { useInventory } from "@/lib/mobile/queries";
@@ -12,8 +12,13 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/estoque")({
-  component: Estoque,
+  component: EstoqueRoute,
 });
+
+function EstoqueRoute() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return pathname === "/estoque/novo" ? <Outlet /> : <Estoque />;
+}
 
 function ItemRow({ item }: { item: InventoryItem }) {
   const qty = Number(item.quantity ?? 0);

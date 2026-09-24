@@ -3,7 +3,8 @@ import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
 import { createInventoryItem } from "@/lib/mobile/actions";
-import { toast } from "sonner";
+import { useInvalidateMobile } from "@/lib/mobile/invalidate";
+import { parseMoney } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/estoque/novo")({
   component: NewInventoryItem,
@@ -31,12 +32,14 @@ const EMPTY: Form = {
 };
 
 const toNumber = (v: string) => {
-  const n = Number(v.replace(/[^\d.]/g, ""));
+  if (!v.trim()) return null;
+  const n = parseMoney(v, Number.NaN);
   return Number.isFinite(n) ? n : null;
 };
 
 function NewInventoryItem() {
   const nav = useNavigate();
+  const invalidateMobile = useInvalidateMobile();
   const [form, setForm] = useState<Form>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +65,7 @@ function NewInventoryItem() {
         storage_location: form.storage_location.trim() || null,
         supplier_name: form.supplier_name.trim() || null,
       });
-      toast.success("Item adicionado");
+      invalidateMobile(["inventory_items"]);
       nav({ to: "/estoque" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao adicionar item");
