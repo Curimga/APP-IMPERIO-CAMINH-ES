@@ -27,6 +27,7 @@ import {
   mdTime,
   mdRelative,
   mdDaysParked,
+  mdDaysUntil,
   mdDiffDays,
 } from "@/lib/mobile/dates";
 import {
@@ -830,7 +831,7 @@ function Attention({
   (trucks ?? [])
     .filter(
       (t) =>
-        t.sold_at && t.warranty_end && mdDaysParked(t.warranty_end) >= 0 && mdDaysParked(t.warranty_end) <= 30,
+        t.sold_at && t.warranty_end && mdDaysUntil(t.warranty_end) >= 0 && mdDaysUntil(t.warranty_end) <= 30,
     )
     .slice(0, 2)
     .forEach((t) =>

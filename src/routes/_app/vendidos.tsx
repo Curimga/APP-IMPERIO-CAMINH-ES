@@ -4,7 +4,7 @@ import { ShieldCheck, ShieldOff, UserRound } from "lucide-react";
 import { useSoldTrucks } from "@/lib/mobile/queries";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
 import { brl, dateBR } from "@/lib/format";
-import { mdDiffDays, spaTodayISO } from "@/lib/mobile/dates";
+import { mdDaysUntil } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_app/vendidos")({
 
 function warrantyInfo(warrantyEnd: string | null) {
   if (!warrantyEnd) return { active: false, label: "Sem garantia cadastrada" };
-  const days = mdDiffDays(warrantyEnd, spaTodayISO());
+  const days = mdDaysUntil(warrantyEnd);
   if (days < 0) return { active: false, label: "Garantia encerrada há " + Math.abs(days) + " d" };
   if (days === 0) return { active: true, label: "Último dia de garantia!" };
   return { active: true, label: `Garantia: ${days} d restantes` };

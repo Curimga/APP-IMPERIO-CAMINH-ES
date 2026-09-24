@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Wrench, ShieldCheck, Coins, Bell, ArrowRight } from "lucide-react";
 import { useServices, useSoldTrucks, useTodaysEvents, useNotifications } from "@/lib/mobile/queries";
 import { SkeletonRows, MobileCard, EmptyState, PageHeader, SectionTitle } from "@/components/mobile/ui";
-import { mdDaysParked, mdRelative, mdTime } from "@/lib/mobile/dates";
+import { mdDaysUntil, mdRelative, mdTime } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,7 +23,7 @@ export function usePendencies() {
     (s) => s.status === "em_andamento" && s.expected_at && mdRelative(s.expected_at).startsWith("atrasado"),
   );
   const garantias = (sold.data?.trucks ?? []).filter((t) => {
-    const d = mdDaysParked(t.warranty_end);
+    const d = mdDaysUntil(t.warranty_end);
     return t.warranty_end && d >= 0 && d <= 30;
   });
   // "Vencimentos de hoje" revela compromissos financeiros — apenas Executivo.
@@ -68,7 +68,7 @@ function Pendencias() {
       count: p.garantias.length,
       items: p.garantias.slice(0, 3).map((t) => ({
         title: `${t.brand} ${t.model}`,
-        subtitle: `vence em ${mdRelative(t.warranty_end)}`,
+        subtitle: `vence ${mdRelative(t.warranty_end)}`,
       })),
     },
     {

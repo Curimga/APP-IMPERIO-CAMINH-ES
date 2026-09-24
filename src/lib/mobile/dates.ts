@@ -78,6 +78,13 @@ export function mdDaysParked(since: MDate): number {
   return Number.isFinite(d) ? d : 0;
 }
 
+/** Dias restantes até a data alvo (negativo quando já venceu). */
+export function mdDaysUntil(target: MDate, ref: MDate = spaTodayISO()): number {
+  if (!target) return 0;
+  const d = mdDiffDays(ref, target);
+  return Number.isFinite(d) ? d : 0;
+}
+
 /** "há X dias", "hoje", "amanhã", "atrasado" para exibição de prazos. */
 export function mdRelative(d: MDate, ref = new Date()): string {
   if (!d) return "—";
