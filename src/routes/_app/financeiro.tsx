@@ -3,8 +3,6 @@ import { useState } from "react";
 import {
   Eye,
   EyeOff,
-  TrendingUp,
-  TrendingDown,
   Boxes,
   Landmark,
   ArrowUpRight,
@@ -29,15 +27,6 @@ import type { Tables } from "@/integrations/supabase/types";
 export const Route = createFileRoute("/_app/financeiro")({
   component: Financeiro,
 });
-
-type OpenRow = {
-  amount: number;
-  paid_at?: string | null;
-  received_at?: string | null;
-};
-
-const sumOpen = (rows: OpenRow[] | undefined | null, paidField: "paid_at" | "received_at") =>
-  (rows ?? []).reduce((s, r) => s + (r[paidField] == null ? Number(r.amount ?? 0) : 0), 0);
 
 /**
  * O módulo Financeiro é exclusivo do Executivo. Os hooks financeiros
@@ -76,8 +65,9 @@ function Financeiro() {
   const banks = (snap.banks ?? []) as Tables<"bank_accounts">[];
   const receivables = (snap.receivables ?? []) as Tables<"receivables">[];
   const payables = (snap.payables ?? []) as Tables<"payables">[];
-  const receivablesOpen = sumOpen(receivables, "received_at");
-  const payablesOpen = sumOpen(payables, "paid_at");
+  const hasOpenDue =
+    receivables.some((r) => r.received_at == null && r.due_date) ||
+    payables.some((p) => p.paid_at == null && p.due_date);
 
   return (
     <>
@@ -133,12 +123,6 @@ function Financeiro() {
               accent={kpis.balance >= 0 ? "success" : "destructive"}
             />
             <MoneyStat label="Receita do mês" value={valuemaybe(kpis.revMonth ?? 0)} accent="gold" />
-            <MoneyStat
-              label="Resultado do mês"
-              value={valuemaybe(kpis.netProfit ?? 0)}
-              accent={(kpis.netProfit ?? 0) >= 0 ? "success" : "destructive"}
-            />
-            <MoneyStat label="Opex do mês" value={valuemaybe(kpis.opex ?? 0)} accent="muted" />
           </div>
 
           {/* Capital imobilizado */}
@@ -161,24 +145,6 @@ function Financeiro() {
               {(cap.data?.count ?? 0) === 1 ? "" : "s"} em estoque (compra + despesas)
             </div>
           </MobileCard>
-
-          {/* Contas a receber / pagar */}
-          <div className="grid grid-cols-2 gap-2">
-            <MobileCard className="p-3" onClick={() => navigate({ to: "/agenda", search: { view: "pagamentos" } })}>
-              <div className="flex items-center gap-1.5 text-[12px] font-bold text-success uppercase">
-                <TrendingUp className="h-3.5 w-3.5" /> A receber
-              </div>
-              <div className="mt-1 text-lg font-extrabold tabular-nums">
-                {valuemaybe(receivablesOpen)}
-              </div>
-            </MobileCard>
-            <MobileCard className="p-3" onClick={() => navigate({ to: "/agenda", search: { view: "pagamentos" } })}>
-              <div className="flex items-center gap-1.5 text-[12px] font-bold text-destructive uppercase">
-                <TrendingDown className="h-3.5 w-3.5" /> A pagar
-              </div>
-              <div className="mt-1 text-lg font-extrabold tabular-nums">{valuemaybe(payablesOpen)}</div>
-            </MobileCard>
-          </div>
 
           {/* Contas bancárias */}
           <MobileCard className="p-3">
@@ -205,7 +171,7 @@ function Financeiro() {
           {/* Próximos vencimentos */}
           <MobileCard className="p-3">
             <SectionTitle className="mb-1">Próximos vencimentos</SectionTitle>
-            {payablesOpen === 0 && receivablesOpen === 0 ? (
+            {!hasOpenDue ? (
               <p className="text-[13px] text-muted-foreground">Nenhum lançamento em aberto.</p>
             ) : (
               <div className="divide-y divide-border/60">
