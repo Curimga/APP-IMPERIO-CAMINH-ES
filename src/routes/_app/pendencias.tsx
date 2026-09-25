@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Wrench, ShieldCheck, Coins, Bell, ArrowRight } from "lucide-react";
 import { useServices, useSoldTrucks, useTodaysEvents, useNotifications } from "@/lib/mobile/queries";
 import { SkeletonRows, MobileCard, EmptyState, PageHeader, SectionTitle } from "@/components/mobile/ui";
-import { mdDaysUntil, mdRelative, mdTime } from "@/lib/mobile/dates";
+import { mdDaysUntil, mdIsPastDue, mdRelative, mdTime } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,21 +13,21 @@ export const Route = createFileRoute("/_app/pendencias")({
 });
 
 export function usePendencies() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const services = useServices();
   const sold = useSoldTrucks();
   const events = useTodaysEvents();
   const notif = useNotifications();
 
   const atrasados = (services.data ?? []).filter(
-    (s) => s.status === "em_andamento" && s.expected_at && mdRelative(s.expected_at).startsWith("atrasado"),
+    (s) => s.status === "em_andamento" && mdIsPastDue(s.expected_at),
   );
   const garantias = (sold.data?.trucks ?? []).filter((t) => {
     const d = mdDaysUntil(t.warranty_end);
     return t.warranty_end && d >= 0 && d <= 30;
   });
   // "Vencimentos de hoje" revela compromissos financeiros — apenas Executivo.
-  const monetarios = isFinanceExecutive(roles)
+  const monetarios = isFinanceExecutive(roles, user?.email)
     ? (events.data ?? []).filter((e) => e.type === "pagamento" || e.type === "vencimento")
     : [];
   const criticas = (notif.data?.items ?? []).filter(

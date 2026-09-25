@@ -7,7 +7,7 @@ import { setServiceStatus, updateServiceDeadline } from "@/lib/mobile/actions";
 import { MobileCard, SkeletonRows, EmptyState, Field, inputClass, btnGold } from "@/components/mobile/ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { dateBR } from "@/lib/format";
-import { mdRelative, spaTodayISO } from "@/lib/mobile/dates";
+import { mdIsPastDue, mdRelative, spaTodayISO } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -93,8 +93,7 @@ function ServiceItem({ s, onEditDeadline }: { s: ServiceItem; onEditDeadline: (s
   const invalidateMobile = useInvalidateMobile();
   const isLate =
     s.status === "em_andamento" &&
-    s.expected_at &&
-    mdRelative(s.expected_at).startsWith("atrasado");
+    mdIsPastDue(s.expected_at);
   const isConcluido = s.status === "concluido";
   return (
     <div className="flex items-start gap-3 px-3 py-3">
@@ -202,8 +201,7 @@ function Servicos() {
   const atrasados = all.filter(
     (s) =>
       s.status === "em_andamento" &&
-      s.expected_at &&
-      mdRelative(s.expected_at).startsWith("atrasado"),
+      mdIsPastDue(s.expected_at),
   );
   const concluidos = all.filter((s) => s.status === "concluido");
   const list = tab === "andamento" ? andamento : tab === "atrasados" ? atrasados : concluidos;

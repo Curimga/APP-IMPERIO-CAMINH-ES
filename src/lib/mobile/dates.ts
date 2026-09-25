@@ -85,6 +85,11 @@ export function mdDaysUntil(target: MDate, ref: MDate = spaTodayISO()): number {
   return Number.isFinite(d) ? d : 0;
 }
 
+/** Verdadeiro somente quando a data alvo já passou no calendário local. */
+export function mdIsPastDue(target: MDate, ref: MDate = spaTodayISO()): boolean {
+  return !!target && mdDaysUntil(target, ref) < 0;
+}
+
 /** "há X dias", "hoje", "amanhã", "atrasado" para exibição de prazos. */
 export function mdRelative(d: MDate, ref = new Date()): string {
   if (!d) return "—";

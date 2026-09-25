@@ -158,8 +158,8 @@ const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
    ============================================================ */
 
 function Agenda() {
-  const { roles } = useAuth();
-  const showAmount = isFinanceExecutive(roles);
+  const { roles, user } = useAuth();
+  const showAmount = isFinanceExecutive(roles, user?.email);
   const search = Route.useSearch();
   const today = spaTodayISO();
   const nav = useNavigate();

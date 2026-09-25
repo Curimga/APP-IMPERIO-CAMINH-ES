@@ -243,8 +243,8 @@ function FavoriteTruckCard({ t }: { t: TruckWithPhotos }) {
 
 function Garagem() {
   const location = useLocation();
-  const { roles } = useAuth();
-  const isExec = isFinanceExecutive(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   const { data, isLoading, isError } = useTrucks();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>(readSavedFilter);

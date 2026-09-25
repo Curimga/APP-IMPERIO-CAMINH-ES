@@ -24,8 +24,8 @@ function warrantyInfo(warrantyEnd: string | null) {
 
 function Vendidos() {
   const navigate = useNavigate();
-  const { roles } = useAuth();
-  const isExec = isFinanceExecutive(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   const { data, isLoading, isError } = useSoldTrucks();
   const trucks = data?.trucks ?? [];
 

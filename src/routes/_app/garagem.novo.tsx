@@ -75,8 +75,8 @@ const toNumber = (v: string) => {
 function NewTruck() {
   const nav = useNavigate();
   const search = Route.useSearch();
-  const { roles } = useAuth();
-  const isExec = isFinanceExecutive(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   const isEdit = !!search.edit;
   const { data: detail } = useTruckDetail(search.edit || undefined);
   const [form, setForm] = useState<Form>(EMPTY);

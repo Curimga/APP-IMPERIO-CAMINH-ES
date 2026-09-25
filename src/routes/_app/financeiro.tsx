@@ -34,14 +34,14 @@ export const Route = createFileRoute("/_app/financeiro")({
  * usuário é admin — para não executivos nenhuma requisição financeira dispara.
  */
 function Financeiro() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const navigate = useNavigate();
   const [reveal, setReveal] = useState(false);
   const [tab, setTab] = useState<"indicadores" | "relatorios">("indicadores");
   const { data, isLoading, isError } = useMobileFinance();
   const cap = useCapitalImobilizado();
 
-  if (!canSeeFinance(roles)) {
+  if (!canSeeFinance(roles, user?.email)) {
     return (
       <EmptyState
         title="Você não possui permissão para acessar esta área"

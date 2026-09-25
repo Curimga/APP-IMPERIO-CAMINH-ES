@@ -77,6 +77,13 @@ describe("realtime hub — assinatura por perfil (financeiro/secretária não as
     }
   });
 
+  it("Josemar não assina tabelas financeiras mesmo sendo admin", () => {
+    const tables = realtimeTablesForRoles(["admin"], "josemar.essing@gmail.com");
+    for (const fin of FINANCIAL_TABLES) {
+      expect(tables, `${fin} deveria ficar fora p/ Josemar`).not.toContain(fin);
+    }
+  });
+
   it("financeiro NÃO assina nenhuma tabela financeira privada", () => {
     const tables = realtimeTablesForRoles(["financeiro"]);
     for (const fin of FINANCIAL_TABLES) {

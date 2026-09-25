@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { PostgrestError, RealtimeChannel } from "@supabase/supabase-js";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
-import { isAdmin } from "@/lib/mobile/perm";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 import {
   ALL_QUERY_KEYS,
   ALL_TABLE_KEYS,
@@ -41,10 +41,10 @@ export const FINANCIAL_TABLES: readonly (keyof RealtimeKeyMap)[] = [
   "general_expenses",
 ];
 
-/** Função pura: quais tabelas assinar para um perfil. Financeiras só p/ admin. */
-export function realtimeTablesForRoles(roles: AppRole[]): (keyof RealtimeKeyMap)[] {
-  const admin = isAdmin(roles);
-  return ALL_TABLE_KEYS.filter((t) => admin || !FINANCIAL_TABLES.includes(t));
+/** Função pura: quais tabelas assinar para um perfil. Financeiras só p/ Executivo autorizado. */
+export function realtimeTablesForRoles(roles: AppRole[], email?: string | null): (keyof RealtimeKeyMap)[] {
+  const canAccessFinance = isFinanceExecutive(roles, email);
+  return ALL_TABLE_KEYS.filter((t) => canAccessFinance || !FINANCIAL_TABLES.includes(t));
 }
 
 const RECONNECT_MS = 5_000;
@@ -66,20 +66,22 @@ type GeneratePayableAlertsRpc = (
  */
 export function useRealtimeSync(extraKeys: string[] = []) {
   const qc = useQueryClient();
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const rolesRef = useRef(roles);
+  const emailRef = useRef(user?.email ?? null);
   rolesRef.current = roles;
+  emailRef.current = user?.email ?? null;
   const extraKeysRef = useRef(extraKeys);
   extraKeysRef.current = extraKeys;
 
   // Re-assina quando o perfil muda (ex.: roles carregam após o login).
-  const signature = `${realtimeTablesForRoles(roles).join("|")}|${extraKeys.join("|")}`;
+  const signature = `${realtimeTablesForRoles(roles, user?.email).join("|")}|${extraKeys.join("|")}`;
 
   useEffect(() => {
     let disposed = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const tables = realtimeTablesForRoles(rolesRef.current);
+    const tables = realtimeTablesForRoles(rolesRef.current, emailRef.current);
 
     const invalidateAll = () => {
       ALL_QUERY_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -160,7 +162,7 @@ export function useRealtimeSync(extraKeys: string[] = []) {
     // Gera alertas financeiros (vencimentos ≤3 dias / atrasos) periodicamente.
     // Exclusivo do Executivo: financeiro/secretaria não devem receber avisos financeiros.
     const runAlerts = async () => {
-      if (!isAdmin(rolesRef.current)) return;
+      if (!isFinanceExecutive(rolesRef.current, emailRef.current)) return;
       try {
         const generatePayableAlerts = supabase.rpc as unknown as GeneratePayableAlertsRpc;
         await generatePayableAlerts("fn_generate_payable_alerts");

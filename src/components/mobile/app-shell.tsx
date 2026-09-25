@@ -14,11 +14,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { canEditInventory, isAdmin } from "@/lib/mobile/perm";
+import { canEditInventory, isFinanceExecutive } from "@/lib/mobile/perm";
 import { AppHeader } from "@/components/mobile/header";
 import { OfflineBanner } from "@/components/mobile/connection";
 import { haptic } from "@/lib/mobile/haptic";
 import { useNotifications, useServices } from "@/lib/mobile/queries";
+import { mdIsPastDue } from "@/lib/mobile/dates";
 import { RefreshSurface } from "@/components/mobile/pull-to-refresh";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -65,8 +66,7 @@ export function MobileTabBar() {
   const delayedCount = (services ?? []).filter(
     (s) =>
       s.status === "em_andamento" &&
-      s.expected_at &&
-      s.expected_at.slice(0, 10) < new Date().toISOString().slice(0, 10),
+      mdIsPastDue(s.expected_at),
   ).length;
 
   return (
@@ -187,7 +187,7 @@ function FabSheet({ actions }: { actions: FabAction[] }) {
 }
 
 function useFabActions() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const staff =
     roles.includes("admin") || roles.includes("financeiro") || roles.includes("secretaria");
   const actions: FabAction[] = [];
@@ -225,7 +225,7 @@ function useFabActions() {
       to: "/estoque/novo",
     });
   }
-  if (isAdmin(roles)) {
+  if (isFinanceExecutive(roles, user?.email)) {
     actions.push({
       label: "Financeiro",
       description: "Indicadores e lançamentos",

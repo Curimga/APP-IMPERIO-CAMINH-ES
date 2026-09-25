@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchDashboardSnapshot, computeExecutiveKpis } from "@/lib/dashboard-data";
 import { spaTodayISO } from "@/lib/mobile/dates";
 import { useAuth } from "@/hooks/use-auth";
-import { isAdmin } from "@/lib/mobile/perm";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 import type { Tables } from "@/integrations/supabase/types";
 import type { TruckCustomerRef, TruckDealRef } from "@/lib/mobile/truck-detail";
 
@@ -129,7 +129,7 @@ export interface DashboardTruck {
 /** Subconjunto enxuto de serviços usado apenas pelo dashboard (home). */
 export type DashboardService = Pick<
   Tables<"services">,
-  "id" | "title" | "status" | "expected_at" | "completed_at" | "created_at"
+  "id" | "truck_id" | "title" | "status" | "category" | "notes" | "expected_at" | "completed_at" | "created_at"
 > & { truck: TruckRef | null };
 
 /** Subconjunto enxuto de compromissos do dia usado apenas pelo dashboard (home). */
@@ -282,8 +282,8 @@ export function truckPhotoVersion(photo: TruckPhoto | null | undefined, truckUpd
 
 /** Lista da garagem — todos os caminhões com foto principal. */
 export function useTrucks() {
-  const { roles } = useAuth();
-  const isExec = isAdmin(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   return useQuery({
     queryKey: ["trucks-mobile", isExec],
     refetchOnWindowFocus: true,
@@ -338,8 +338,8 @@ export function useTrucks() {
  * exclui as colunas financeiras e as despesas não são consultadas.
  */
 export function useTruck(id: string | undefined) {
-  const { roles } = useAuth();
-  const isExec = isAdmin(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   return useQuery({
     queryKey: ["truck-mobile", id, isExec],
     enabled: !!id,
@@ -398,8 +398,8 @@ export function useTruck(id: string | undefined) {
  * nem são enviadas ao Supabase.
  */
 export function useTruckDetail(id: string | undefined) {
-  const { roles } = useAuth();
-  const isExec = isAdmin(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   return useQuery({
     queryKey: ["truck-detail", id, isExec],
     enabled: !!id,
@@ -739,7 +739,7 @@ export function useDashboardData() {
         supabase
           .from("services")
           .select(
-            "id, title, status, expected_at, completed_at, created_at, truck:trucks(id, brand, model, plate)",
+            "id, truck_id, title, status, category, notes, expected_at, completed_at, created_at, truck:trucks(id, brand, model, plate)",
           )
           .in("status", ["em_andamento", "concluido"])
           .order("created_at", { ascending: false })
@@ -829,10 +829,11 @@ export function useCustomers(q: string) {
 
 /** Financas: snapshot do dashboard + itens financeiros essenciais. */
 export function useMobileFinance() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
+  const canAccessFinance = isFinanceExecutive(roles, user?.email);
   return useQuery({
-    queryKey: ["finance-mobile"],
-    enabled: isAdmin(roles),
+    queryKey: ["finance-mobile", canAccessFinance],
+    enabled: canAccessFinance,
     queryFn: async () => {
       const snap = await fetchDashboardSnapshot();
       const kpis = computeExecutiveKpis(snap);
@@ -867,8 +868,8 @@ export function useInventory() {
  * Financeiro e Secretaria o SELECT usa somente colunas operacionais.
  */
 export function useSoldTrucks() {
-  const { roles } = useAuth();
-  const isExec = isAdmin(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   return useQuery({
     queryKey: ["sold-trucks-mobile", isExec],
     refetchOnWindowFocus: true,
@@ -1006,8 +1007,8 @@ function useAuthSession() {
  * `purchase_price` + `expenses_total`.
  */
 export function useCapitalImobilizado() {
-  const { roles } = useAuth();
-  const isExec = isAdmin(roles);
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   const inStockStatuses = [
     "disponivel",
     "consignado",

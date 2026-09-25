@@ -25,7 +25,7 @@ const KIND_OPTIONS: { v: "pagar" | "receber"; label: string }[] = [
 const PAYMENT_METHODS = ["PIX", "BOLETO", "TRANSFERENCIA", "DINHEIRO", "CARTAO", "OUTRO"] as const;
 
 function NewPayment() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const nav = useNavigate();
   const invalidateMobile = useInvalidateMobile();
   const { data: trucks } = useTrucks();
@@ -54,7 +54,7 @@ function NewPayment() {
   const selectedTruck = truckOptions.find((t) => t.id === truckId);
   const selectedCustomer = (customers ?? []).find((c) => c.id === customerId);
 
-  if (!isFinanceExecutive(roles)) {
+  if (!isFinanceExecutive(roles, user?.email)) {
     return (
       <EmptyState
         title="Você não possui permissão para esta ação"

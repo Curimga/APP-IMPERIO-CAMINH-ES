@@ -12,24 +12,30 @@ export function isAdmin(roles: AppRole[]) {
   return roles.includes("admin");
 }
 
+const FINANCE_BLOCKED_EMAILS = new Set(["josemar.essing@gmail.com"]);
+
+function isFinanceBlockedEmail(email?: string | null) {
+  return FINANCE_BLOCKED_EMAILS.has(email?.toLowerCase() ?? "");
+}
+
 /**
  * Acesso financeiro exclusivo do Executivo.
  *
  * Decisão de negócio: mesmo o cargo "financeiro" NÃO possui acesso a
  * informações financeiras. Apenas o Executivo (admin).
  */
-export function isFinanceExecutive(roles: AppRole[]) {
-  return roles.includes("admin");
+export function isFinanceExecutive(roles: AppRole[], email?: string | null) {
+  return roles.includes("admin") && !isFinanceBlockedEmail(email);
 }
 
 /** Executivo: acesso ao módulo Financeiro. */
-export function canSeeFinance(roles: AppRole[]) {
-  return isFinanceExecutive(roles);
+export function canSeeFinance(roles: AppRole[], email?: string | null) {
+  return isFinanceExecutive(roles, email);
 }
 
 /** Ações financeiras críticas (lançamentos, pagamentos) — Executivo. */
-export function canEditFinance(roles: AppRole[]) {
-  return isFinanceExecutive(roles);
+export function canEditFinance(roles: AppRole[], email?: string | null) {
+  return isFinanceExecutive(roles, email);
 }
 
 /** Secretaria pode editar estoque de itens (conforme regras do CRM). */
@@ -42,8 +48,8 @@ export function canManageTrucks(roles: AppRole[]) {
   return roles.includes("admin") || roles.includes("financeiro") || roles.includes("secretaria");
 }
 
-export function canRegisterExpense(roles: AppRole[]) {
-  return isFinanceExecutive(roles);
+export function canRegisterExpense(roles: AppRole[], email?: string | null) {
+  return isFinanceExecutive(roles, email);
 }
 
 export function roleLabel(roles: AppRole[]): string {
@@ -58,7 +64,7 @@ export const MOBILE_MENU: {
   label: string;
   to: string;
   icon: string;
-  allowed: (roles: AppRole[]) => boolean;
+  allowed: (roles: AppRole[], email?: string | null) => boolean;
   description: string;
 }[] = [
   {

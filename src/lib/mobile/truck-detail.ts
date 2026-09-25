@@ -29,13 +29,13 @@ export function normalizeTruckIdParam(param: string | null | undefined): string 
 }
 
 /** Acesso financeiro: apenas Executivo (admin). O nome do papel não prevalece. */
-export function maySeeTruckFinance(roles: AppRole[]): boolean {
-  return isFinanceExecutive(roles);
+export function maySeeTruckFinance(roles: AppRole[], email?: string | null): boolean {
+  return isFinanceExecutive(roles, email);
 }
 
 /** CPF/CNPJ do comprador segue a mesma regra das finanças (exclusivo Executivo). */
-export function maySeeCpfCnpj(roles: AppRole[]): boolean {
-  return isFinanceExecutive(roles);
+export function maySeeCpfCnpj(roles: AppRole[], email?: string | null): boolean {
+  return isFinanceExecutive(roles, email);
 }
 
 export interface TruckFinanceInput {

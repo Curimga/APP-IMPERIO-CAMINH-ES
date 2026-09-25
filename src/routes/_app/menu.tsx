@@ -34,11 +34,11 @@ const ICONS: Record<string, React.ReactNode> = {
 };
 
 function Menu() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const { data } = useNotifications();
   const pendencias = usePendencies();
   const install = useInstallPrompt();
-  const items = MOBILE_MENU.filter((m) => m.allowed(roles));
+  const items = MOBILE_MENU.filter((m) => m.allowed(roles, user?.email));
   const unread = data?.unread ?? 0;
 
   return (

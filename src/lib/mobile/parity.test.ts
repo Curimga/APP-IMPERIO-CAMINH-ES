@@ -5,6 +5,7 @@ import {
   mdDiffDays,
   mdRelative,
   mdDaysParked,
+  mdIsPastDue,
 } from "./dates";
 import {
   isFinanceExecutive,
@@ -62,11 +63,18 @@ describe("datas — fuso America/Sao_Paulo (sem regressão de meia-noite)", () =
     expect(mdRelative("2026-09-08", ref)).toBe("hoje");
     expect(mdRelative("2026-09-09", ref)).toBe("amanhã");
   });
+
+  it("mdIsPastDue considera hoje dentro do prazo", () => {
+    expect(mdIsPastDue("2026-09-07", "2026-09-08")).toBe(true);
+    expect(mdIsPastDue("2026-09-08", "2026-09-08")).toBe(false);
+    expect(mdIsPastDue("2026-09-09", "2026-09-08")).toBe(false);
+  });
 });
 
 describe("permissões — financeiro SOMENTE Executivo; estoque p/ secretaria/financeiro", () => {
   it("isFinanceExecutive aceita apenas admin", () => {
     expect(isFinanceExecutive(["admin"])).toBe(true);
+    expect(isFinanceExecutive(["admin"], "josemar.essing@gmail.com")).toBe(false);
     expect(isFinanceExecutive(["financeiro"])).toBe(false);
     expect(isFinanceExecutive(["secretaria"])).toBe(false);
     expect(isFinanceExecutive([])).toBe(false);
@@ -74,6 +82,7 @@ describe("permissões — financeiro SOMENTE Executivo; estoque p/ secretaria/fi
 
   it("canSeeFinance/canEditFinance = mesma regra (esconde valor para não-exec)", () => {
     expect(canSeeFinance(["admin"])).toBe(true);
+    expect(canSeeFinance(["admin"], "josemar.essing@gmail.com")).toBe(false);
     expect(canSeeFinance(["financeiro"])).toBe(false);
     expect(canEditFinance(["financeiro"])).toBe(false);
   });

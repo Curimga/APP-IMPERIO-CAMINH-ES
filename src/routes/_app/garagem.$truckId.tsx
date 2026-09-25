@@ -219,9 +219,9 @@ function TruckDetail() {
   const { truckId: rawTruckId } = Route.useParams();
   const truckId = normalizeTruckIdParam(rawTruckId);
   const nav = useNavigate();
-  const { roles } = useAuth();
-  const isExec = maySeeTruckFinance(roles);
-  const canSeeDocNumber = maySeeCpfCnpj(roles);
+  const { roles, user } = useAuth();
+  const isExec = maySeeTruckFinance(roles, user?.email);
+  const canSeeDocNumber = maySeeCpfCnpj(roles, user?.email);
   const { data, isLoading, isError } = useTruckDetail(truckId ?? undefined);
   const [statusOpen, setStatusOpen] = useState(false);
   const [fav, setFav] = useState(false);
@@ -417,7 +417,7 @@ function TruckDetail() {
           <MobileCard className="p-3">
             <div className="flex items-center justify-between">
               <SectionTitle className="mb-1">Despesas</SectionTitle>
-              {canRegisterExpense(roles) ? <Link to="/garagem/$truckId/despesa" params={{ truckId: truck.id }} className="text-xs font-bold text-gold">registrar</Link> : null}
+              {canRegisterExpense(roles, user?.email) ? <Link to="/garagem/$truckId/despesa" params={{ truckId: truck.id }} className="text-xs font-bold text-gold">registrar</Link> : null}
             </div>
             <div className="mb-3 grid grid-cols-4 gap-2 text-center text-xs">
               <div className="rounded-xl bg-muted p-2"><div className="font-bold">{expenseSummary.count}</div><div className="text-muted-foreground">itens</div></div>

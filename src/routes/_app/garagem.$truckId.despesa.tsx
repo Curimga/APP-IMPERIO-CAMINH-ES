@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ArrowLeft, ChevronDown } from "lucide-react";
-import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
+import { Field, inputClass, btnGold, btnGhost, MobileCard, EmptyState } from "@/components/mobile/ui";
 import { useTrucks } from "@/lib/mobile/queries";
 import { createGeneralExpense } from "@/lib/mobile/actions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
 import { useInvalidateMobile } from "@/lib/mobile/invalidate";
+import { useAuth } from "@/hooks/use-auth";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/garagem/$truckId/despesa")({
   component: RegisterExpense,
@@ -44,6 +46,7 @@ const PAYMENT_METHODS = ["PIX", "BOLETO", "TRANSFERENCIA", "DINHEIRO", "CARTAO",
 
 function RegisterExpense() {
   const nav = useNavigate();
+  const { roles, user } = useAuth();
   const { truckId } = useParams({ from: Route.id });
   const { data: trucks } = useTrucks();
   const invalidateMobile = useInvalidateMobile();
@@ -66,6 +69,17 @@ function RegisterExpense() {
     [trucks],
   );
   const selected = truckOptions.find((t) => t.id === selectedTruckId);
+
+  if (!isFinanceExecutive(roles, user?.email)) {
+    return (
+      <EmptyState
+        title="Você não possui permissão para esta ação"
+        hint="Registrar despesas é exclusivo do Executivo."
+        actionLabel="Voltar para o início"
+        onAction={() => nav({ to: "/" })}
+      />
+    );
+  }
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();

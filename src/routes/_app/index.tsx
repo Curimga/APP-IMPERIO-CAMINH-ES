@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -28,6 +28,7 @@ import {
   mdRelative,
   mdDaysParked,
   mdDaysUntil,
+  mdIsPastDue,
   mdDiffDays,
 } from "@/lib/mobile/dates";
 import {
@@ -61,6 +62,7 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 const FLEET_EXCLUDED_STATUSES = new Set(["vendido", "repasse"]);
+const OPERATIONAL_PANEL_EMAILS = new Set(["josemar.essing@gmail.com"]);
 
 type Tone = "default" | "gold" | "success" | "destructive" | "muted" | "info" | "warning";
 
@@ -470,18 +472,82 @@ function AgendaTodayRow({ count }: { count: number }) {
 }
 
 /* ============================================================
+   Previsão de serviços
+   ============================================================ */
+
+function ServiceForecast({ services }: { services: DashboardService[] }) {
+  const forecast = (services ?? [])
+    .filter((s) => s.status === "em_andamento" && s.expected_at)
+    .sort((a, b) => mdDaysUntil(a.expected_at) - mdDaysUntil(b.expected_at))
+    .slice(0, 5);
+
+  if (forecast.length === 0) return null;
+
+  return (
+    <section>
+      <SectionTitle
+        right={
+          <Link to="/servicos" className="flex items-center text-xs font-semibold text-gold">
+            ver serviços <ArrowRight className="ml-0.5 h-3 w-3" />
+          </Link>
+        }
+      >
+        Previsão de serviços
+      </SectionTitle>
+      <MobileCard className="divide-y">
+        {forecast.map((s) => {
+          const isLate = mdIsPastDue(s.expected_at);
+          const when = mdRelative(s.expected_at);
+          const detail = [s.truck ? truckTitle(s.truck) : "Sem caminhão", s.category, s.notes]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <Link key={s.id} to="/servicos" className="block active:bg-muted/60">
+              <div className="flex items-start gap-2.5 px-3 py-2.5">
+                <span
+                  className={cn(
+                    "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                    isLate ? "bg-destructive" : when === "hoje" ? "bg-warning" : "bg-gold",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-semibold">{s.title || "Serviço"}</div>
+                  <div className="line-clamp-1 text-[12px] text-muted-foreground">{detail}</div>
+                </div>
+                <div
+                  className={cn(
+                    "shrink-0 text-right text-[11px] font-bold tabular-nums",
+                    isLate ? "text-destructive" : when === "hoje" ? "text-warning" : "text-muted-foreground",
+                  )}
+                >
+                  {when}
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </MobileCard>
+    </section>
+  );
+}
+
+/* ============================================================
    Página inicial — central operacional (sem dados financeiros)
    ============================================================ */
 
 function AppHome() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
   const today = new Date();
   const hour = today.getHours();
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const isOperationalPanelUser = OPERATIONAL_PANEL_EMAILS.has(user?.email?.toLowerCase() ?? "");
   const [view, setView] = useState<"resumo" | "tudo">(
-    () => (localStorage.getItem("imperio:dashboard-view") === "tudo" ? "tudo" : "resumo"),
+    () => (isOperationalPanelUser || localStorage.getItem("imperio:dashboard-view") === "tudo" ? "tudo" : "resumo"),
   );
+  useEffect(() => {
+    if (isOperationalPanelUser) setView("tudo");
+  }, [isOperationalPanelUser]);
   const toggleView = () => {
     haptic(10);
     setView((v) => {
@@ -532,7 +598,7 @@ function AppHome() {
   const operating = fleet;
   const svcRunning = (services ?? []).filter((s) => s.status === "em_andamento").length;
   const delayedServices = (services ?? []).filter(
-    (s) => s.status === "em_andamento" && s.expected_at && mdRelative(s.expected_at).startsWith("atrasado"),
+    (s) => s.status === "em_andamento" && mdIsPastDue(s.expected_at),
   );
   const eventsCount = events?.length ?? 0;
   const todayStr = spaTodayISO();
@@ -664,6 +730,8 @@ function AppHome() {
 
           <AgendaTodayRow count={eventsCount} />
 
+          <ServiceForecast services={services} />
+
           <QuickActions />
         </>
       ) : (
@@ -749,6 +817,8 @@ function AppHome() {
             </div>
           </section>
 
+          <ServiceForecast services={services} />
+
           <Attention trucks={all} services={services} events={events} todayStr={todayStr} />
 
           <GarageStatusBars
@@ -783,7 +853,7 @@ function Attention({
   const items: AttentionItem[] = [];
 
   (services ?? [])
-    .filter((s) => s.status === "em_andamento" && s.expected_at && mdDaysParked(s.expected_at) > 0)
+    .filter((s) => s.status === "em_andamento" && mdIsPastDue(s.expected_at))
     .slice(0, 3)
     .forEach((s) =>
       items.push({
