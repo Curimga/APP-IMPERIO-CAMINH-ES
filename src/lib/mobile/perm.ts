@@ -68,6 +68,13 @@ export const MOBILE_MENU: {
   description: string;
 }[] = [
   {
+    label: "Assistente V",
+    to: "/assistente",
+    icon: "assistant",
+    allowed: () => true,
+    description: "Consulta inteligente",
+  },
+  {
     label: "Garagem",
     to: "/garagem",
     icon: "truck",

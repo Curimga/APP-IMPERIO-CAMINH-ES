@@ -15,6 +15,7 @@ import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAgendaRouteImport } from './routes/_app/agenda'
+import { Route as AppAssistenteRouteImport } from './routes/_app/assistente'
 import { Route as AppBuscaRouteImport } from './routes/_app/busca'
 import { Route as AppClientesRouteImport } from './routes/_app/clientes'
 import { Route as AppEstoqueRouteImport } from './routes/_app/estoque'
@@ -31,6 +32,7 @@ import { Route as AppClientesNovoRouteImport } from './routes/_app/clientes.novo
 import { Route as AppEstoqueNovoRouteImport } from './routes/_app/estoque.novo'
 import { Route as AppGaragemTruckIdRouteImport } from './routes/_app/garagem.$truckId'
 import { Route as AppGaragemNovoRouteImport } from './routes/_app/garagem.novo'
+import { Route as AppGaragemSimularVendaRouteImport } from './routes/_app/garagem.simular-venda'
 import { Route as AppPagamentosNovoRouteImport } from './routes/_app/pagamentos.novo'
 import { Route as AppServicosNovoRouteImport } from './routes/_app/servicos.novo'
 import { Route as AppGaragemTruckIdDespesaRouteImport } from './routes/_app/garagem.$truckId.despesa'
@@ -62,6 +64,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAgendaRoute = AppAgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAssistenteRoute = AppAssistenteRouteImport.update({
+  id: '/assistente',
+  path: '/assistente',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBuscaRoute = AppBuscaRouteImport.update({
@@ -144,6 +151,11 @@ const AppGaragemNovoRoute = AppGaragemNovoRouteImport.update({
   path: '/novo',
   getParentRoute: () => AppGaragemRoute,
 } as any)
+const AppGaragemSimularVendaRoute = AppGaragemSimularVendaRouteImport.update({
+  id: '/simular-venda',
+  path: '/simular-venda',
+  getParentRoute: () => AppGaragemRoute,
+} as any)
 const AppPagamentosNovoRoute = AppPagamentosNovoRouteImport.update({
   id: '/pagamentos/novo',
   path: '/pagamentos/novo',
@@ -167,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/login': typeof LoginRoute
   '/agenda': typeof AppAgendaRouteWithChildren
+  '/assistente': typeof AppAssistenteRoute
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
   '/estoque': typeof AppEstoqueRouteWithChildren
@@ -183,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/estoque/novo': typeof AppEstoqueNovoRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
+  '/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
   '/pagamentos/novo': typeof AppPagamentosNovoRoute
   '/servicos/novo': typeof AppServicosNovoRoute
   '/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
@@ -192,6 +206,7 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/login': typeof LoginRoute
   '/agenda': typeof AppAgendaRouteWithChildren
+  '/assistente': typeof AppAssistenteRoute
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
   '/estoque': typeof AppEstoqueRouteWithChildren
@@ -209,6 +224,7 @@ export interface FileRoutesByTo {
   '/estoque/novo': typeof AppEstoqueNovoRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
+  '/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
   '/pagamentos/novo': typeof AppPagamentosNovoRoute
   '/servicos/novo': typeof AppServicosNovoRoute
   '/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
@@ -220,6 +236,7 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/login': typeof LoginRoute
   '/_app/agenda': typeof AppAgendaRouteWithChildren
+  '/_app/assistente': typeof AppAssistenteRoute
   '/_app/busca': typeof AppBuscaRoute
   '/_app/clientes': typeof AppClientesRouteWithChildren
   '/_app/estoque': typeof AppEstoqueRouteWithChildren
@@ -237,6 +254,7 @@ export interface FileRoutesById {
   '/_app/estoque/novo': typeof AppEstoqueNovoRoute
   '/_app/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/_app/garagem/novo': typeof AppGaragemNovoRoute
+  '/_app/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
   '/_app/pagamentos/novo': typeof AppPagamentosNovoRoute
   '/_app/servicos/novo': typeof AppServicosNovoRoute
   '/_app/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
@@ -249,6 +267,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/login'
     | '/agenda'
+    | '/assistente'
     | '/busca'
     | '/clientes'
     | '/estoque'
@@ -265,6 +284,7 @@ export interface FileRouteTypes {
     | '/estoque/novo'
     | '/garagem/$truckId'
     | '/garagem/novo'
+    | '/garagem/simular-venda'
     | '/pagamentos/novo'
     | '/servicos/novo'
     | '/garagem/$truckId/despesa'
@@ -274,6 +294,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/login'
     | '/agenda'
+    | '/assistente'
     | '/busca'
     | '/clientes'
     | '/estoque'
@@ -291,6 +312,7 @@ export interface FileRouteTypes {
     | '/estoque/novo'
     | '/garagem/$truckId'
     | '/garagem/novo'
+    | '/garagem/simular-venda'
     | '/pagamentos/novo'
     | '/servicos/novo'
     | '/garagem/$truckId/despesa'
@@ -301,6 +323,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/login'
     | '/_app/agenda'
+    | '/_app/assistente'
     | '/_app/busca'
     | '/_app/clientes'
     | '/_app/estoque'
@@ -318,6 +341,7 @@ export interface FileRouteTypes {
     | '/_app/estoque/novo'
     | '/_app/garagem/$truckId'
     | '/_app/garagem/novo'
+    | '/_app/garagem/simular-venda'
     | '/_app/pagamentos/novo'
     | '/_app/servicos/novo'
     | '/_app/garagem/$truckId/despesa'
@@ -372,6 +396,13 @@ declare module '@tanstack/react-router' {
       path: '/agenda'
       fullPath: '/agenda'
       preLoaderRoute: typeof AppAgendaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/assistente': {
+      id: '/_app/assistente'
+      path: '/assistente'
+      fullPath: '/assistente'
+      preLoaderRoute: typeof AppAssistenteRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/busca': {
@@ -486,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGaragemNovoRouteImport
       parentRoute: typeof AppGaragemRoute
     }
+    '/_app/garagem/simular-venda': {
+      id: '/_app/garagem/simular-venda'
+      path: '/simular-venda'
+      fullPath: '/garagem/simular-venda'
+      preLoaderRoute: typeof AppGaragemSimularVendaRouteImport
+      parentRoute: typeof AppGaragemRoute
+    }
     '/_app/pagamentos/novo': {
       id: '/_app/pagamentos/novo'
       path: '/pagamentos/novo'
@@ -560,11 +598,13 @@ const AppGaragemTruckIdRouteWithChildren =
 interface AppGaragemRouteChildren {
   AppGaragemTruckIdRoute: typeof AppGaragemTruckIdRouteWithChildren
   AppGaragemNovoRoute: typeof AppGaragemNovoRoute
+  AppGaragemSimularVendaRoute: typeof AppGaragemSimularVendaRoute
 }
 
 const AppGaragemRouteChildren: AppGaragemRouteChildren = {
   AppGaragemTruckIdRoute: AppGaragemTruckIdRouteWithChildren,
   AppGaragemNovoRoute: AppGaragemNovoRoute,
+  AppGaragemSimularVendaRoute: AppGaragemSimularVendaRoute,
 }
 
 const AppGaragemRouteWithChildren = AppGaragemRoute._addFileChildren(
@@ -585,6 +625,7 @@ const AppServicosRouteWithChildren = AppServicosRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRouteWithChildren
+  AppAssistenteRoute: typeof AppAssistenteRoute
   AppBuscaRoute: typeof AppBuscaRoute
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
@@ -602,6 +643,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgendaRoute: AppAgendaRouteWithChildren,
+  AppAssistenteRoute: AppAssistenteRoute,
   AppBuscaRoute: AppBuscaRoute,
   AppClientesRoute: AppClientesRouteWithChildren,
   AppEstoqueRoute: AppEstoqueRouteWithChildren,

@@ -11,6 +11,7 @@ import {
   UserRound,
   Download,
   ListTodo,
+  BrainCircuit,
 } from "lucide-react";
 import { MOBILE_MENU } from "@/lib/mobile/perm";
 import { useAuth } from "@/hooks/use-auth";
@@ -31,6 +32,7 @@ const ICONS: Record<string, React.ReactNode> = {
   dollar: <DollarSign className="h-5 w-5" />,
   box: <Box className="h-5 w-5" />,
   shield: <ShieldCheck className="h-5 w-5" />,
+  assistant: <BrainCircuit className="h-5 w-5" />,
 };
 
 function Menu() {

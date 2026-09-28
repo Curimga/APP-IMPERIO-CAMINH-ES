@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import {
   ArrowLeft,
+  Calculator,
   CalendarDays,
   CheckCheck,
   DollarSign,
@@ -549,13 +550,20 @@ function TruckDetail() {
 
       <div className="grid grid-cols-2 gap-2">
         <Link
+          to="/garagem/simular-venda"
+          search={{ truck_id: truck.id }}
+          className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
+        >
+          <Calculator className="h-4 w-4" />Simular venda
+        </Link>
+        <Link
           to="/servicos/novo"
           search={{ truck_id: truck.id }}
           className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
         >
           <Wrench className="h-4 w-4" />Criar serviço
         </Link>
-        <Link to="/agenda/novo" search={{ truck_id: truck.id, date: undefined, edit: undefined }} className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"><CalendarDays className="h-4 w-4" />Compromisso</Link>
+        <Link to="/agenda/novo" search={{ truck_id: truck.id, date: undefined, edit: undefined }} className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"><CalendarDays className="h-4 w-4" />Compromisso</Link>
       </div>
 
       <StatusSheet open={statusOpen} onOpenChange={setStatusOpen} truck={truck} />

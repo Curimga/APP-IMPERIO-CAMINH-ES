@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Search, SlidersHorizontal, Plus, Truck, Heart, LayoutGrid, Rows2 } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, Truck, Heart, LayoutGrid, Rows2, Calculator } from "lucide-react";
 import { useTrucks, getTruckCoverPhoto, truckPhotoSrc, truckPhotoVersion } from "@/lib/mobile/queries";
 import type { TruckWithPhotos } from "@/lib/mobile/queries";
 import { MobileCard, SkeletonRows, EmptyState, StatusBadge } from "@/components/mobile/ui";
@@ -367,6 +367,13 @@ function Garagem() {
               <Rows2 className="h-4 w-4" />
             </button>
           </div>
+          <Link
+            to="/garagem/simular-venda"
+            aria-label="Simular venda"
+            className="flex h-10 items-center gap-1.5 rounded-xl border bg-card px-3 text-sm font-bold text-gold-dark pressable active:scale-95"
+          >
+            <Calculator className="h-4 w-4" /> Simular
+          </Link>
           <Link
             to="/garagem/novo"
             aria-label="Cadastrar caminhão"

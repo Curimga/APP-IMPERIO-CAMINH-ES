@@ -11,6 +11,7 @@ import {
   Package,
   Activity,
   Wallet,
+  BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -191,6 +192,12 @@ function useFabActions() {
   const staff =
     roles.includes("admin") || roles.includes("financeiro") || roles.includes("secretaria");
   const actions: FabAction[] = [];
+  actions.push({
+    label: "Assistente V",
+    description: "Consultar operação agora",
+    icon: <BrainCircuit className="h-5 w-5" />,
+    to: "/assistente",
+  });
   if (staff) {
     actions.push({
       label: "Cadastrar caminhão",
