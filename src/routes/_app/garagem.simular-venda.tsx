@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { Dispatch, SetStateAction } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, Calculator, Lock, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Download, FileText, ImageDown, Lock, Plus, Printer, TrendingUp, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,26 +8,25 @@ import { MobileCard, SectionTitle, SkeletonRows, EmptyState, StatusBadge } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCustomers, useTruckDetail, useTrucks } from "@/lib/mobile/queries";
-import { maySeeTruckFinance, mergeTruckExpenses } from "@/lib/mobile/truck-detail";
-import { dateBR, todayISO } from "@/lib/format";
+import { getTruckCoverPhoto, truckPhotoSrc, truckPhotoVersion, useCustomers, useTruckDetail, useTrucks } from "@/lib/mobile/queries";
+import { maySeeTruckFinance } from "@/lib/mobile/truck-detail";
+import { todayISO } from "@/lib/format";
 import { truckTitle } from "@/lib/truck-title";
 import { STATUS_LABEL } from "@/lib/truck-status";
 import { cn } from "@/lib/utils";
+import logoUrl from "@/assets/logo.png";
 import {
-  calculateSaleScenario,
+  calculateCrmSaleProposal,
+  buildClientProposalDto,
   canPersistRealSaleSafely,
   centsFromMoney,
-  evaluateFiscalValidation,
   formatCents,
   moneyFromCents,
-  paymentReconciliationMessage,
+  paymentDiffMessage,
   saleSimulatorFinanceAccess,
-  taxDisplayState,
-  type CommissionBasis,
   type CommissionMode,
-  type ExpenseInput,
-  type PaymentKind,
+  type CrmPaymentMethod,
+  type ClientProposalDto,
   type PaymentLineInput,
 } from "@/lib/sales-simulator";
 
@@ -39,120 +37,42 @@ export const Route = createFileRoute("/_app/garagem/simular-venda")({
   component: SaleSimulatorRoute,
 });
 
-type ScenarioKey = "conservador" | "alvo" | "proposta";
-
-const PAYMENT_KINDS: { value: PaymentKind; label: string }[] = [
-  { value: "entrada", label: "Entrada" },
+const PAYMENT_METHODS: { value: CrmPaymentMethod; label: string }[] = [
   { value: "PIX", label: "PIX" },
-  { value: "TRANSFERENCIA", label: "TED/transferência" },
+  { value: "TRANSFERENCIA", label: "Transferência/TED" },
   { value: "DINHEIRO", label: "Dinheiro" },
-  { value: "CHEQUE", label: "Cheque" },
   { value: "CARTAO", label: "Cartão" },
-  { value: "FINANCIAMENTO", label: "Financiamento/repasse" },
-  { value: "TROCA", label: "Veículo na troca" },
+  { value: "BOLETO", label: "Boleto" },
+  { value: "OUTRO", label: "Outro" },
 ];
 
-const COMMISSION_BASES: { value: CommissionBasis; label: string }[] = [
-  { value: "gross", label: "Preço bruto" },
-  { value: "net", label: "Preço líquido" },
-  { value: "margin", label: "Margem" },
-];
+type StepKey = "truck" | "customer" | "seller" | "proposal" | "payment" | "result" | "export";
 
-const OPERATION_LABELS = {
-  proprio: "Próprio em estoque para revenda",
-  consignacao_comissao: "Consignação - contrato de comissão",
-  consignacao_estimatorio: "Consignação - contrato estimatório",
-  ativo_imobilizado: "Alienação de ativo imobilizado",
-  validar: "Selecionar e validar com contador",
-} as const;
+const STEPS: { key: StepKey; label: string }[] = [
+  { key: "truck", label: "Caminhão" },
+  { key: "customer", label: "Cliente" },
+  { key: "seller", label: "Vendedor" },
+  { key: "proposal", label: "Proposta" },
+  { key: "payment", label: "Pagamento" },
+  { key: "result", label: "Resultado" },
+  { key: "export", label: "Exportar" },
+];
 
 function brlInput(cents: number) {
-  return moneyFromCents(cents).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function parseBps(value: string) {
-  const n = Number(value.replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  return cents ? moneyFromCents(cents).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
 }
 
 function pctLabel(bps: number | null) {
   if (bps == null) return "—";
-  return `${(bps / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
-}
-
-function ValueCard({ label, value, tone, description }: { label: string; value: string; tone?: "good" | "bad" | "warn"; description?: string }) {
-  return (
-    <div className={cn(
-      "rounded-xl border bg-card p-3",
-      tone === "good" && "border-success/30 bg-success/5",
-      tone === "bad" && "border-destructive/30 bg-destructive/5",
-      tone === "warn" && "border-gold/40 bg-gold/5",
-    )}>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-[15px] font-black tabular-nums">{value}</div>
-      {description ? <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{description}</p> : null}
-    </div>
-  );
-}
-
-const SCENARIO_INFO: Record<ScenarioKey, { title: string; description: string; reason: string }> = {
-  conservador: {
-    title: "Cenário Conservador",
-    description: "Usa uma venda mais cautelosa, abaixo do preço anunciado, para medir até onde a proposta aguenta desconto sem comprometer a margem.",
-    reason: "Está assim para simular uma negociação difícil, onde o comprador pressiona preço e o vendedor precisa saber o piso seguro.",
-  },
-  alvo: {
-    title: "Cenário Alvo",
-    description: "Usa o preço anunciado atual do caminhão como referência principal da negociação.",
-    reason: "Está assim para mostrar o resultado esperado se a venda acontecer perto da estratégia comercial definida na Garagem.",
-  },
-  proposta: {
-    title: "Cenário Proposta",
-    description: "Usa os valores digitados no simulador: preço bruto, desconto, pagamentos, comissão e custos opcionais.",
-    reason: "Está assim para representar a proposta real que está sendo montada para o cliente antes de qualquer gravação no CRM.",
-  },
-};
-
-function OptionSwitch({ checked, onChange, label, hint }: { checked: boolean; onChange: (checked: boolean) => void; label: string; hint?: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors",
-        checked ? "border-gold bg-gold/10" : "bg-card",
-      )}
-    >
-      <span className="min-w-0">
-        <span className="block text-sm font-black">{label}</span>
-        {hint ? <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span> : null}
-      </span>
-      <span
-        className={cn(
-          "relative h-7 w-12 shrink-0 rounded-full transition-colors",
-          checked ? "bg-gold" : "bg-muted-foreground/25",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform",
-            checked ? "translate-x-6" : "translate-x-1",
-          )}
-        />
-      </span>
-    </button>
-  );
+  return `${(bps / 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
 function MoneyInput({ label, value, onChange }: { label: string; value: number; onChange: (cents: number) => void }) {
-  const [draft, setDraft] = useState(() => (value ? brlInput(value) : ""));
+  const [draft, setDraft] = useState(() => brlInput(value));
   const [focused, setFocused] = useState(false);
 
   useEffect(() => {
-    if (focused) return;
-    setDraft(value ? brlInput(value) : "");
+    if (!focused) setDraft(brlInput(value));
   }, [focused, value]);
 
   return (
@@ -164,202 +84,440 @@ function MoneyInput({ label, value, onChange }: { label: string; value: number; 
         placeholder="0,00"
         onFocus={() => setFocused(true)}
         onChange={(e) => {
-          const next = e.target.value;
-          setDraft(next);
-          onChange(centsFromMoney(next));
+          setDraft(e.target.value);
+          onChange(centsFromMoney(e.target.value));
         }}
         onBlur={() => {
           setFocused(false);
-          setDraft(value ? brlInput(value) : "");
+          setDraft(brlInput(value));
         }}
       />
     </div>
   );
 }
 
-function MoneyCell({ value, onChange, placeholder = "0,00" }: { value: number; onChange: (cents: number) => void; placeholder?: string }) {
-  const [draft, setDraft] = useState(() => (value ? brlInput(value) : ""));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (focused) return;
-    setDraft(value ? brlInput(value) : "");
-  }, [focused, value]);
-
+function ValueCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <Input
-      value={draft}
-      inputMode="decimal"
-      placeholder={placeholder}
-      onFocus={() => setFocused(true)}
-      onChange={(e) => {
-        const next = e.target.value;
-        setDraft(next);
-        onChange(centsFromMoney(next));
-      }}
-      onBlur={() => {
-        setFocused(false);
-        setDraft(value ? brlInput(value) : "");
-      }}
-    />
-  );
-}
-
-function PercentInput({ label, valueBps, onChange }: { label: string; valueBps: number; onChange: (bps: number) => void }) {
-  const [draft, setDraft] = useState(() => (valueBps ? (valueBps / 100).toLocaleString("pt-BR") : ""));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (focused) return;
-    setDraft(valueBps ? (valueBps / 100).toLocaleString("pt-BR") : "");
-  }, [focused, valueBps]);
-
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Input
-        inputMode="decimal"
-        value={draft}
-        placeholder="0,00"
-        onFocus={() => setFocused(true)}
-        onChange={(e) => {
-          const next = e.target.value;
-          setDraft(next);
-          onChange(parseBps(next));
-        }}
-        onBlur={() => {
-          setFocused(false);
-          setDraft(valueBps ? (valueBps / 100).toLocaleString("pt-BR") : "");
-        }}
-      />
+    <div className="rounded-xl border bg-card p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-[16px] font-black tabular-nums">{value}</div>
+      {hint ? <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
 
-function useProfiles() {
+function useSellers() {
   return useQuery({
-    queryKey: ["profiles-options"],
+    queryKey: ["seller-options"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .order("full_name", { ascending: true })
-        .limit(200);
-      if (error) throw error;
-      return data ?? [];
+      const [employeesR, profilesR] = await Promise.all([
+        supabase
+          .from("employees")
+          .select("id, full_name, status, user_id")
+          .eq("status", "ativo")
+          .order("full_name", { ascending: true })
+          .limit(200),
+        supabase
+          .from("profiles")
+          .select("id, full_name, status")
+          .eq("status", "active")
+          .order("full_name", { ascending: true })
+          .limit(200),
+      ]);
+
+      if (employeesR.error && profilesR.error) throw employeesR.error;
+
+      const sellers = new Map<string, { id: string; full_name: string }>();
+      for (const employee of employeesR.data ?? []) {
+        if (!employee.full_name) continue;
+        sellers.set(employee.id, { id: employee.id, full_name: employee.full_name });
+      }
+      for (const profile of profilesR.data ?? []) {
+        if (!profile.full_name) continue;
+        sellers.set(profile.id, { id: profile.id, full_name: profile.full_name });
+      }
+
+      return Array.from(sellers.values()).sort((a, b) => a.full_name.localeCompare(b.full_name, "pt-BR"));
     },
   });
+}
+
+function pdfFromJpegDataUrl(jpegDataUrl: string) {
+  const base64 = jpegDataUrl.split(",")[1] ?? "";
+  const binary = atob(base64);
+  const imageBytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) imageBytes[i] = binary.charCodeAt(i);
+  const imageBuffer = new ArrayBuffer(imageBytes.length);
+  new Uint8Array(imageBuffer).set(imageBytes);
+  const header = "%PDF-1.4\n";
+  const objects = [
+    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 765] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >> endobj",
+    `4 0 obj << /Type /XObject /Subtype /Image /Width 1080 /Height 1350 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >> stream\n`,
+    "\nendstream endobj",
+    "5 0 obj << /Length 38 >> stream\nq 612 0 0 765 0 0 cm /Im1 Do Q\nendstream endobj",
+  ];
+  const chunks: BlobPart[] = [header];
+  const offsets = [0];
+  let length = header.length;
+  offsets.push(length);
+  chunks.push(objects[0] + "\n");
+  length += objects[0].length + 1;
+  offsets.push(length);
+  chunks.push(objects[1] + "\n");
+  length += objects[1].length + 1;
+  offsets.push(length);
+  chunks.push(objects[2] + "\n");
+  length += objects[2].length + 1;
+  offsets.push(length);
+  chunks.push(objects[3]);
+  length += objects[3].length;
+  chunks.push(imageBuffer);
+  length += imageBytes.length;
+  chunks.push(objects[4] + "\n");
+  length += objects[4].length + 1;
+  offsets.push(length);
+  chunks.push(objects[5] + "\n");
+  length += objects[5].length + 1;
+  const xrefOffset = length;
+  let xref = `xref\n0 6\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) xref += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  xref += `trailer << /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  chunks.push(xref);
+  return new Blob(chunks, { type: "application/pdf" });
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function drawProposalCard(canvas: HTMLCanvasElement, opts: { logo: string; photo?: string; proposal: ClientProposalDto }) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  canvas.width = 1080;
+  canvas.height = 1350;
+  ctx.fillStyle = "#f7f3e8";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#090909";
+  ctx.fillRect(0, 0, canvas.width, 330);
+  ctx.fillStyle = "#f5b400";
+  ctx.fillRect(0, 0, canvas.width, 18);
+  try {
+    const logo = await loadImage(opts.logo);
+    ctx.drawImage(logo, 56, 52, 290, 135);
+  } catch {
+    ctx.fillStyle = "#f5b400";
+    ctx.font = "700 42px Arial";
+    ctx.fillText("IMPÉRIO CAMINHÕES", 60, 120);
+  }
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 54px Arial";
+  ctx.fillText("PROPOSTA", 60, 260);
+  ctx.fillStyle = "#f5b400";
+  ctx.font = "900 62px Arial";
+  ctx.fillText(opts.proposal.priceLabel, 520, 128, 500);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "rgba(0,0,0,0.18)";
+  ctx.shadowBlur = 18;
+  ctx.fillRect(60, 370, 960, 500);
+  ctx.shadowBlur = 0;
+  if (opts.photo) {
+    try {
+      const photo = await loadImage(opts.photo);
+      ctx.drawImage(photo, 80, 390, 920, 460);
+    } catch {
+      ctx.fillStyle = "#202020";
+      ctx.fillRect(80, 390, 920, 460);
+      ctx.fillStyle = "#f5b400";
+      ctx.font = "800 42px Arial";
+      ctx.fillText("IMPÉRIO CAMINHÕES", 285, 640);
+    }
+  } else {
+    ctx.fillStyle = "#202020";
+    ctx.fillRect(80, 390, 920, 460);
+    ctx.fillStyle = "#f5b400";
+    ctx.font = "800 42px Arial";
+    ctx.fillText("IMPÉRIO CAMINHÕES", 285, 640);
+  }
+
+  ctx.fillStyle = "#090909";
+  ctx.font = "900 48px Arial";
+  ctx.fillText(opts.proposal.vehicleTitle, 60, 960, 960);
+  ctx.fillStyle = "#323232";
+  ctx.font = "400 31px Arial";
+  const lines = [
+    opts.proposal.vehicleDetails,
+    `Cliente: ${opts.proposal.customerName}`,
+    opts.proposal.paymentSummary,
+    opts.proposal.contractLabel ? `Condição: ${opts.proposal.contractLabel}` : "",
+    `Vendedor: ${opts.proposal.sellerName}`,
+  ].filter(Boolean);
+  let y = 1025;
+  for (const line of lines) {
+    ctx.fillText(line, 60, y, 940);
+    y += 50;
+  }
+  ctx.fillStyle = "#f5b400";
+  ctx.fillRect(60, 1215, 960, 4);
+  ctx.fillStyle = "#090909";
+  ctx.font = "700 30px Arial";
+  ctx.fillText("Proposta comercial sujeita a confirmação de disponibilidade.", 60, 1275, 940);
+  ctx.fillStyle = "#f5b400";
+  ctx.fillRect(0, 1320, canvas.width, 30);
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob || blob.size === 0 || blob.type !== type) {
+          reject(new Error("Falha ao gerar imagem válida da proposta."));
+          return;
+        }
+        resolve(blob);
+      }, type, quality);
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error("Canvas bloqueado por imagem externa."));
+    }
+  });
+}
+
+async function validateImageBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    await loadImage(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function SaleSimulatorRoute() {
   const search = Route.useSearch();
   const { roles, user } = useAuth();
   const access = saleSimulatorFinanceAccess(roles, user?.email);
+  const isExec = maySeeTruckFinance(roles, user?.email);
+  const [step, setStep] = useState<StepKey>(search.truck_id ? "customer" : "truck");
   const [truckSearch, setTruckSearch] = useState("");
   const [selectedTruckId, setSelectedTruckId] = useState(search.truck_id ?? "");
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [scenario, setScenario] = useState<ScenarioKey>("proposta");
-  const [grossPriceCents, setGrossPriceCents] = useState(0);
-  const [discountCents, setDiscountCents] = useState(0);
-  const [targetMarginBps, setTargetMarginBps] = useState(1_500);
-  const [operation, setOperation] = useState<keyof typeof OPERATION_LABELS>("validar");
-  const [contractType, setContractType] = useState<"garantia" | "repasse">("garantia");
   const [sellerId, setSellerId] = useState("");
-  const [expectedDate, setExpectedDate] = useState(todayISO());
+  const [proposedPriceCents, setProposedPriceCents] = useState(0);
+  const [proposalDate, setProposalDate] = useState(todayISO());
+  const [contractType, setContractType] = useState<"garantia" | "repasse">("garantia");
   const [notes, setNotes] = useState("");
-  const [includeCommission, setIncludeCommission] = useState(false);
-  const [includeTaxes, setIncludeTaxes] = useState(false);
-  const [commissionMode, setCommissionMode] = useState<CommissionMode>("none");
-  const [commissionBasis, setCommissionBasis] = useState<CommissionBasis>("margin");
-  const [commissionPercentBps, setCommissionPercentBps] = useState(0);
+  const [commissionMode] = useState<CommissionMode>("fixed");
   const [commissionFixedCents, setCommissionFixedCents] = useState(0);
-  const [newExpenses, setNewExpenses] = useState<ExpenseInput[]>([]);
-  const [sellingCosts, setSellingCosts] = useState<ExpenseInput[]>([]);
+  const [taxesCents, setTaxesCents] = useState(0);
+  const [extraCostCents, setExtraCostCents] = useState(0);
   const [payments, setPayments] = useState<PaymentLineInput[]>([]);
+  const [downloadOk, setDownloadOk] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const trucksQ = useTrucks();
-  const truckDetailQ = useTruckDetail(selectedTruckId || undefined);
+  const detailQ = useTruckDetail(selectedTruckId || undefined);
   const customersQ = useCustomers(customerSearch);
-  const profilesQ = useProfiles();
+  const sellersQ = useSellers();
 
-  const isExec = maySeeTruckFinance(roles, user?.email);
   const trucks = trucksQ.data ?? [];
-  const selectedTruck = truckDetailQ.data?.truck ?? trucks.find((t) => t.id === selectedTruckId) ?? null;
+  const selectedTruck = detailQ.data?.truck ?? trucks.find((t) => t.id === selectedTruckId) ?? null;
   const selectedCustomer = (customersQ.data ?? []).find((c) => c.id === selectedCustomerId) ?? null;
-  const expenseLines = useMemo(
-    () => mergeTruckExpenses(truckDetailQ.data?.expenses, truckDetailQ.data?.generalExpenses),
-    [truckDetailQ.data?.expenses, truckDetailQ.data?.generalExpenses],
-  );
-  const accountedExpenseCents = selectedTruck ? centsFromMoney(selectedTruck.expenses_total ?? 0) : 0;
-  const acquisitionCostCents = selectedTruck ? centsFromMoney(selectedTruck.purchase_price ?? 0) : 0;
-  const advertisedCents = selectedTruck ? centsFromMoney(selectedTruck.expected_price ?? 0) : 0;
+  const selectedSeller = (sellersQ.data ?? []).find((s) => s.id === sellerId) ?? null;
+  const announcedPriceCents = selectedTruck ? centsFromMoney(selectedTruck.expected_price ?? 0) : 0;
+  const purchasePriceCents = selectedTruck ? centsFromMoney(selectedTruck.purchase_price ?? 0) : 0;
+  const accumulatedExpensesCents = selectedTruck ? centsFromMoney(selectedTruck.expenses_total ?? 0) : 0;
+  const cover = getTruckCoverPhoto(selectedTruck);
+  const photoUrl = cover && selectedTruck ? truckPhotoSrc(cover.url, truckPhotoVersion(cover, selectedTruck.updated_at ?? selectedTruck.created_at)) : undefined;
 
-  const scenarioPreset = useMemo(() => {
-    if (scenario === "conservador") return { gross: Math.max(0, advertisedCents - Math.round(advertisedCents * 0.08)), discount: 0 };
-    if (scenario === "alvo") return { gross: advertisedCents, discount: 0 };
-    return { gross: grossPriceCents || advertisedCents, discount: discountCents };
-  }, [advertisedCents, discountCents, grossPriceCents, scenario]);
-
-  const result = calculateSaleScenario({
-    grossPriceCents: scenarioPreset.gross,
-    discountCents: scenarioPreset.discount,
-    acquisitionCostCents,
-    accountedExpenseCents,
-    estimatedExpenses: newExpenses,
-    sellingCosts,
+  const result = calculateCrmSaleProposal({
+    announcedPriceCents,
+    proposedPriceCents,
+    purchasePriceCents,
+    accumulatedExpensesCents,
+    taxesCents,
+    extraCostCents,
+    payments,
     commission: {
-      mode: includeCommission ? commissionMode : "none",
-      basis: commissionBasis,
-      percentBps: commissionPercentBps,
+      enabled: isExec && commissionFixedCents > 0,
+      mode: commissionMode,
       fixedCents: commissionFixedCents,
     },
-    payments,
-    targetMarginBps,
-    fiscalProfileValidated: false,
-  });
-  const scenarioInfo = SCENARIO_INFO[scenario];
-
-  const taxState = taxDisplayState(false);
-  const fiscalResult = evaluateFiscalValidation({
-    regime: "Lucro Real (referência Manual HF 2026, não validado para esta venda)",
-    originUf: "PR",
-    destinationUf: null,
-    buyerIsTaxpayer: null,
-    operationType: OPERATION_LABELS[operation],
-    entryDocumentationValidated: false,
-    exitConditionsValidated: false,
-    fiscalCostValidatedCents: null,
-    fiscalResponsible: null,
-    fiscalApprovedAt: null,
-    fiscalSource: null,
-    pisCofinsRuleApproved: false,
-    icmsUsedVehicleRuleApproved: false,
-    irpjCsllSaleLevelRuleApproved: false,
-  });
-  const persistDecision = canPersistRealSaleSafely({
-    hasTruckId: Boolean(selectedTruck?.id),
-    hasCustomerId: Boolean(selectedCustomer?.id),
-    hasAtomicSaleFlow: false,
+    canSeeFinance: isExec,
   });
 
-  function syncFromTruck(id: string) {
+  const publicData = useMemo(() => selectedTruck ? {
+    customerName: selectedCustomer?.name ?? "",
+    truckTitle: truckTitle(selectedTruck),
+    plate: selectedTruck.plate,
+    year: selectedTruck.year,
+    color: selectedTruck.color,
+    priceCents: result.proposedPriceCents,
+    paymentSummary: payments.length ? payments.map((p) => `${PAYMENT_METHODS.find((m) => m.value === p.method)?.label}: ${formatCents(p.amountCents)}`).join(" | ") : "Condições de pagamento a combinar",
+    sellerName: selectedSeller?.full_name ?? "Império Caminhões",
+    contractType,
+  } : null, [contractType, payments, result.proposedPriceCents, selectedCustomer?.name, selectedSeller?.full_name, selectedTruck]);
+  const clientProposal = useMemo(() => {
+    if (!publicData) return null;
+    try {
+      return buildClientProposalDto(publicData);
+    } catch {
+      return null;
+    }
+  }, [publicData]);
+  useEffect(() => {
+    if (!canvasRef.current || !clientProposal) return;
+    drawProposalCard(canvasRef.current, {
+      logo: logoUrl,
+      photo: photoUrl,
+      proposal: clientProposal,
+    });
+  }, [clientProposal, photoUrl]);
+
+  useEffect(() => {
+    setImageBlob(null);
+    setExportError(null);
+    setImagePreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  }, [clientProposal, photoUrl]);
+
+  function selectTruck(id: string) {
     setSelectedTruckId(id);
-    const t = trucks.find((x) => x.id === id);
-    if (t?.expected_price) setGrossPriceCents(centsFromMoney(t.expected_price));
-    if (t?.consigned) setOperation("validar");
-    else setOperation("proprio");
+    const truck = trucks.find((t) => t.id === id);
+    const price = centsFromMoney(truck?.expected_price ?? 0);
+    setProposedPriceCents(price);
+    setPayments(price ? [{ id: crypto.randomUUID(), method: "PIX", amountCents: price, dueDate: proposalDate }] : []);
+    setStep("customer");
   }
 
-  function addPayment(kind: PaymentKind) {
-    setPayments((items) => [
-      ...items,
-      { id: crypto.randomUUID(), kind, amountCents: 0, dueDate: expectedDate },
-    ]);
+  function selectCustomer(id: string) {
+    setSelectedCustomerId(id);
+    setStep("seller");
   }
 
-  function addExpense(setter: Dispatch<SetStateAction<ExpenseInput[]>>, label: string) {
-    setter((items) => [...items, { id: crypto.randomUUID(), label, amountCents: 0 }]);
+  function selectSeller(id: string) {
+    setSellerId(id);
+    if (id) setStep("proposal");
+  }
+
+  function canOpenStep(target: StepKey) {
+    const order = STEPS.findIndex((s) => s.key === target);
+    if (order <= 0) return true;
+    if (!selectedTruck && order > 0) return false;
+    if (!selectedCustomer && order > 1) return false;
+    if (!selectedSeller && order > 2) return false;
+    if (proposedPriceCents <= 0 && order > 3) return false;
+    return true;
+  }
+
+  function StepHeader() {
+    return (
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" data-no-pull>
+        {STEPS.map((item, index) => {
+          const active = step === item.key;
+          const enabled = canOpenStep(item.key);
+          return (
+            <button
+              key={item.key}
+              type="button"
+              disabled={!enabled}
+              onClick={() => setStep(item.key)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[12px] font-bold disabled:opacity-40",
+                active ? "border-gold bg-gold text-gold-foreground" : "bg-card text-muted-foreground",
+              )}
+            >
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-black/10 text-[10px]">{index + 1}</span>
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function printProposal() {
+    window.print();
+  }
+
+  async function generateImagePreview() {
+    setDownloadOk(null);
+    setExportError(null);
+    if (!clientProposal) {
+      setExportError("Selecione caminhão, cliente e vendedor antes de gerar a proposta.");
+      return null;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      setExportError("Prévia da proposta ainda não está pronta.");
+      return null;
+    }
+    try {
+      await drawProposalCard(canvas, { logo: logoUrl, photo: photoUrl, proposal: clientProposal });
+      const blob = await canvasToBlob(canvas, "image/png");
+      await validateImageBlob(blob);
+      setImageBlob(blob);
+      setImagePreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return URL.createObjectURL(blob);
+      });
+      setDownloadOk("Prévia da imagem gerada e validada.");
+      return blob;
+    } catch (error) {
+      setImageBlob(null);
+      setExportError(error instanceof Error ? error.message : "Falha ao gerar imagem da proposta.");
+      return null;
+    }
+  }
+
+  async function exportPdf() {
+    setDownloadOk(null);
+    setExportError(null);
+    if (!clientProposal || !canvasRef.current) {
+      setExportError("Gere uma proposta válida antes de exportar o PDF.");
+      return;
+    }
+    try {
+      await drawProposalCard(canvasRef.current, { logo: logoUrl, photo: photoUrl, proposal: clientProposal });
+      const jpegDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.92);
+      if (!jpegDataUrl.startsWith("data:image/jpeg")) throw new Error("Falha ao gerar imagem base do PDF.");
+      downloadBlob(pdfFromJpegDataUrl(jpegDataUrl), `proposta-imperio-${selectedTruck?.plate ?? "caminhao"}.pdf`);
+      setDownloadOk("PDF baixado.");
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Falha ao gerar PDF da proposta.");
+    }
+  }
+
+  function downloadImage() {
+    if (!imageBlob) {
+      setExportError("Gere e confira a prévia antes de baixar a imagem.");
+      return;
+    }
+    downloadBlob(imageBlob, `proposta-imperio-${selectedTruck?.plate ?? "caminhao"}.png`);
+    setDownloadOk("Imagem baixada.");
   }
 
   const filteredTrucks = trucks.filter((t) => {
@@ -371,340 +529,173 @@ function SaleSimulatorRoute() {
   if (!access.canAccess) {
     return (
       <>
-        <Link to="/garagem" className="inline-flex items-center gap-2 text-sm font-bold text-gold">
-          <ArrowLeft className="h-4 w-4" /> Garagem
-        </Link>
-        <MobileCard className="p-5 text-center">
-          <Lock className="mx-auto mb-3 h-7 w-7 text-muted-foreground" />
-          <h1 className="text-lg font-black">Simulador financeiro restrito</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{access.reason}</p>
-        </MobileCard>
+        <Link to="/garagem" className="inline-flex items-center gap-2 text-sm font-bold text-gold"><ArrowLeft className="h-4 w-4" /> Garagem</Link>
+        <MobileCard className="p-5 text-center"><Lock className="mx-auto mb-3 h-7 w-7 text-muted-foreground" /><h1 className="text-lg font-black">Simulador restrito</h1><p className="mt-2 text-sm text-muted-foreground">{access.reason}</p></MobileCard>
       </>
     );
   }
 
+  const persistDecision = canPersistRealSaleSafely({ hasTruckId: Boolean(selectedTruck), hasCustomerId: Boolean(selectedCustomer), hasSellerId: Boolean(selectedSeller), hasCrmSaleSimulatorAction: false });
+
   return (
     <>
       <div className="flex items-center gap-3">
-        <Link to="/garagem" aria-label="Voltar" className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-black">Simular venda</h1>
-          <p className="text-[12px] text-muted-foreground">Simulação local. Não altera caminhão, cliente, pagamentos ou contratos.</p>
-        </div>
+        <Link to="/garagem" aria-label="Voltar" className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card"><ArrowLeft className="h-5 w-5" /></Link>
+        <div className="min-w-0 flex-1"><h1 className="truncate text-xl font-black">Simular venda</h1><p className="text-[12px] text-muted-foreground">Proposta local baseada nos registros reais do CRM. Não grava venda.</p></div>
       </div>
+      <StepHeader />
 
-      <MobileCard className="border-gold/30 bg-gold/5 p-3">
-        <div className="flex gap-2 text-[13px] text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-          <p>Tributos, comissão e confirmação real dependem de configuração validada e do fluxo oficial. Nenhum valor fiscal é tratado como zero.</p>
-        </div>
-      </MobileCard>
-
-      <MobileCard className="p-3">
-        <SectionTitle className="mb-3">1. Caminhão real da Garagem</SectionTitle>
-        <div className="space-y-3">
-          <Input value={truckSearch} onChange={(e) => setTruckSearch(e.target.value)} placeholder="Buscar por placa, modelo ou ID" />
-          {trucksQ.isLoading ? <SkeletonRows rows={3} height={48} /> : null}
-          {trucksQ.isError ? <EmptyState title="Erro ao carregar caminhões" hint="Tente novamente." /> : null}
-          <div className="grid gap-2 sm:grid-cols-2">
-            {filteredTrucks.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => syncFromTruck(t.id)}
-                className={cn("rounded-xl border p-3 text-left", selectedTruckId === t.id ? "border-gold bg-gold/10" : "bg-card")}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate font-bold">{truckTitle(t)}</div>
-                    <div className="text-xs text-muted-foreground">{t.plate ?? "sem placa"} · ID {t.id.slice(0, 8)}</div>
-                  </div>
-                  <StatusBadge status={t.status} />
+      {step === "truck" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">1. Caminhão</SectionTitle>
+        <Input value={truckSearch} onChange={(e) => setTruckSearch(e.target.value)} placeholder="Buscar por placa, modelo ou ID" />
+        {trucksQ.isLoading ? <SkeletonRows rows={3} height={48} /> : null}
+        {trucksQ.isError ? <EmptyState title="Erro ao carregar caminhões" hint="Tente novamente." /> : null}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {filteredTrucks.map((t) => (
+            <button key={t.id} type="button" onClick={() => selectTruck(t.id)} className={cn("min-w-0 rounded-xl border p-3 text-left", selectedTruckId === t.id ? "border-gold bg-gold/10" : "bg-card")}>
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold sm:text-base">{truckTitle(t)}</div>
+                  <div className="truncate text-[11px] text-muted-foreground sm:text-xs">{t.plate ?? "sem placa"} · ID {t.id.slice(0, 8)}</div>
                 </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </MobileCard>
-
-      {selectedTruck ? (
-        <MobileCard className="p-3">
-          <SectionTitle className="mb-2">Dados carregados do CRM</SectionTitle>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <ValueCard label="Caminhão" value={truckTitle(selectedTruck)} />
-            <ValueCard label="Status" value={STATUS_LABEL[selectedTruck.status] ?? selectedTruck.status} />
-            <ValueCard label="Placa / ano" value={`${selectedTruck.plate ?? "—"} · ${selectedTruck.year ?? "—"}`} />
-            <ValueCard label="Cor" value={selectedTruck.color ?? "—"} />
-            {isExec ? <ValueCard label="Preço anunciado" value={formatCents(advertisedCents)} /> : null}
-            {isExec ? <ValueCard label="Custo de compra" value={formatCents(acquisitionCostCents)} /> : null}
-            {isExec ? <ValueCard label="Despesas contabilizadas" value={formatCents(accountedExpenseCents)} /> : null}
-            <ValueCard label="Consignado" value={selectedTruck.consigned ? "Sim" : "Não"} />
-          </div>
-          {expenseLines.length > 0 ? (
-            <details className="mt-3 rounded-xl bg-muted p-3 text-sm">
-              <summary className="cursor-pointer font-bold">Despesas vinculadas ({expenseLines.length})</summary>
-              <div className="mt-2 divide-y divide-border/60">
-                {expenseLines.slice(0, 12).map((e) => (
-                  <div key={e.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                    <span className="truncate">{e.description || e.kind || "Despesa"}</span>
-                    <span className="font-bold tabular-nums">{formatCents(centsFromMoney(e.amount))}</span>
-                  </div>
-                ))}
+                <div className="shrink-0 scale-90 origin-top-right sm:scale-100"><StatusBadge status={t.status} /></div>
               </div>
-            </details>
-          ) : null}
+            </button>
+          ))}
+        </div>
+      </MobileCard> : null}
+
+      {selectedTruck && step !== "truck" ? (
+        <MobileCard className="p-3">
+          <SectionTitle className="mb-2">Resumo do caminhão</SectionTitle>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <ValueCard label="Modelo" value={truckTitle(selectedTruck)} />
+            <ValueCard label="Status" value={STATUS_LABEL[selectedTruck.status] ?? selectedTruck.status} />
+            <ValueCard label="Preço anunciado" value={formatCents(announcedPriceCents)} />
+          </div>
         </MobileCard>
       ) : null}
 
-      <MobileCard className="p-3">
-        <SectionTitle className="mb-3">2. Operação, cliente e proposta</SectionTitle>
+      {step === "customer" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">2. Cliente</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Tipo de operação</Label>
-            <select value={operation} onChange={(e) => setOperation(e.target.value as keyof typeof OPERATION_LABELS)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              {Object.entries(OPERATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Contrato disponível</Label>
-            <select value={contractType} onChange={(e) => setContractType(e.target.value as "garantia" | "repasse")} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              <option value="garantia">Garantia</option>
-              <option value="repasse">Repasse</option>
-            </select>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Cliente existente</Label>
-            <Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} placeholder="Buscar cliente real" />
-            <div className="grid max-h-48 gap-2 overflow-y-auto pt-1">
-              {(customersQ.data ?? []).slice(0, 8).map((c) => (
-                <button key={c.id} type="button" onClick={() => setSelectedCustomerId(c.id)} className={cn("rounded-xl border p-2 text-left text-sm", selectedCustomerId === c.id ? "border-gold bg-gold/10" : "bg-card")}>
-                  <span className="font-bold">{c.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{c.phone ?? c.city ?? "ID " + c.id.slice(0, 8)}</span>
-                </button>
-              ))}
+          <div className="space-y-1.5 sm:col-span-2"><Label>Cliente existente</Label><Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} placeholder="Buscar cliente real" />
+            <div className="mt-2 grid max-h-44 gap-2 overflow-y-auto">
+              {(customersQ.data ?? []).slice(0, 8).map((c) => <button key={c.id} type="button" onClick={() => selectCustomer(c.id)} className={cn("rounded-xl border p-2 text-left text-sm", selectedCustomerId === c.id ? "border-gold bg-gold/10" : "bg-card")}><span className="font-bold">{c.name}</span><span className="ml-2 text-xs text-muted-foreground">{c.phone ?? c.city ?? c.id.slice(0, 8)}</span></button>)}
             </div>
           </div>
-          <MoneyInput label="Preço anunciado/bruto" value={grossPriceCents || advertisedCents} onChange={setGrossPriceCents} />
-          <MoneyInput label="Desconto" value={discountCents} onChange={setDiscountCents} />
-          <div className="space-y-1.5">
-            <Label>Vendedor responsável</Label>
-            <select value={sellerId} onChange={(e) => setSellerId(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              <option value="">Selecionar</option>
-              {(profilesQ.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.full_name ?? p.id}</option>)}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Data prevista/competência</Label>
-            <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observações da simulação</Label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Condições, pendências, validações contábeis..." />
-          </div>
         </div>
-      </MobileCard>
+      </MobileCard> : null}
 
-      <MobileCard className="p-3">
-        <SectionTitle className="mb-3">3. Cenários e cálculos</SectionTitle>
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          {(["conservador", "alvo", "proposta"] as ScenarioKey[]).map((key) => (
-            <button key={key} type="button" onClick={() => setScenario(key)} className={cn("rounded-xl border px-2 py-2 text-xs font-black capitalize", scenario === key ? "border-gold bg-gold text-gold-foreground" : "bg-card")}>{key}</button>
+      {step === "seller" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">3. Vendedor</SectionTitle>
+        <div className="space-y-1.5">
+          <Label>Vendedor real</Label>
+          {sellersQ.isLoading ? <SkeletonRows rows={2} height={42} /> : null}
+          <select
+            value={sellerId}
+            disabled={sellersQ.isLoading || sellersQ.isError || (sellersQ.data ?? []).length === 0}
+            onChange={(e) => selectSeller(e.target.value)}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-60"
+          >
+            <option value="">Selecionar vendedor</option>
+            {(sellersQ.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+          </select>
+          {sellersQ.isError ? <p className="text-xs text-destructive">Falha ao carregar vendedores. Verifique sua conexão/permissão.</p> : null}
+          {!sellersQ.isLoading && !sellersQ.isError && (sellersQ.data ?? []).length === 0 ? <p className="text-xs text-muted-foreground">Nenhum vendedor ativo encontrado em funcionários ou perfis do CRM.</p> : null}
+        </div>
+        {selectedSeller ? <Button type="button" className="mt-3 w-full" onClick={() => setStep("proposal")}>Continuar para proposta</Button> : null}
+      </MobileCard> : null}
+
+      {step === "proposal" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">4. Proposta</SectionTitle>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5"><Label>Condição</Label><select value={contractType} onChange={(e) => setContractType(e.target.value as "garantia" | "repasse")} className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="garantia">Garantia</option><option value="repasse">Repasse</option></select></div>
+          <MoneyInput label="Preço proposto" value={proposedPriceCents} onChange={setProposedPriceCents} />
+          <div className="space-y-1.5"><Label>Data da proposta</Label><Input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)} /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>Observação interna da simulação</Label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Não aparece no card do cliente." /></div>
+        </div>
+        <Button type="button" className="mt-3 w-full" disabled={proposedPriceCents <= 0} onClick={() => setStep("payment")}>Continuar para pagamento</Button>
+      </MobileCard> : null}
+
+      {step === "payment" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">5. Condições de pagamento</SectionTitle>
+        <Button type="button" variant="outline" size="sm" onClick={() => setPayments((items) => [...items, { id: crypto.randomUUID(), method: "PIX", amountCents: 0, dueDate: proposalDate }])}><Plus className="h-4 w-4" /> Adicionar parcela</Button>
+        <div className="mt-3 space-y-2">
+          {payments.length === 0 ? <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">Nenhuma condição cadastrada.</p> : null}
+          {payments.map((p) => (
+            <div key={p.id} className="rounded-xl border bg-card p-2">
+              <div className="grid gap-2 sm:grid-cols-[1fr_150px_150px_40px]">
+                <select value={p.method} onChange={(e) => setPayments((items) => items.map((x) => x.id === p.id ? { ...x, method: e.target.value as CrmPaymentMethod } : x))} className="h-10 rounded-md border bg-background px-2 text-sm">{PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select>
+                <MoneyInput label="Valor" value={p.amountCents} onChange={(amountCents) => setPayments((items) => items.map((x) => x.id === p.id ? { ...x, amountCents } : x))} />
+                <div className="space-y-1.5"><Label>Vencimento</Label><Input type="date" value={p.dueDate} onChange={(e) => setPayments((items) => items.map((x) => x.id === p.id ? { ...x, dueDate: e.target.value } : x))} /></div>
+                <button type="button" aria-label="Remover" onClick={() => setPayments((items) => items.filter((x) => x.id !== p.id))} className="mt-6 flex h-10 items-center justify-center rounded-md border bg-card"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            </div>
           ))}
         </div>
-        <div className="mb-3 rounded-xl border border-gold/30 bg-gold/5 p-3">
-          <div className="text-sm font-black">{scenarioInfo.title}</div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{scenarioInfo.description}</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground"><span className="font-bold text-foreground">Por que está assim:</span> {scenarioInfo.reason}</p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <ValueCard label="Preço líquido" value={formatCents(result.netPriceCents)} description="Preço bruto menos desconto. É o valor que precisa fechar com as formas de pagamento." />
-          <ValueCard label="Custo gerencial" value={formatCents(result.managerialCostCents)} description="Compra, despesas já vinculadas e novas despesas estimadas não duplicadas." />
-          <ValueCard label="Margem bruta" value={formatCents(result.grossMarginCents)} tone={result.grossMarginCents >= 0 ? "good" : "bad"} description="Sobra comercial antes de comissão, custos de venda e tributos." />
-          <ValueCard label="Margem %" value={pctLabel(result.marginBps)} description="Margem bruta dividida pelo preço líquido. Fica zerada/indefinida se não houver preço." />
-          <ValueCard label="Custos de venda" value={formatCents(result.sellingCostCents)} description="Taxas, despachante, cartão, financiamento ou outros custos informados à parte." />
-          <ValueCard label="Comissão estimada" value={formatCents(result.commissionCents)} description={includeCommission ? "Calculada pela regra opcional selecionada." : "Desativada. Não entra no resultado deste cenário."} />
-          <ValueCard label="Contribuição antes tributos" value={formatCents(result.contributionAfterCostsCents)} tone={result.contributionAfterCostsCents >= 0 ? "good" : "bad"} description="Margem após custos de venda e comissão, ainda sem tributos validados." />
-          <ValueCard label="Preço equilíbrio" value={formatCents(result.breakEvenPriceCents)} description="Preço necessário para cobrir custo gerencial, custos de venda e comissão ativa." />
-          <ValueCard label="Preço mínimo alvo" value={formatCents(result.minimumPriceCents)} tone="warn" description="Preço estimado para atingir a margem alvo definida no simulador." />
-        </div>
-        <details className="mt-3 rounded-xl bg-muted p-3 text-sm">
-          <summary className="cursor-pointer font-bold">Como foi calculado?</summary>
-          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-            <p>Preço líquido = preço bruto - desconto.</p>
-            <p>Custo gerencial = compra + despesas contabilizadas + novas despesas estimadas não contabilizadas.</p>
-            <p>Margem bruta = preço líquido - custo gerencial.</p>
-            <p>Contribuição antes de tributos = margem bruta - custos de venda - comissão.</p>
-            <p>Preço mínimo usa a margem alvo informada e não considera tributos sem perfil fiscal validado.</p>
-          </div>
-        </details>
-      </MobileCard>
+        <Button type="button" className="mt-3 w-full" onClick={() => setStep("result")}>Ver resultado</Button>
+      </MobileCard> : null}
 
-      <MobileCard className="p-3">
-        <SectionTitle className="mb-3">4. Comissão, despesas e custos</SectionTitle>
-        <OptionSwitch
-          checked={includeCommission}
-          onChange={(checked) => {
-            setIncludeCommission(checked);
-            if (checked && commissionMode === "none") setCommissionMode("percent");
-          }}
-          label="Incluir comissão na simulação"
-          hint="Opcional. Só entra no cálculo quando ativada e configurada."
-        />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className={cn("space-y-1.5", !includeCommission && "opacity-50")}>
-            <Label>Comissão do vendedor</Label>
-            <select disabled={!includeCommission} value={commissionMode} onChange={(e) => setCommissionMode(e.target.value as CommissionMode)} className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:cursor-not-allowed">
-              <option value="none">Não calcular</option>
-              <option value="percent">Percentual</option>
-              <option value="fixed">Valor fixo</option>
-            </select>
-          </div>
-          <div className={cn("space-y-1.5", !includeCommission && "opacity-50")}>
-            <Label>Base da comissão</Label>
-            <select disabled={!includeCommission} value={commissionBasis} onChange={(e) => setCommissionBasis(e.target.value as CommissionBasis)} className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:cursor-not-allowed">
-              {COMMISSION_BASES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-            </select>
-          </div>
-          {includeCommission && commissionMode === "percent" ? (
-            <PercentInput label="Percentual (%)" valueBps={commissionPercentBps} onChange={setCommissionPercentBps} />
-          ) : null}
-          {includeCommission && commissionMode === "fixed" ? <MoneyInput label="Valor fixo" value={commissionFixedCents} onChange={setCommissionFixedCents} /> : null}
-          <PercentInput label="Margem alvo (%)" valueBps={targetMarginBps} onChange={setTargetMarginBps} />
-        </div>
+      {step === "result" && isExec ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.48fr)]">
+          <MobileCard className="p-5">
+            <SectionTitle className="mb-5 text-base">Simulador de venda</SectionTitle>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <MoneyInput label="Preço de venda (R$)" value={proposedPriceCents} onChange={setProposedPriceCents} />
+              <MoneyInput label="Comissão (R$)" value={commissionFixedCents} onChange={setCommissionFixedCents} />
+              <MoneyInput label="Impostos / taxas (R$)" value={taxesCents} onChange={setTaxesCents} />
+              <MoneyInput label="Custo extra (R$)" value={extraCostCents} onChange={setExtraCostCents} />
+            </div>
+            <div className="mt-5 grid gap-x-6 gap-y-3 border-t pt-4 sm:grid-cols-2">
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">Valor de compra</span><strong>{formatCents(result.purchasePriceCents ?? 0)}</strong></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">Despesas acumuladas</span><strong>{formatCents(result.accumulatedExpensesCents ?? 0)}</strong></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">Comissão</span><strong>{formatCents(result.commissionCents ?? 0)}</strong></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">Impostos</span><strong>{formatCents(result.taxesCents ?? 0)}</strong></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">Custo extra</span><strong>{formatCents(result.extraCostCents ?? 0)}</strong></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">Custo total</span><strong>{formatCents(result.totalCostCents ?? 0)}</strong></div>
+            </div>
+          </MobileCard>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div>
-            <div className="mb-2 flex items-center justify-between"><span className="text-sm font-black">Novas despesas estimadas</span><Button type="button" size="sm" variant="outline" onClick={() => addExpense(setNewExpenses, "Despesa estimada")}><Plus className="h-4 w-4" /></Button></div>
-            <EditableExpenses items={newExpenses} onChange={setNewExpenses} />
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between"><span className="text-sm font-black">Custos de venda</span><Button type="button" size="sm" variant="outline" onClick={() => addExpense(setSellingCosts, "Custo de venda")}><Plus className="h-4 w-4" /></Button></div>
-            <EditableExpenses items={sellingCosts} onChange={setSellingCosts} />
-          </div>
+          <MobileCard className="border-success/40 p-5">
+            <div className="mb-4 flex items-center gap-2 font-black"><TrendingUp className="h-4 w-4 text-success" />Resultado projetado</div>
+            <div className="text-xs uppercase text-muted-foreground">Lucro líquido</div>
+            <div className={cn("mt-1 text-3xl font-black tabular-nums", (result.netProfitCents ?? 0) >= 0 ? "text-success" : "text-destructive")}>{formatCents(result.netProfitCents ?? 0)}</div>
+            <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
+              <div><div className="text-muted-foreground">Margem</div><div className="font-black">{pctLabel(result.marginBps)}</div></div>
+              <div><div className="text-muted-foreground">Markup</div><div className="font-black">{pctLabel(result.markupBps)}</div></div>
+            </div>
+            <p className="mt-5 border-t pt-3 text-xs text-muted-foreground">Margem bruta = (lucro / venda). Markup = (lucro / custo total).</p>
+            <div className="mt-4 grid grid-cols-2 gap-2"><Button type="button" variant="outline" disabled={!clientProposal} onClick={exportPdf}><FileText className="h-4 w-4" />PDF</Button><Button type="button" variant="outline" onClick={printProposal}><Printer className="h-4 w-4" />Imprimir</Button></div>
+          </MobileCard>
         </div>
-      </MobileCard>
+      ) : step === "result" ? (
+        <MobileCard className="p-3">
+          <SectionTitle className="mb-3">Resultado</SectionTitle>
+          <div className="grid gap-2 sm:grid-cols-2"><ValueCard label="Preço proposto" value={formatCents(result.proposedPriceCents)} /><ValueCard label="Total condições" value={formatCents(result.paymentsTotalCents)} /></div>
+        </MobileCard>
+      ) : null}
 
-      <MobileCard className="p-3">
-        <SectionTitle className="mb-3">5. Formas de pagamento</SectionTitle>
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-          {PAYMENT_KINDS.map((p) => <Button key={p.value} type="button" variant="outline" size="sm" className="shrink-0" onClick={() => addPayment(p.value)}>{p.label}</Button>)}
-        </div>
-        <EditablePayments payments={payments} onChange={setPayments} />
-        <div className={cn("mt-3 rounded-xl p-3 text-sm font-bold", result.reconciliationDiffCents === 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
-          {paymentReconciliationMessage(result.reconciliationDiffCents)}
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-4">
-          <ValueCard label="Total nominal" value={formatCents(result.paymentsTotalCents)} />
-          <ValueCard label="Recebido pela empresa" value={formatCents(result.companyReceivesCents)} />
-          <ValueCard label="Principal financiado" value={formatCents(result.financePrincipalCents)} />
-          <ValueCard label="Troca separada" value={formatCents(result.tradeInCents)} />
-        </div>
-      </MobileCard>
-
-      <MobileCard className="p-3">
-        <SectionTitle className="mb-2">6. Tributos e confirmação</SectionTitle>
-        <OptionSwitch
-          checked={includeTaxes}
-          onChange={setIncludeTaxes}
-          label="Considerar impostos na simulação"
-          hint="Opcional. Ao ativar, o simulador mostra as pendências fiscais; não calcula valores sem validação."
-        />
-        <div className="rounded-xl border border-gold/40 bg-gold/5 p-3 text-sm">
-          <div className="font-black">{includeTaxes ? taxState.label : "Impostos desativados nesta simulação"}</div>
-          {includeTaxes ? (
-            <>
-              <p className="mt-1 text-muted-foreground">Manual HF informado: Lucro Real/PR; ICMS pode ter base reduzida a 5% do valor da operação somente quando a entrada e a saída estiverem fiscalmente enquadradas. Isso não é alíquota de ICMS e não vira padrão automático.</p>
-              <div className="mt-3 grid gap-2">
-                {fiscalResult.states.map((state) => (
-                  <div key={state.key} className="rounded-lg bg-background/70 p-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold">{state.label}</span>
-                      <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-bold text-gold-dark">
-                        {state.status === "not_sale_level" ? "não apurado por venda" : "pendente"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{state.message}</p>
-                  </div>
-                ))}
-              </div>
-              <details className="mt-3 text-xs text-muted-foreground">
-                <summary className="cursor-pointer font-bold text-foreground">Dados fiscais faltantes</summary>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {fiscalResult.missing.map((item) => (
-                    <span key={item} className="rounded-full bg-muted px-2 py-1">{item}</span>
-                  ))}
-                </div>
-              </details>
-            </>
-          ) : (
-            <p className="mt-1 text-muted-foreground">Nenhum imposto entra no resultado. A margem exibida continua gerencial e antes de tributos.</p>
-          )}
-        </div>
-        <div className="mt-3 rounded-xl border bg-card p-3 text-sm">
-          <div className="font-black">Dossiê do caminhão no CRM</div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <ValueCard label="Documentos" value={String((truckDetailQ.data?.truckDocuments.length ?? 0) + (truckDetailQ.data?.documents.length ?? 0))} />
-            <ValueCard label="Despesas vinculadas" value={String(expenseLines.length)} />
-            <ValueCard label="Serviços" value={String(truckDetailQ.data?.services.length ?? 0)} />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">O simulador apenas consulta vínculos existentes. NF-e, transferência, contrato e encerramento continuam fora da simulação.</p>
-        </div>
-        <div className="mt-3 rounded-xl border bg-card p-3 text-sm">
-          <div className="font-black">Revisão final</div>
-          <p className="mt-1 text-muted-foreground">Caminhão: {selectedTruck ? `${truckTitle(selectedTruck)} (${selectedTruck.id})` : "não selecionado"}</p>
-          <p className="text-muted-foreground">Cliente: {selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.id})` : "não selecionado"}</p>
-          <p className="text-muted-foreground">Vendedor: {(profilesQ.data ?? []).find((p) => p.id === sellerId)?.full_name ?? "não selecionado"}</p>
-          <p className="text-muted-foreground">Preço líquido: {formatCents(result.netPriceCents)} · contrato: {contractType} · competência: {dateBR(expectedDate)}</p>
-          {notes ? <p className="mt-1 whitespace-pre-line text-muted-foreground">{notes}</p> : null}
-        </div>
-        <Button type="button" disabled className="mt-3 w-full">
-          <Calculator className="h-4 w-4" /> Confirmar venda real indisponível
-        </Button>
+      {step === "result" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">Conferência de pagamento</SectionTitle>
+        <p className={cn("rounded-xl p-3 text-sm font-bold", result.isBalanced ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>{paymentDiffMessage(result.paymentDiffCents)}</p>
         <p className="mt-2 text-xs text-muted-foreground">{persistDecision.reason}</p>
-      </MobileCard>
+        <Button type="button" className="mt-3 w-full" onClick={() => setStep("export")}>Finalizar e exportar</Button>
+      </MobileCard> : null}
+
+      {step === "export" ? <MobileCard className="p-3">
+        <SectionTitle className="mb-3">Exportar proposta para cliente</SectionTitle>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Button type="button" disabled={!clientProposal} onClick={generateImagePreview}><ImageDown className="h-4 w-4" /> Gerar prévia</Button>
+          <Button type="button" disabled={!clientProposal} onClick={exportPdf}><FileText className="h-4 w-4" /> Exportar PDF</Button>
+          <Button type="button" disabled={!imageBlob} onClick={downloadImage}><ImageDown className="h-4 w-4" /> Baixar imagem</Button>
+        </div>
+        {downloadOk ? <p className="mt-2 text-sm font-bold text-success"><Download className="mr-1 inline h-4 w-4" />{downloadOk}</p> : null}
+        {exportError ? <p className="mt-2 rounded-xl bg-destructive/10 p-3 text-sm font-bold text-destructive">{exportError}</p> : null}
+        {imagePreviewUrl ? <div className="mt-4 overflow-hidden rounded-2xl border bg-muted p-2"><img src={imagePreviewUrl} alt="Prévia validada da proposta" className="mx-auto block w-full max-w-[360px] rounded-xl" /></div> : null}
+        <div className={cn("mt-4 overflow-hidden rounded-2xl border bg-muted p-2", imagePreviewUrl && "sr-only")}><canvas ref={canvasRef} className="mx-auto block w-full max-w-[360px] rounded-xl" aria-label="Prévia da imagem da proposta" /></div>
+        <p className="mt-2 text-xs text-muted-foreground">PDF e card do cliente não incluem custo de compra, comissão, margem, CPF/CNPJ ou notas internas.</p>
+      </MobileCard> : null}
     </>
-  );
-}
-
-function EditableExpenses({ items, onChange }: { items: ExpenseInput[]; onChange: (items: ExpenseInput[]) => void }) {
-  if (!items.length) return <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">Nenhum item estimado.</p>;
-  return (
-    <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item.id} className="grid grid-cols-[1fr_120px_34px] gap-2">
-          <Input value={item.label} onChange={(e) => onChange(items.map((x) => x.id === item.id ? { ...x, label: e.target.value } : x))} />
-          <MoneyCell value={item.amountCents} onChange={(amountCents) => onChange(items.map((x) => x.id === item.id ? { ...x, amountCents } : x))} />
-          <button type="button" aria-label="Remover" onClick={() => onChange(items.filter((x) => x.id !== item.id))} className="flex h-10 items-center justify-center rounded-md border bg-card"><Trash2 className="h-4 w-4" /></button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EditablePayments({ payments, onChange }: { payments: PaymentLineInput[]; onChange: (items: PaymentLineInput[]) => void }) {
-  if (!payments.length) return <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">Adicione entrada, PIX, financiamento, parcelas ou troca. Troca não reduz automaticamente o preço de venda.</p>;
-  return (
-    <div className="space-y-2">
-      {payments.map((p) => (
-        <div key={p.id} className="rounded-xl border bg-card p-2">
-          <div className="grid grid-cols-[1fr_120px_34px] gap-2">
-            <select value={p.kind} onChange={(e) => onChange(payments.map((x) => x.id === p.id ? { ...x, kind: e.target.value as PaymentKind } : x))} className="h-10 rounded-md border bg-background px-2 text-sm">
-              {PAYMENT_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-            </select>
-            <MoneyCell value={p.amountCents} onChange={(amountCents) => onChange(payments.map((x) => x.id === p.id ? { ...x, amountCents } : x))} />
-            <button type="button" aria-label="Remover" onClick={() => onChange(payments.filter((x) => x.id !== p.id))} className="flex h-10 items-center justify-center rounded-md border bg-card"><Trash2 className="h-4 w-4" /></button>
-          </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <Input type="date" value={p.dueDate} onChange={(e) => onChange(payments.map((x) => x.id === p.id ? { ...x, dueDate: e.target.value } : x))} />
-            <MoneyCell placeholder="Taxa/custo" value={p.feeCents ?? 0} onChange={(feeCents) => onChange(payments.map((x) => x.id === p.id ? { ...x, feeCents } : x))} />
-            {p.kind === "FINANCIAMENTO" ? (
-              <MoneyCell placeholder="Principal financiado" value={p.financePrincipalCents ?? 0} onChange={(financePrincipalCents) => onChange(payments.map((x) => x.id === p.id ? { ...x, financePrincipalCents } : x))} />
-            ) : null}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }

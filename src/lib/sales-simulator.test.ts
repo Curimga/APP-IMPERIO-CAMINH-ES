@@ -1,170 +1,126 @@
 import { describe, expect, it } from "vitest";
 import {
-  calculateSaleScenario,
+  calculateCrmSaleProposal,
   canPersistRealSaleSafely,
   centsFromMoney,
-  evaluateFiscalValidation,
   formatCents,
-  paymentReconciliationMessage,
+  paymentDiffMessage,
+  publicProposalLines,
   saleSimulatorFinanceAccess,
   simulationWritesToCrm,
-  taxDisplayState,
-  type SaleScenarioInput,
 } from "@/lib/sales-simulator";
 
-function base(overrides: Partial<SaleScenarioInput> = {}): SaleScenarioInput {
-  return {
-    grossPriceCents: centsFromMoney(300_000),
-    discountCents: 0,
-    acquisitionCostCents: centsFromMoney(220_000),
-    accountedExpenseCents: centsFromMoney(10_000),
-    estimatedExpenses: [],
-    sellingCosts: [],
-    commission: { mode: "none", basis: "margin" },
-    payments: [],
-    targetMarginBps: 1_500,
-    fiscalProfileValidated: false,
-    ...overrides,
-  };
-}
-
-describe("sales simulator", () => {
-  it("calcula preço líquido como bruto menos desconto", () => {
-    const r = calculateSaleScenario(base({ discountCents: centsFromMoney(12_345.67) }));
-    expect(r.netPriceCents).toBe(centsFromMoney(287_654.33));
-  });
-
-  it("calcula margem sem duplicar despesas já contabilizadas", () => {
-    const r = calculateSaleScenario(base({
-      estimatedExpenses: [
-        { id: "1", label: "Já no CRM", amountCents: centsFromMoney(5_000), alreadyAccounted: true },
-        { id: "2", label: "Nova", amountCents: centsFromMoney(2_500) },
-      ],
-    }));
-    expect(r.managerialCostCents).toBe(centsFromMoney(232_500));
-    expect(r.grossMarginCents).toBe(centsFromMoney(67_500));
-  });
-
-  it("calcula comissão percentual por bases suportadas e valor fixo", () => {
-    expect(calculateSaleScenario(base({ commission: { mode: "percent", basis: "gross", percentBps: 100 } })).commissionCents).toBe(centsFromMoney(3_000));
-    expect(calculateSaleScenario(base({ commission: { mode: "percent", basis: "net", percentBps: 100 }, discountCents: centsFromMoney(10_000) })).commissionCents).toBe(centsFromMoney(2_900));
-    expect(calculateSaleScenario(base({ commission: { mode: "percent", basis: "margin", percentBps: 1_000 } })).commissionCents).toBe(centsFromMoney(7_000));
-    expect(calculateSaleScenario(base({ commission: { mode: "fixed", basis: "margin", fixedCents: centsFromMoney(1_234.56) } })).commissionCents).toBe(centsFromMoney(1_234.56));
-  });
-
-  it("calcula preço de equilíbrio e preço mínimo", () => {
-    const r = calculateSaleScenario(base({
-      sellingCosts: [{ id: "frete", label: "Frete", amountCents: centsFromMoney(2_000) }],
-      commission: { mode: "fixed", basis: "margin", fixedCents: centsFromMoney(3_000) },
-      targetMarginBps: 2_000,
-    }));
-    expect(r.breakEvenPriceCents).toBe(centsFromMoney(235_000));
-    expect(r.minimumPriceCents).toBe(centsFromMoney(293_750));
-  });
-
-  it("reconcilia entrada, financiamento, parcelas e troca com o preço", () => {
-    const r = calculateSaleScenario(base({
-      payments: [
-        { id: "entrada", kind: "entrada", amountCents: centsFromMoney(50_000), dueDate: "2026-09-28" },
-        { id: "fin", kind: "FINANCIAMENTO", amountCents: centsFromMoney(150_000), financePrincipalCents: centsFromMoney(150_000), dueDate: "2026-10-01" },
-        { id: "p1", kind: "TRANSFERENCIA", amountCents: centsFromMoney(50_000), dueDate: "2026-11-01" },
-        { id: "troca", kind: "TROCA", amountCents: centsFromMoney(50_000), dueDate: "2026-09-28" },
-      ],
-    }));
-    expect(r.reconciliationDiffCents).toBe(0);
-    expect(r.financePrincipalCents).toBe(centsFromMoney(150_000));
-    expect(r.tradeInCents).toBe(centsFromMoney(50_000));
-  });
-
-  it("trata diferença de centavos por arredondamento", () => {
-    const r = calculateSaleScenario(base({
-      grossPriceCents: 10_000,
-      acquisitionCostCents: 0,
-      accountedExpenseCents: 0,
-      payments: [
-        { id: "1", kind: "PIX", amountCents: 3_333, dueDate: "2026-09-28" },
-        { id: "2", kind: "PIX", amountCents: 3_333, dueDate: "2026-09-28" },
-        { id: "3", kind: "PIX", amountCents: 3_333, dueDate: "2026-09-28" },
-      ],
-    }));
-    expect(r.reconciliationDiffCents).toBe(-1);
-    expect(paymentReconciliationMessage(r.reconciliationDiffCents).replace(/\s/g, " ")).toContain("Falta R$ 0,01");
-  });
-
-  it("veículo de troca não reduz automaticamente o preço de venda", () => {
-    const r = calculateSaleScenario(base({
-      payments: [{ id: "troca", kind: "TROCA", amountCents: centsFromMoney(80_000), dueDate: "2026-09-28" }],
-    }));
-    expect(r.netPriceCents).toBe(centsFromMoney(300_000));
-    expect(r.tradeInCents).toBe(centsFromMoney(80_000));
-  });
-
-  it("tributo não validado aparece como não calculado, nunca zero", () => {
-    const state = taxDisplayState(false);
-    expect(state.value).toBeNull();
-    expect(state.label).toContain("Tributos não calculados");
-  });
-
-  it("PIS/COFINS ficam bloqueados até aprovação da base fiscal", () => {
-    const result = evaluateFiscalValidation({
-      regime: "Lucro Real",
-      originUf: "PR",
-      destinationUf: "PR",
-      buyerIsTaxpayer: false,
-      operationType: "revenda",
-      entryDocumentationValidated: true,
-      exitConditionsValidated: true,
-      fiscalCostValidatedCents: centsFromMoney(220_000),
-      fiscalResponsible: "HF",
-      fiscalApprovedAt: "2026-09-28",
-      fiscalSource: "Manual HF",
-      pisCofinsRuleApproved: false,
+describe("CRM-like sale proposal simulator", () => {
+  it("calcula diferença comercial entre preço anunciado e proposto", () => {
+    const result = calculateCrmSaleProposal({
+      announcedPriceCents: centsFromMoney(300_000),
+      proposedPriceCents: centsFromMoney(285_000),
+      payments: [],
+      commission: { enabled: false, mode: "none" },
+      canSeeFinance: true,
     });
-    const state = result.states.find((s) => s.key === "pis_cofins");
-    expect(state?.valueCents).toBeNull();
-    expect(state?.status).toBe("pending");
-    expect(state?.message).toContain("não aplicar 0,65% e 3,00%");
+
+    expect(result.commercialDiscountCents).toBe(centsFromMoney(15_000));
+    expect(result.commercialDiscountBps).toBe(500);
   });
 
-  it("ICMS não é calculado sem validar documentação de entrada e condições da saída", () => {
-    const result = evaluateFiscalValidation({ regime: "Lucro Real", originUf: "PR", operationType: "revenda" });
-    const state = result.states.find((s) => s.key === "icms");
-    expect(state?.valueCents).toBeNull();
-    expect(state?.status).toBe("pending");
-    expect(result.missing).toContain("documentação fiscal de entrada validada");
-    expect(result.missing).toContain("condições da saída validadas");
+  it("reproduz o resultado projetado do simulador simples do CRM", () => {
+    const result = calculateCrmSaleProposal({
+      announcedPriceCents: centsFromMoney(535_000),
+      proposedPriceCents: centsFromMoney(535_000),
+      purchasePriceCents: centsFromMoney(450_000),
+      accumulatedExpensesCents: centsFromMoney(900),
+      taxesCents: 0,
+      extraCostCents: 0,
+      payments: [],
+      commission: { enabled: true, mode: "fixed", fixedCents: 0 },
+      canSeeFinance: true,
+    });
+
+    expect(result.totalCostCents).toBe(centsFromMoney(450_900));
+    expect(result.netProfitCents).toBe(centsFromMoney(84_100));
+    expect(result.marginBps).toBe(1572);
+    expect(result.markupBps).toBe(1865);
   });
 
-  it("IRPJ/CSLL não são apresentados como imposto exato por caminhão sem regra aprovada", () => {
-    const result = evaluateFiscalValidation({ regime: "Lucro Real" });
-    const state = result.states.find((s) => s.key === "irpj_csll");
-    expect(state?.valueCents).toBeNull();
-    expect(state?.status).toBe("not_sale_level");
-    expect(state?.message).toContain("Lucro Real");
+  it("reconcilia pagamentos usando métodos existentes do CRM", () => {
+    const result = calculateCrmSaleProposal({
+      announcedPriceCents: centsFromMoney(300_000),
+      proposedPriceCents: centsFromMoney(300_000),
+      payments: [
+        { id: "1", method: "PIX", amountCents: centsFromMoney(100_000), dueDate: "2026-09-28" },
+        { id: "2", method: "TRANSFERENCIA", amountCents: centsFromMoney(200_000), dueDate: "2026-10-28" },
+      ],
+      commission: { enabled: false, mode: "none" },
+      canSeeFinance: true,
+    });
+
+    expect(result.paymentsTotalCents).toBe(centsFromMoney(300_000));
+    expect(result.isBalanced).toBe(true);
+    expect(paymentDiffMessage(result.paymentDiffCents)).toContain("fecham");
   });
 
-  it("perfis sem permissão não recebem financeiro", () => {
+  it("calcula comissão percentual e fixa somente quando habilitada", () => {
+    expect(calculateCrmSaleProposal({
+      announcedPriceCents: 0,
+      proposedPriceCents: centsFromMoney(200_000),
+      payments: [],
+      commission: { enabled: true, mode: "percent", percentBps: 100 },
+      canSeeFinance: true,
+    }).commissionCents).toBe(centsFromMoney(2_000));
+
+    expect(calculateCrmSaleProposal({
+      announcedPriceCents: 0,
+      proposedPriceCents: centsFromMoney(200_000),
+      payments: [],
+      commission: { enabled: true, mode: "fixed", fixedCents: centsFromMoney(1_500) },
+      canSeeFinance: true,
+    }).commissionCents).toBe(centsFromMoney(1_500));
+
+    expect(calculateCrmSaleProposal({
+      announcedPriceCents: 0,
+      proposedPriceCents: centsFromMoney(200_000),
+      payments: [],
+      commission: { enabled: false, mode: "percent", percentBps: 100 },
+      canSeeFinance: true,
+    }).commissionCents).toBeNull();
+  });
+
+  it("não retorna comissão para usuário sem permissão financeira", () => {
+    const result = calculateCrmSaleProposal({
+      announcedPriceCents: 0,
+      proposedPriceCents: centsFromMoney(200_000),
+      payments: [],
+      commission: { enabled: true, mode: "percent", percentBps: 100 },
+      canSeeFinance: false,
+    });
+
+    expect(result.commissionCents).toBeNull();
     expect(saleSimulatorFinanceAccess(["secretaria"], "x@imperio.test").canAccess).toBe(false);
-    expect(saleSimulatorFinanceAccess(["financeiro"], "x@imperio.test").canAccess).toBe(false);
-    expect(saleSimulatorFinanceAccess(["admin"], "josemar.essing@gmail.com").canAccess).toBe(false);
     expect(saleSimulatorFinanceAccess(["admin"], "admin@imperio.test").canAccess).toBe(true);
   });
 
-  it("simulação não escreve nem altera qualquer registro do CRM", () => {
+  it("simulação não escreve no CRM e confirmação exige fluxo real acessível", () => {
     expect(simulationWritesToCrm()).toBe(false);
+    expect(canPersistRealSaleSafely({ hasTruckId: true, hasCustomerId: true, hasSellerId: true, hasCrmSaleSimulatorAction: false }).allowed).toBe(false);
+    expect(canPersistRealSaleSafely({ hasTruckId: true, hasCustomerId: true, hasSellerId: true, hasCrmSaleSimulatorAction: true }).allowed).toBe(true);
   });
 
-  it("confirmação exige IDs reais de caminhão e cliente", () => {
-    expect(canPersistRealSaleSafely({ hasTruckId: false, hasCustomerId: true, hasAtomicSaleFlow: true }).allowed).toBe(false);
-    expect(canPersistRealSaleSafely({ hasTruckId: true, hasCustomerId: false, hasAtomicSaleFlow: true }).allowed).toBe(false);
-  });
+  it("linhas públicas da proposta não incluem dados internos", () => {
+    const lines = publicProposalLines({
+      customerName: "Cliente Teste",
+      truckTitle: "Volvo FH 540",
+      plate: "ABC1D23",
+      year: 2022,
+      color: "Branco",
+      priceCents: centsFromMoney(450_000),
+      paymentSummary: "PIX: R$ 450.000,00",
+      sellerName: "Vendedor Real",
+      contractType: "garantia",
+    });
 
-  it("bloqueia fluxo real quando falta transação segura e permitiria sucesso quando existir", () => {
-    expect(canPersistRealSaleSafely({ hasTruckId: true, hasCustomerId: true, hasAtomicSaleFlow: false }).allowed).toBe(false);
-    expect(canPersistRealSaleSafely({ hasTruckId: true, hasCustomerId: true, hasAtomicSaleFlow: true }).allowed).toBe(true);
-  });
-
-  it("formata centavos em BRL pt-BR", () => {
-    expect(formatCents(123_456)).toBe("R$ 1.234,56");
+    expect(lines.join(" ")).toContain("Volvo FH 540");
+    expect(lines.join(" ")).toContain(formatCents(centsFromMoney(450_000)));
+    expect(lines.join(" ")).not.toMatch(/comiss|margem|custo|lucro/i);
   });
 });

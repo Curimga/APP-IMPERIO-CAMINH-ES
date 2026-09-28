@@ -81,7 +81,7 @@ function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<stri
       aria-label={`Abrir ficha de ${truckTitle(t)} ${t.plate ?? ""}`.trim()}
     >
       <MobileCard className="overflow-hidden p-0">
-        <div className="relative h-40 bg-muted">
+        <div className="relative h-36 bg-muted sm:h-40">
           {cover ? (
             <img
               key={`${t.id}-${cover.id}`}
@@ -115,29 +115,29 @@ function TruckCard({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<stri
               className={cn("h-4 w-4", fav ? "fill-destructive text-destructive" : "text-white")}
             />
           </button>
-          <div className="absolute inset-x-3 bottom-2 flex items-end justify-between gap-2">
-            <span className="truncate text-sm font-bold uppercase tracking-wide text-white">
+          <div className="absolute inset-x-3 bottom-2 flex min-w-0 items-end justify-between gap-2">
+            <span className="min-w-0 truncate text-[13px] font-bold uppercase tracking-wide text-white sm:text-sm">
               {t.plate ?? "sem placa"}
             </span>
             {isExec && Number(t.expected_price ?? 0) > 0 ? (
-              <span className="shrink-0 rounded-md bg-black/55 px-1.5 py-0.5 text-[12px] font-bold tabular-nums text-gold">
+              <span className="max-w-[48%] shrink-0 truncate rounded-md bg-black/55 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-gold sm:text-[12px]">
                 {brl(t.expected_price)}
               </span>
             ) : null}
           </div>
         </div>
         <div className="p-3">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="truncate text-[15px] font-bold leading-tight">{truckTitle(t)}</h3>
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <h3 className="min-w-0 truncate text-[14px] font-bold leading-tight sm:text-[15px]">{truckTitle(t)}</h3>
             <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
               parado há {days} d
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted-foreground">
-            <span>{t.year ?? ""}</span>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground sm:text-[12px]">
+            <span className="shrink-0">{t.year ?? ""}</span>
             {t.color ? <span>· {t.color}</span> : null}
             {t.status_expected_end ? (
-              <span className="font-semibold text-gold-dark">retorno {dateBR(t.status_expected_end)}</span>
+              <span className="max-w-full truncate font-semibold text-gold-dark">retorno {dateBR(t.status_expected_end)}</span>
             ) : null}
           </div>
         </div>
@@ -177,12 +177,12 @@ function TruckRow({ t, favIds, isExec }: { t: TruckWithPhotos; favIds: Set<strin
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-bold leading-tight">{truckTitle(t)}</div>
-            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="truncate text-[13px] font-bold leading-tight sm:text-[14px]">{truckTitle(t)}</div>
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground sm:text-[11px]">
               <span className="font-semibold uppercase">{t.plate ?? "—"}</span>
               <span>parado há {days} d</span>
               {isExec && Number(t.expected_price ?? 0) > 0 ? (
-                <span className="font-bold tabular-nums text-gold-dark">{brl(t.expected_price)}</span>
+                <span className="max-w-full truncate font-bold tabular-nums text-gold-dark">{brl(t.expected_price)}</span>
               ) : null}
             </div>
           </div>
@@ -340,9 +340,9 @@ function Garagem() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold tracking-tight">Garagem</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <div className="flex rounded-lg bg-surface-secondary p-0.5">
             <button
               type="button"
@@ -370,14 +370,14 @@ function Garagem() {
           <Link
             to="/garagem/simular-venda"
             aria-label="Simular venda"
-            className="flex h-10 items-center gap-1.5 rounded-xl border bg-card px-3 text-sm font-bold text-gold-dark pressable active:scale-95"
+            className="flex h-10 items-center gap-1.5 rounded-xl border bg-card px-2.5 text-xs font-bold text-gold-dark pressable active:scale-95 sm:px-3 sm:text-sm"
           >
             <Calculator className="h-4 w-4" /> Simular
           </Link>
           <Link
             to="/garagem/novo"
             aria-label="Cadastrar caminhão"
-            className="flex h-10 items-center gap-1.5 rounded-xl bg-gold px-3 text-sm font-bold text-gold-foreground pressable active:scale-95"
+            className="flex h-10 items-center gap-1.5 rounded-xl bg-gold px-2.5 text-xs font-bold text-gold-foreground pressable active:scale-95 sm:px-3 sm:text-sm"
           >
             <Plus className="h-4 w-4" /> Novo
           </Link>

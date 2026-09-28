@@ -2,120 +2,82 @@ import type { AppRole } from "@/hooks/use-auth";
 import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export type MoneyCents = number;
-
-export type CommissionBasis = "gross" | "net" | "margin";
 export type CommissionMode = "none" | "percent" | "fixed";
 
-export type PaymentKind =
-  | "entrada"
+export type CrmPaymentMethod =
   | "PIX"
+  | "BOLETO"
   | "TRANSFERENCIA"
   | "DINHEIRO"
-  | "CHEQUE"
   | "CARTAO"
-  | "FINANCIAMENTO"
-  | "TROCA";
+  | "OUTRO";
 
 export interface PaymentLineInput {
   id: string;
-  kind: PaymentKind;
+  method: CrmPaymentMethod;
   amountCents: MoneyCents;
   dueDate: string;
-  feeCents?: MoneyCents;
-  financePrincipalCents?: MoneyCents;
-  financeBuyerInterestCents?: MoneyCents;
-}
-
-export interface ExpenseInput {
-  id: string;
-  label: string;
-  amountCents: MoneyCents;
-  alreadyAccounted?: boolean;
+  note?: string;
 }
 
 export interface CommissionInput {
+  enabled: boolean;
   mode: CommissionMode;
-  basis: CommissionBasis;
   percentBps?: number;
   fixedCents?: MoneyCents;
 }
 
-export interface SaleScenarioInput {
-  grossPriceCents: MoneyCents;
-  discountCents: MoneyCents;
-  acquisitionCostCents: MoneyCents;
-  accountedExpenseCents: MoneyCents;
-  estimatedExpenses: ExpenseInput[];
-  sellingCosts: ExpenseInput[];
-  commission: CommissionInput;
+export interface CrmSaleProposalInput {
+  announcedPriceCents: MoneyCents;
+  proposedPriceCents: MoneyCents;
+  purchasePriceCents?: MoneyCents;
+  accumulatedExpensesCents?: MoneyCents;
+  taxesCents?: MoneyCents;
+  extraCostCents?: MoneyCents;
   payments: PaymentLineInput[];
-  targetMarginBps: number;
-  fiscalProfileValidated: boolean;
+  commission: CommissionInput;
+  canSeeFinance: boolean;
 }
 
-export interface SaleScenarioResult {
-  grossPriceCents: MoneyCents;
-  discountCents: MoneyCents;
-  netPriceCents: MoneyCents;
-  accountedExpenseCents: MoneyCents;
-  estimatedExpenseCents: MoneyCents;
-  acquisitionCostCents: MoneyCents;
-  managerialCostCents: MoneyCents;
-  grossMarginCents: MoneyCents;
-  marginBps: number | null;
-  sellingCostCents: MoneyCents;
-  commissionCents: MoneyCents;
-  contributionBeforeTaxCents: MoneyCents;
-  contributionAfterCostsCents: MoneyCents;
-  breakEvenPriceCents: MoneyCents;
-  minimumPriceCents: MoneyCents;
+export interface CrmSaleProposalResult {
+  announcedPriceCents: MoneyCents;
+  proposedPriceCents: MoneyCents;
+  commercialDiscountCents: MoneyCents;
+  commercialDiscountBps: number | null;
   paymentsTotalCents: MoneyCents;
-  paymentFeesCents: MoneyCents;
-  reconciliationDiffCents: MoneyCents;
-  companyReceivesCents: MoneyCents;
-  financePrincipalCents: MoneyCents;
-  financeBuyerInterestCents: MoneyCents;
-  tradeInCents: MoneyCents;
-  taxStatus: "not_calculated" | "validated";
-  canClose: boolean;
+  paymentDiffCents: MoneyCents;
+  commissionCents: MoneyCents | null;
+  purchasePriceCents: MoneyCents | null;
+  accumulatedExpensesCents: MoneyCents | null;
+  taxesCents: MoneyCents | null;
+  extraCostCents: MoneyCents | null;
+  totalCostCents: MoneyCents | null;
+  netProfitCents: MoneyCents | null;
+  marginBps: number | null;
+  markupBps: number | null;
+  isBalanced: boolean;
 }
 
-export interface FinanceAccessDecision {
-  canAccess: boolean;
-  reason: string | null;
+export interface PublicProposalData {
+  customerName: string;
+  truckTitle: string;
+  plate?: string | null;
+  year?: number | null;
+  color?: string | null;
+  priceCents: MoneyCents;
+  paymentSummary: string;
+  sellerName: string;
+  contractType?: "garantia" | "repasse";
 }
 
-export type FiscalTaxKey = "icms" | "pis_cofins" | "irpj_csll";
-
-export interface FiscalValidationInput {
-  regime?: string | null;
-  originUf?: string | null;
-  destinationUf?: string | null;
-  buyerIsTaxpayer?: boolean | null;
-  operationType?: string | null;
-  entryDocumentationValidated?: boolean;
-  exitConditionsValidated?: boolean;
-  fiscalCostValidatedCents?: MoneyCents | null;
-  fiscalResponsible?: string | null;
-  fiscalApprovedAt?: string | null;
-  fiscalSource?: string | null;
-  pisCofinsRuleApproved?: boolean;
-  icmsUsedVehicleRuleApproved?: boolean;
-  irpjCsllSaleLevelRuleApproved?: boolean;
-}
-
-export interface FiscalTaxState {
-  key: FiscalTaxKey;
-  label: string;
-  status: "pending" | "not_sale_level" | "ready_without_amount";
-  message: string;
-  valueCents: MoneyCents | null;
-}
-
-export interface FiscalValidationResult {
-  profileComplete: boolean;
-  states: FiscalTaxState[];
-  missing: string[];
+export interface ClientProposalDto {
+  customerName: string;
+  vehicleTitle: string;
+  vehicleDetails: string;
+  priceLabel: string;
+  paymentSummary: string;
+  sellerName: string;
+  contractLabel: string | null;
 }
 
 export function centsFromMoney(value: number | string | null | undefined): MoneyCents {
@@ -145,172 +107,75 @@ export function sumCents(values: Array<MoneyCents | null | undefined>): MoneyCen
 }
 
 export function calcPercentCents(amountCents: MoneyCents, bps: number): MoneyCents {
-  return Math.round((amountCents * bps) / 10_000);
+  return Math.round((amountCents * Math.max(0, bps)) / 10_000);
 }
 
-export function commissionBaseCents(
-  basis: CommissionBasis,
-  grossPriceCents: MoneyCents,
-  netPriceCents: MoneyCents,
-  grossMarginCents: MoneyCents,
-): MoneyCents {
-  if (basis === "gross") return grossPriceCents;
-  if (basis === "net") return netPriceCents;
-  return Math.max(0, grossMarginCents);
-}
-
-export function calculateCommission(input: CommissionInput, bases: {
-  grossPriceCents: MoneyCents;
-  netPriceCents: MoneyCents;
-  grossMarginCents: MoneyCents;
-}): MoneyCents {
-  if (input.mode === "none") return 0;
+export function calculateCommission(input: CommissionInput, proposedPriceCents: MoneyCents): MoneyCents | null {
+  if (!input.enabled || input.mode === "none") return null;
   if (input.mode === "fixed") return Math.max(0, Math.round(input.fixedCents ?? 0));
-  return calcPercentCents(
-    commissionBaseCents(input.basis, bases.grossPriceCents, bases.netPriceCents, bases.grossMarginCents),
-    Math.max(0, input.percentBps ?? 0),
-  );
+  return calcPercentCents(proposedPriceCents, input.percentBps ?? 0);
 }
 
-export function calculateSaleScenario(input: SaleScenarioInput): SaleScenarioResult {
-  const grossPriceCents = Math.max(0, Math.round(input.grossPriceCents));
-  const discountCents = Math.max(0, Math.round(input.discountCents));
-  const netPriceCents = Math.max(0, grossPriceCents - discountCents);
-  const acquisitionCostCents = Math.max(0, Math.round(input.acquisitionCostCents));
-  const accountedExpenseCents = Math.max(0, Math.round(input.accountedExpenseCents));
-  const estimatedExpenseCents = sumCents(
-    input.estimatedExpenses.filter((e) => !e.alreadyAccounted).map((e) => e.amountCents),
-  );
-  const managerialCostCents = acquisitionCostCents + accountedExpenseCents + estimatedExpenseCents;
-  const grossMarginCents = netPriceCents - managerialCostCents;
-  const marginBps = netPriceCents > 0 ? Math.round((grossMarginCents * 10_000) / netPriceCents) : null;
-  const sellingCostCents = sumCents(input.sellingCosts.map((c) => c.amountCents));
-  const commissionCents = calculateCommission(input.commission, {
-    grossPriceCents,
-    netPriceCents,
-    grossMarginCents,
-  });
-  const contributionBeforeTaxCents = grossMarginCents;
-  const contributionAfterCostsCents = grossMarginCents - sellingCostCents - commissionCents;
-  const breakEvenPriceCents = managerialCostCents + sellingCostCents + commissionCents;
-  const targetMarginBps = Math.min(Math.max(input.targetMarginBps, 0), 9_900);
-  const minimumPriceCents = targetMarginBps > 0
-    ? Math.ceil((managerialCostCents + sellingCostCents + commissionCents) / (1 - targetMarginBps / 10_000))
-    : breakEvenPriceCents;
+export function calculateCrmSaleProposal(input: CrmSaleProposalInput): CrmSaleProposalResult {
+  const announcedPriceCents = Math.max(0, Math.round(input.announcedPriceCents));
+  const proposedPriceCents = Math.max(0, Math.round(input.proposedPriceCents));
+  const commercialDiscountCents = Math.max(0, announcedPriceCents - proposedPriceCents);
+  const commercialDiscountBps = announcedPriceCents > 0
+    ? Math.round((commercialDiscountCents * 10_000) / announcedPriceCents)
+    : null;
   const paymentsTotalCents = sumCents(input.payments.map((p) => p.amountCents));
-  const paymentFeesCents = sumCents(input.payments.map((p) => p.feeCents));
-  const financePrincipalCents = sumCents(input.payments.map((p) => p.financePrincipalCents));
-  const financeBuyerInterestCents = sumCents(input.payments.map((p) => p.financeBuyerInterestCents));
-  const tradeInCents = sumCents(input.payments.filter((p) => p.kind === "TROCA").map((p) => p.amountCents));
-  const companyReceivesCents = paymentsTotalCents - paymentFeesCents;
-  const reconciliationDiffCents = paymentsTotalCents - netPriceCents;
+  const paymentDiffCents = paymentsTotalCents - proposedPriceCents;
+  const commissionCents = input.canSeeFinance
+    ? calculateCommission(input.commission, proposedPriceCents)
+    : null;
+  const purchasePriceCents = input.canSeeFinance ? Math.max(0, Math.round(input.purchasePriceCents ?? 0)) : null;
+  const accumulatedExpensesCents = input.canSeeFinance ? Math.max(0, Math.round(input.accumulatedExpensesCents ?? 0)) : null;
+  const taxesCents = input.canSeeFinance ? Math.max(0, Math.round(input.taxesCents ?? 0)) : null;
+  const extraCostCents = input.canSeeFinance ? Math.max(0, Math.round(input.extraCostCents ?? 0)) : null;
+  const totalCostCents = input.canSeeFinance
+    ? sumCents([purchasePriceCents, accumulatedExpensesCents, commissionCents, taxesCents, extraCostCents])
+    : null;
+  const netProfitCents = input.canSeeFinance && totalCostCents != null
+    ? proposedPriceCents - totalCostCents
+    : null;
+  const marginBps = input.canSeeFinance && proposedPriceCents > 0 && netProfitCents != null
+    ? Math.round((netProfitCents * 10_000) / proposedPriceCents)
+    : null;
+  const markupBps = input.canSeeFinance && totalCostCents != null && totalCostCents > 0 && netProfitCents != null
+    ? Math.round((netProfitCents * 10_000) / totalCostCents)
+    : null;
 
   return {
-    grossPriceCents,
-    discountCents,
-    netPriceCents,
-    accountedExpenseCents,
-    estimatedExpenseCents,
-    acquisitionCostCents,
-    managerialCostCents,
-    grossMarginCents,
-    marginBps,
-    sellingCostCents,
-    commissionCents,
-    contributionBeforeTaxCents,
-    contributionAfterCostsCents,
-    breakEvenPriceCents,
-    minimumPriceCents,
+    announcedPriceCents,
+    proposedPriceCents,
+    commercialDiscountCents,
+    commercialDiscountBps,
     paymentsTotalCents,
-    paymentFeesCents,
-    reconciliationDiffCents,
-    companyReceivesCents,
-    financePrincipalCents,
-    financeBuyerInterestCents,
-    tradeInCents,
-    taxStatus: input.fiscalProfileValidated ? "validated" : "not_calculated",
-    canClose: reconciliationDiffCents === 0 && input.fiscalProfileValidated,
+    paymentDiffCents,
+    commissionCents,
+    purchasePriceCents,
+    accumulatedExpensesCents,
+    taxesCents,
+    extraCostCents,
+    totalCostCents,
+    netProfitCents,
+    marginBps,
+    markupBps,
+    isBalanced: paymentDiffCents === 0,
   };
 }
 
-export function paymentReconciliationMessage(diffCents: MoneyCents): string {
-  if (diffCents === 0) return "Formas de pagamento fecham com o preço líquido.";
-  if (diffCents > 0) return `Sobra ${formatCents(diffCents)} nas formas de pagamento.`;
-  return `Falta ${formatCents(Math.abs(diffCents))} para fechar o preço líquido.`;
+export function paymentDiffMessage(diffCents: MoneyCents): string {
+  if (diffCents === 0) return "Condições de pagamento fecham com o preço proposto.";
+  if (diffCents > 0) return `Condições passam ${formatCents(diffCents)} do preço proposto.`;
+  return `Faltam ${formatCents(Math.abs(diffCents))} para fechar o preço proposto.`;
 }
 
-export function taxDisplayState(fiscalProfileValidated: boolean): { label: string; value: string | null } {
-  if (!fiscalProfileValidated) {
-    return {
-      label: "Tributos não calculados — falta validar o perfil fiscal",
-      value: null,
-    };
-  }
-  return {
-    label: "Perfil fiscal validado, mas sem regra tributária parametrizada no APP",
-    value: null,
-  };
-}
-
-export function evaluateFiscalValidation(input: FiscalValidationInput): FiscalValidationResult {
-  const missing: string[] = [];
-  if (!input.regime) missing.push("regime tributário e vigência");
-  if (!input.originUf) missing.push("UF de origem");
-  if (!input.destinationUf) missing.push("UF de destino");
-  if (input.buyerIsTaxpayer == null) missing.push("condição de contribuinte do comprador");
-  if (!input.operationType) missing.push("tipo de operação fiscal");
-  if (!input.entryDocumentationValidated) missing.push("documentação fiscal de entrada validada");
-  if (!input.exitConditionsValidated) missing.push("condições da saída validadas");
-  if (input.fiscalCostValidatedCents == null) missing.push("custo fiscal validado");
-  if (!input.fiscalResponsible) missing.push("responsável fiscal pela aprovação");
-  if (!input.fiscalApprovedAt) missing.push("data de aprovação fiscal");
-  if (!input.fiscalSource) missing.push("fonte/regra fiscal aplicável");
-
-  const baseComplete = missing.length === 0;
-  const icmsReady = baseComplete && Boolean(input.icmsUsedVehicleRuleApproved);
-  const pisCofinsReady = baseComplete && Boolean(input.pisCofinsRuleApproved);
-  const irpjCsllReady = baseComplete && Boolean(input.irpjCsllSaleLevelRuleApproved);
-
-  return {
-    profileComplete: baseComplete,
-    missing,
-    states: [
-      {
-        key: "icms",
-        label: "ICMS",
-        status: icmsReady ? "ready_without_amount" : "pending",
-        valueCents: null,
-        message: icmsReady
-          ? "Regra marcada como aprovada, mas o APP não possui parametrização segura para calcular o imposto definitivo. A base reduzida de 5% é base de cálculo, não alíquota."
-          : "Pendente de validação fiscal: confirmar documentação de entrada, condições da saída, UF, CFOP e enquadramento PR. Não calcular DIFAL por presunção.",
-      },
-      {
-        key: "pis_cofins",
-        label: "PIS/COFINS",
-        status: pisCofinsReady ? "ready_without_amount" : "pending",
-        valueCents: null,
-        message: pisCofinsReady
-          ? "Regra marcada como aprovada, mas a base fiscal validada precisa ser mantida separada da margem gerencial. Preparação/oficina/frete não entram automaticamente na base."
-          : "Pendente de aprovação: não aplicar 0,65% e 3,00% sem confirmação fiscal da base sobre diferença entre alienação e custo de aquisição fiscal.",
-      },
-      {
-        key: "irpj_csll",
-        label: "IRPJ/CSLL",
-        status: irpjCsllReady ? "ready_without_amount" : "not_sale_level",
-        valueCents: null,
-        message: irpjCsllReady
-          ? "Há indicação de regra aprovada, mas o APP ainda não possui cálculo parametrizado seguro para apresentar valor por caminhão."
-          : "Não calculado no nível da venda; apuração depende da contabilidade do Lucro Real. Não aplicar percentual fixo por caminhão.",
-      },
-    ],
-  };
-}
-
-export function saleSimulatorFinanceAccess(roles: AppRole[], email?: string | null): FinanceAccessDecision {
+export function saleSimulatorFinanceAccess(roles: AppRole[], email?: string | null) {
   if (isFinanceExecutive(roles, email)) return { canAccess: true, reason: null };
   return {
     canAccess: false,
-    reason: "Simulador financeiro exclusivo do Executivo/Admin. Este perfil não deve receber custos, margens, comissão ou tributos.",
+    reason: "Valores internos, comissão e dados financeiros são exclusivos do Executivo/Admin.",
   };
 }
 
@@ -321,16 +186,42 @@ export function simulationWritesToCrm(): boolean {
 export function canPersistRealSaleSafely(args: {
   hasTruckId: boolean;
   hasCustomerId: boolean;
-  hasAtomicSaleFlow: boolean;
+  hasSellerId: boolean;
+  hasCrmSaleSimulatorAction: boolean;
 }): { allowed: boolean; reason: string } {
-  if (!args.hasTruckId || !args.hasCustomerId) {
-    return { allowed: false, reason: "Selecione caminhão e cliente pelos IDs reais antes de confirmar." };
+  if (!args.hasTruckId || !args.hasCustomerId || !args.hasSellerId) {
+    return { allowed: false, reason: "Selecione caminhão, cliente e vendedor reais antes de avançar." };
   }
-  if (!args.hasAtomicSaleFlow) {
+  if (!args.hasCrmSaleSimulatorAction) {
     return {
       allowed: false,
-      reason: "Bloqueado: o APP atual não possui fluxo transacional único para venda, recebíveis, comissão e formalização com rollback seguro.",
+      reason: "O simulador real do CRM não está acessível no APP; nenhuma venda será gravada por esta tela.",
     };
   }
-  return { allowed: true, reason: "Fluxo real disponível." };
+  return { allowed: true, reason: "Fluxo real do CRM disponível." };
+}
+
+export function publicProposalLines(data: PublicProposalData): string[] {
+  return [
+    data.truckTitle,
+    [data.year, data.color, data.plate].filter(Boolean).join(" • "),
+    `Preço proposto: ${formatCents(data.priceCents)}`,
+    data.paymentSummary,
+    data.contractType ? `Condição: ${data.contractType === "garantia" ? "Garantia" : "Repasse"}` : "",
+    `Vendedor: ${data.sellerName}`,
+  ].filter(Boolean);
+}
+
+export function buildClientProposalDto(data: PublicProposalData): ClientProposalDto {
+  const customerName = data.customerName.trim();
+  if (!customerName) throw new Error("Selecione um cliente com nome válido para gerar a proposta.");
+  return {
+    customerName,
+    vehicleTitle: data.truckTitle,
+    vehicleDetails: [data.year, data.color, data.plate].filter(Boolean).join(" • "),
+    priceLabel: formatCents(data.priceCents),
+    paymentSummary: data.paymentSummary,
+    sellerName: data.sellerName,
+    contractLabel: data.contractType ? (data.contractType === "garantia" ? "Garantia" : "Repasse") : null,
+  };
 }
