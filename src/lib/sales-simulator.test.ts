@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  addDaysToIsoDate,
+  buildClientProposalDto,
+  buildProposalCode,
   calculateCrmSaleProposal,
   canPersistRealSaleSafely,
   centsFromMoney,
@@ -108,7 +111,6 @@ describe("CRM-like sale proposal simulator", () => {
 
   it("linhas públicas da proposta não incluem dados internos", () => {
     const lines = publicProposalLines({
-      customerName: "Cliente Teste",
       truckTitle: "Volvo FH 540",
       plate: "ABC1D23",
       year: 2022,
@@ -122,5 +124,77 @@ describe("CRM-like sale proposal simulator", () => {
     expect(lines.join(" ")).toContain("Volvo FH 540");
     expect(lines.join(" ")).toContain(formatCents(centsFromMoney(450_000)));
     expect(lines.join(" ")).not.toMatch(/comiss|margem|custo|lucro/i);
+  });
+
+  it("DTO do cliente monta ficha técnica e tabela de parcelas com dados reais", () => {
+    const dto = buildClientProposalDto({
+      truckTitle: "Volvo FH 540 6x2",
+      truckSubtitle: "Volvo FH",
+      plate: "abc1d23",
+      year: 2022,
+      color: "Branco",
+      mileageKm: 312_450,
+      fuel: "Diesel",
+      chassis: "9B9630",
+      priceCents: centsFromMoney(535_000),
+      paymentSummary: "2 parcelas",
+      payments: [
+        { method: "PIX", amountCents: centsFromMoney(267_500), dueDate: "2026-09-28" },
+        { method: "Transferência", amountCents: centsFromMoney(267_500), dueDate: "2026-10-28" },
+      ],
+      sellerName: "Império Caminhões",
+      contactLine: "(11) 99999-0000",
+      contractType: "garantia",
+      issuedAt: "2026-09-12",
+      validUntil: "2026-09-19",
+      proposalCode: "PROP-20260912",
+      publicNote: "Documentação completa.",
+    });
+
+    expect(dto.proposalCode).toBe("PROP-20260912");
+    expect(dto.issuedAtLabel).toBe("12/09/2026");
+    expect(dto.validUntilLabel).toBe("19/09/2026");
+    expect(dto.priceLabel).toBe(formatCents(centsFromMoney(535_000)));
+    expect(dto.specs).toEqual([
+      { label: "Ano", value: "2022" },
+      { label: "Placa", value: "ABC1D23" },
+      { label: "Cor", value: "Branco" },
+      { label: "Quilometragem", value: "312.450 km" },
+      { label: "Combustível", value: "Diesel" },
+      { label: "Chassi", value: "9B9630" },
+    ]);
+    expect(dto.payments).toEqual([
+      { installment: "1ª", method: "PIX", dueLabel: "28/09/2026", amountLabel: formatCents(centsFromMoney(267_500)) },
+      { installment: "2ª", method: "Transferência", dueLabel: "28/10/2026", amountLabel: formatCents(centsFromMoney(267_500)) },
+    ]);
+    expect(dto.publicNote).toBe("Documentação completa.");
+  });
+
+  it("DTO do cliente descarta dados ausentes e nunca inventa cliente", () => {
+    const dto = buildClientProposalDto({
+      truckTitle: "Scania R450",
+      plate: null,
+      year: null,
+      color: null,
+      mileageKm: 0,
+      fuel: null,
+      chassis: null,
+      priceCents: centsFromMoney(100_000),
+      paymentSummary: "A combinar",
+      sellerName: "Império Caminhões",
+    });
+
+    expect(dto.specs).toEqual([]);
+    expect(dto.payments).toEqual([]);
+    expect(dto.vehicleSubtitle).toBe("");
+    expect(dto.publicNote).toBeNull();
+    expect(dto.contractLabel).toBeNull();
+    expect(JSON.stringify(dto)).not.toMatch(/comiss|margem|lucro|custo|notes/i);
+  });
+
+  it("gera validade e código de proposta a partir da data", () => {
+    expect(addDaysToIsoDate("2026-09-12", 7)).toBe("2026-09-19");
+    expect(addDaysToIsoDate("2026-12-28", 7)).toBe("2027-01-04");
+    expect(buildProposalCode("2026-09-12")).toBe("PROP-20260912");
   });
 });

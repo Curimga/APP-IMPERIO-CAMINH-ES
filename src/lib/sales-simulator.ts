@@ -59,25 +59,53 @@ export interface CrmSaleProposalResult {
 }
 
 export interface PublicProposalData {
-  customerName: string;
   truckTitle: string;
+  truckSubtitle?: string | null;
   plate?: string | null;
   year?: number | null;
   color?: string | null;
+  mileageKm?: number | null;
+  fuel?: string | null;
+  chassis?: string | null;
   priceCents: MoneyCents;
   paymentSummary: string;
+  payments?: Array<{ method: string; amountCents: MoneyCents; dueDate?: string | null }>;
   sellerName: string;
+  contactLine?: string | null;
   contractType?: "garantia" | "repasse";
+  issuedAt?: string | null;
+  validUntil?: string | null;
+  proposalCode?: string | null;
+  publicNote?: string | null;
+}
+
+export interface ClientProposalSpec {
+  label: string;
+  value: string;
+}
+
+export interface ClientProposalPayment {
+  installment: string;
+  method: string;
+  dueLabel: string;
+  amountLabel: string;
 }
 
 export interface ClientProposalDto {
-  customerName: string;
+  proposalCode: string;
+  issuedAtLabel: string;
+  validUntilLabel: string;
   vehicleTitle: string;
-  vehicleDetails: string;
+  vehicleSubtitle: string;
+  specs: ClientProposalSpec[];
   priceLabel: string;
   paymentSummary: string;
-  sellerName: string;
+  payments: ClientProposalPayment[];
   contractLabel: string | null;
+  contactName: string;
+  contactLine: string;
+  publicNote: string | null;
+  disclaimer: string;
 }
 
 export function centsFromMoney(value: number | string | null | undefined): MoneyCents {
@@ -104,6 +132,38 @@ export function formatCents(cents: MoneyCents): string {
 
 export function sumCents(values: Array<MoneyCents | null | undefined>): MoneyCents {
   return values.reduce<number>((acc, value) => acc + Math.round(value ?? 0), 0);
+}
+
+export function formatDateBr(value: string | null | undefined): string {
+  if (!value) return "—";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("pt-BR").format(parsed);
+}
+
+export function formatMileageKm(value: number | null | undefined): string | null {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  const km = Math.round(Number(value));
+  if (km <= 0) return null;
+  return `${new Intl.NumberFormat("pt-BR").format(km)} km`;
+}
+
+export function addDaysToIsoDate(isoDate: string, days: number): string {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate.trim());
+  const base = iso
+    ? new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+    : new Date();
+  base.setDate(base.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`;
+}
+
+export function buildProposalCode(isoDate: string): string {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate.trim());
+  const stamp = iso ? `${iso[1]}${iso[2]}${iso[3]}` : new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `PROP-${stamp}`;
 }
 
 export function calcPercentCents(amountCents: MoneyCents, bps: number): MoneyCents {
@@ -213,15 +273,43 @@ export function publicProposalLines(data: PublicProposalData): string[] {
 }
 
 export function buildClientProposalDto(data: PublicProposalData): ClientProposalDto {
-  const customerName = data.customerName.trim();
-  if (!customerName) throw new Error("Selecione um cliente com nome válido para gerar a proposta.");
+  const specs: ClientProposalSpec[] = [];
+  if (data.year) specs.push({ label: "Ano", value: String(data.year) });
+  if (data.plate) specs.push({ label: "Placa", value: String(data.plate).toUpperCase() });
+  if (data.color) specs.push({ label: "Cor", value: data.color });
+  const mileage = formatMileageKm(data.mileageKm);
+  if (mileage) specs.push({ label: "Quilometragem", value: mileage });
+  if (data.fuel) specs.push({ label: "Combustível", value: data.fuel });
+  if (data.chassis) specs.push({ label: "Chassi", value: data.chassis });
+
+  const payments: ClientProposalPayment[] = (data.payments ?? []).map((payment, index) => ({
+    installment: `${index + 1}ª`,
+    method: payment.method,
+    dueLabel: formatDateBr(payment.dueDate),
+    amountLabel: formatCents(payment.amountCents),
+  }));
+
+  const vehicleSubtitle = [
+    data.truckSubtitle,
+    [data.year, data.color].filter(Boolean).join(" · "),
+  ].filter(Boolean).join(" — ");
+
+  const publicNote = data.publicNote?.trim() ? data.publicNote.trim() : null;
+
   return {
-    customerName,
+    proposalCode: data.proposalCode?.trim() || buildProposalCode(data.issuedAt ?? new Date().toISOString().slice(0, 10)),
+    issuedAtLabel: formatDateBr(data.issuedAt),
+    validUntilLabel: formatDateBr(data.validUntil),
     vehicleTitle: data.truckTitle,
-    vehicleDetails: [data.year, data.color, data.plate].filter(Boolean).join(" • "),
+    vehicleSubtitle,
+    specs,
     priceLabel: formatCents(data.priceCents),
     paymentSummary: data.paymentSummary,
-    sellerName: data.sellerName,
+    payments,
     contractLabel: data.contractType ? (data.contractType === "garantia" ? "Garantia" : "Repasse") : null,
+    contactName: data.sellerName,
+    contactLine: data.contactLine?.trim() || "Consulte nossa equipe comercial para condições finais.",
+    publicNote,
+    disclaimer: "Proposta comercial sem valor fiscal. Valores e condições sujeitos a confirmação de disponibilidade e análise de crédito.",
   };
 }
