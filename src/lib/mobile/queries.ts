@@ -832,7 +832,7 @@ export function useMobileFinance() {
   const { roles, user } = useAuth();
   const canAccessFinance = isFinanceExecutive(roles, user?.email);
   return useQuery({
-    queryKey: ["finance-mobile", canAccessFinance],
+    queryKey: ["finance-mobile", "crm-parity-v2", canAccessFinance],
     enabled: canAccessFinance,
     queryFn: async () => {
       const snap = await fetchDashboardSnapshot();

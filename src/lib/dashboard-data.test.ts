@@ -19,16 +19,14 @@ import {
  * - `src/lib/reports/weekly/weekly-report-data.ts`   → `relatorios/semanal`
  *
  * Regras que os testes fixam (todas conferidas no código do CRM):
- * - Receita: trucks com `sold_at` no período e status `vendido`/`repasse`.
- *   Sem `sold_price`, conta operacionalmente, mas não entra nos valores.
- * - CMV (`costC`): Σ(purchase_price + expenses_total) dos VENDIDOS, com
- *   `expenses_total` sendo lifetime do caminhão.
- * - Despesas gerais: `payables` com `truck_id` por `occurred_at` +
- *   `general_expenses` sem `truck_id` e sem aquisição (`custo_aquisicao` ou
- *   `purchase_installment_id`). Sem filtro de status e sem `truck_expenses`.
- * - Cards do print: `lucroBruto = receita − compra`,
- *   `lucroLiquidoCaminhoes = lucroBruto − despesasDiretas` e
- *   `resultadoGlobal = lucroBruto − OPEX`.
+ * - Receita: trucks com `sold_at` no período, sem filtro de status.
+ *   Sem `sold_price`, conta operacionalmente com receita zero.
+ * - Compra dos veículos: Σ(purchase_price) dos VENDIDOS.
+ * - Despesas diretas: Σ(expenses_total) dos VENDIDOS, com `expenses_total`
+ *   sendo lifetime do caminhão.
+ * - Despesas gerais/OPEX: `general_expenses` ativas, sem `truck_id` e sem
+ *   aquisição. Sem `truck_expenses`/`payables` de caminhão.
+ * - Resultado do CRM nos cards: `receita − compra − despesas diretas − OPEX`.
  * - Semana do RELATÓRIO = segunda a domingo; semana do KPI = domingo a sábado.
  * - Duas regras de rateio diferentes no CRM (ver testes de `imperioShare`).
  */
@@ -224,29 +222,27 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     expect(r.custoCompra).toBe(80000);
     expect(r.despesasCaminhao).toBe(5000);
     expect(r.custoTotal).toBe(85000);
-    // Cards do print: despesas diretas são as despesas dos caminhões vendidos;
-    // despesas gerais/OPEX somam payables com truck_id + gerais não duplicadas.
     expect(r.despesasDiretas).toBe(5000);
-    expect(r.despesasGerais).toBe(3000);
-    expect(r.opex).toBe(3000);
+    expect(r.despesasGerais).toBe(1000);
+    expect(r.opex).toBe(1000);
     expect(r.lucroBruto).toBe(20000);
     expect(r.lucroLiquidoCaminhoes).toBe(15000);
-    expect(r.resultadoGlobal).toBe(17000);
-    expect(r.lucroOperacional).toBe(17000);
+    expect(r.resultadoGlobal).toBe(14000);
+    expect(r.lucroOperacional).toBe(14000);
     expect(r.margemBruta).toBeCloseTo(20, 5);
     expect(r.margemLiquidaCaminhoes).toBeCloseTo(15, 5);
-    expect(r.margemGlobal).toBeCloseTo(17, 5);
+    expect(r.margemGlobal).toBeCloseTo(14, 5);
     expect(r.roiPeriodo).toBeCloseTo((15000 / 85000) * 100, 5);
     expect(r.custoAquisicao).toBe(0);
     expect(r.compras).toBe(0);
     expect(r.vendas).toBe(1);
   });
 
-  it("receita filtra status: negociacao com sold_at não entra", () => {
+  it("receita NÃO filtra status: negociacao com sold_at entra", () => {
     const snap = withTruck(baseSnap(), { status: "negociacao" });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
-    expect(r.vendas).toBe(0);
-    expect(r.receita).toBe(0);
+    expect(r.vendas).toBe(1);
+    expect(r.receita).toBe(100000);
   });
 
   it("receita NÃO exige sold_price: caminhão sem preço conta como venda com 0", () => {
@@ -263,11 +259,11 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     expect(r.receita).toBe(100000);
   });
 
-  it("offline fica fora dos indicadores financeiros", () => {
+  it("offline com sold_at entra como no CRM mensal", () => {
     const snap = withTruck(baseSnap(), { status: "offline" });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
-    expect(r.vendas).toBe(0);
-    expect(r.receita).toBe(0);
+    expect(r.vendas).toBe(1);
+    expect(r.receita).toBe(100000);
   });
 
   it("não usa updated_at como receita: sem sold_at o caminhão fica fora", () => {
@@ -318,13 +314,13 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     expect(r.compras).toBe(80000);
   });
 
-  it("opex do CRM NÃO filtra status: payable e despesa cancelados entram", () => {
+  it("opex do card ignora despesa geral cancelada e payable de caminhão", () => {
     let snap = withPayable(baseSnap(), { status: "cancelado", amount: 2000 });
     snap = withGeneralExpense(snap, { id: "g2", status: "cancelado", amount: 4000, imperio_amount: 4000, shared: false });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
     expect(r.despesasDiretas).toBe(0);
-    expect(r.despesasGerais).toBe(6000);
-    expect(r.opex).toBe(6000);
+    expect(r.despesasGerais).toBe(0);
+    expect(r.opex).toBe(0);
   });
 
   it("truck_expenses NÃO entram no relatório mensal do CRM", () => {
@@ -340,7 +336,6 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     // t1 (80k, vendido) + t2 (60k, comprado em setembro)
     expect(r.compras).toBe(140000);
     expect(r.custoAquisicao).toBe(140000);
-    // O card de lucro bruto do print usa a compra dos vendidos, não compras do mês.
     expect(r.lucroBruto).toBe(20000);
   });
 
@@ -387,8 +382,8 @@ describe("computeWeekReport — espelho de relatorios/semanal", () => {
     expect(r.opex).toBe(0);
     expect(r.lucroBruto).toBe(20000);
     expect(r.lucroLiquidoCaminhoes).toBe(15000);
-    expect(r.resultadoGlobal).toBe(20000);
-    expect(r.lucroOperacional).toBe(20000);
+    expect(r.resultadoGlobal).toBe(15000);
+    expect(r.lucroOperacional).toBe(15000);
   });
 
   it("inclui venda no domingo que fecha a semana", () => {
@@ -401,16 +396,16 @@ describe("computeWeekReport — espelho de relatorios/semanal", () => {
     expect(computeWeekReport(snap, new Date(2026, 8, 10)).vendas).toBe(0);
   });
 
-  it("opex semanal usa payables com truck_id + gerais não duplicadas — igual ao mensal", () => {
+  it("opex semanal usa gerais não duplicadas", () => {
     let snap = withTruck(baseSnap(), { sold_at: "2026-09-07" });
     snap = withPayable(snap, { occurred_at: "2026-09-08", amount: 2000 });
     snap = withGeneralExpense(snap, { occurred_at: "2026-09-08", amount: 2000, imperio_amount: 1000, shared: true });
     const r = computeWeekReport(snap, new Date(2026, 8, 10));
     expect(r.despesasDiretas).toBe(5000);
-    expect(r.despesasGerais).toBe(3000);
-    expect(r.opex).toBe(3000);
+    expect(r.despesasGerais).toBe(1000);
+    expect(r.opex).toBe(1000);
     expect(r.lucroLiquidoCaminhoes).toBe(15000);
-    expect(r.resultadoGlobal).toBe(100000 - 80000 - 3000);
+    expect(r.resultadoGlobal).toBe(100000 - 85000 - 1000);
   });
 
   it("truck_expenses NÃO entram no relatório semanal do CRM", () => {
@@ -420,13 +415,13 @@ describe("computeWeekReport — espelho de relatorios/semanal", () => {
     expect(r.opex).toBe(0);
   });
 
-  it("semanal restringe status e ignora venda sem sold_price nos valores", () => {
+  it("semanal não restringe status e venda sem sold_price mantém custo", () => {
     let snap = withTruck(baseSnap(), { status: "negociacao", sold_at: "2026-09-09", sold_price: 100000 });
     snap = withTruck(snap, { id: "t2", sold_at: "2026-09-09", sold_price: null, purchase_price: 90000, expenses_total: 1000 });
     const r = computeWeekReport(snap, new Date(2026, 8, 10));
-    expect(r.vendas).toBe(1);
-    expect(r.receita).toBe(0);
-    expect(r.custoTotal).toBe(0);
+    expect(r.vendas).toBe(2);
+    expect(r.receita).toBe(100000);
+    expect(r.custoTotal).toBe(176000);
   });
 
   it("despesa de compra não entra no opex semanal", () => {

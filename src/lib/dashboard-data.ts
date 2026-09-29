@@ -26,7 +26,7 @@ export async function fetchDashboardSnapshot() {
     supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id"),
     supabase.from("employees").select("id,full_name,salary,commission_amount,status").eq("status", "ativo"),
     supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id").gte("starts_at", today.toISOString()).lte("starts_at", next30),
-    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id").gte("occurred_at", start12m.slice(0, 10)),
+    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id,status").gte("occurred_at", start12m.slice(0, 10)),
     supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at"),
     supabase.from("truck_purchase_installments").select("*"),
   ]);
@@ -236,22 +236,22 @@ export interface PeriodReport {
   custoTotal: number;
   /** DRE: Σ `purchase_price` dos trucks com `purchase_date` no período. */
   custoAquisicao: number;
-  /** Despesas diretas dos caminhões vendidos (`expenses_total`). */
+  /** Despesas dos caminhões vendidos (`expenses_total`), já incluídas no CMV. */
   despesasDiretas: number;
-  /** Despesas gerais/OPEX do período. */
+  /** Despesas gerais/OPEX do período, sem duplicar despesas de caminhão. */
   despesasGerais: number;
-  /** Alias para despesas gerais/OPEX do período. */
+  /** Alias para despesas do período do CRM. */
   opex: number;
-  /** CRM do print: `receita − custoCompra`. */
+  /** CRM do card: `receita − purchase_price`. */
   lucroBruto: number;
   margemBruta: number;
-  /** CRM do print: `lucroBruto − despesasDiretas`. */
+  /** CRM do card: `lucroBruto − expenses_total`. */
   lucroLiquidoCaminhoes: number;
   margemLiquidaCaminhoes: number;
   /** Mantido para gráficos: mesmo valor de `resultadoGlobal`. */
   lucroOperacional: number;
   margemOperacional: number;
-  /** CRM do print: `lucroBruto − despesasGerais/OPEX`. */
+  /** CRM do card: `lucroLiquidoCaminhoes − despesas do período`. */
   resultadoGlobal: number;
   margemGlobal: number;
   roiPeriodo: number;
@@ -271,28 +271,16 @@ const dmy = (d: Date | null) => (d ? `${pad2(d.getDate())}/${pad2(d.getMonth() +
  * `relatorios/mensal-executivo` (`monthly-report-data.ts`) e
  * `relatorios/semanal` (`weekly-report-data.ts`).
  *
- * Receita: `trucks` com `sold_at` no período e status `vendido`/`repasse`.
- *   Venda sem `sold_price` entra na contagem operacional, mas fica fora de
- *   faturamento/compra/lucro/ticket. `monthly-report-data.ts:294-305` e
- *   `completeSales`.
- * Estrutura do print do CRM:
- *   - Compra dos veículos = Σ `purchase_price` dos trucks vendidos.
- *   - Despesas diretas (caminhões) = Σ `expenses_total` dos trucks vendidos.
- *   - Custo total dos caminhões = compra + despesas diretas.
- *   - Despesas gerais/OPEX = payables com `truck_id` por `occurred_at` +
- *     `general_expenses` sem `truck_id` e sem `custo_aquisicao`/parcela de compra.
+ * Receita: `trucks` com `sold_at` no período. O CRM não filtra status aqui.
+ * Compra dos veículos: Σ `purchase_price` DOS VENDIDOS.
+ * Despesas diretas: Σ `expenses_total` DOS VENDIDOS — lifetime do caminhão.
+ * Despesas gerais/OPEX: `general_expenses` ativas, sem `truck_id` e sem
+ *   aquisição. Despesas vinculadas a caminhão já aparecem em `expenses_total`;
+ *   aquisições são compra, não OPEX.
+ * Cards do CRM:
  *   - Lucro bruto = faturamento − compra dos veículos.
  *   - Lucro líquido caminhões = lucro bruto − despesas diretas.
- *   - Resultado líquido global = lucro bruto − despesas gerais/OPEX.
- * CMV (`costC`): Σ `sumMoney([purchase_price, expenses_total])` DOS VENDIDOS —
- *   `expenses_total` é lifetime do caminhão, não despesa do período.
- * Despesas gerais (`despesasGerais`): `payables` com `truck_id` no período por
- *   `occurred_at` + `general_expenses` do período filtradas por
- *   `!isAcquisitionPayment(e) && !e.truck_id`. As gerais vinculadas a caminhão
- *   já compõem `expenses_total`; aquisições são investimento, não OPEX.
- * Lucro operacional no APP é um alias do resultado global para manter gráficos
- * antigos lendo o mesmo número exibido no card principal.
- *   `monthly-report-data.ts:208-230`.
+ *   - Resultado líquido global = lucro líquido caminhões − despesas do período.
  * Compras: investimento em caminhões: compras do período (exceto offline e
  *   exceto caminhões já pagos por lançamento de aquisição) + pagamentos de
  *   aquisição em `general_expenses`.
@@ -315,30 +303,26 @@ export function computePeriodReport(
     const d = dateOnly(iso);
     return !!d && d >= fromISO && d <= untilISO;
   };
-  // CRM mensal: vendas operacionais são apenas vendido/repasse; vendas sem
-  // preço contam em quantidade, mas não entram nos valores financeiros.
-  const sold = (s.trucks ?? []).filter(
-    (t) => inPeriod(t?.sold_at) && (t?.status === "vendido" || t?.status === "repasse"),
-  );
-  const pricedSold = sold.filter((t) => t?.sold_price != null);
-  const receita = sumMoney(pricedSold.map((t) => t?.sold_price));
-  // `costC` do CRM: CMV dos VENDIDOS. `expenses_total` é lifetime do caminhão.
-  const custoCompra = sumMoney(pricedSold.map((t) => t?.purchase_price));
-  const despesasCaminhao = sumMoney(pricedSold.map((t) => t?.expenses_total));
-  // CRM: `sumMoney(map(t => sumMoney([t.purchase_price, t.expenses_total])))`.
+  const sold = (s.trucks ?? []).filter((t) => inPeriod(t?.sold_at));
+  const receita = sumMoney(sold.map((t) => t?.sold_price));
+  const custoCompra = sumMoney(sold.map((t) => t?.purchase_price));
+  const despesasCaminhao = sumMoney(sold.map((t) => t?.expenses_total));
   const custoTotal = money(custoCompra + despesasCaminhao);
 
-  // Despesas gerais/OPEX do CRM mensal: contas a pagar com `truck_id` + despesas
-  // gerais não vinculadas a caminhão e que não sejam aquisição.
-  const opexDireto = sumMoney(
-    (s.payables ?? []).filter((p) => !!p?.truck_id && inPeriod(p?.occurred_at)).map((p) => p?.amount),
-  );
+  // OPEX do card: somente despesas gerais não duplicadas. Contas/despesas
+  // vinculadas a caminhão já foram absorvidas em `expenses_total`.
   const opexGeral = sumMoney(
     (s.generalExp ?? [])
-      .filter((r) => inPeriod(r?.occurred_at) && !r?.truck_id && !isAcquisitionPayment(r))
+      .filter(
+        (r) =>
+          inPeriod(r?.occurred_at) &&
+          r?.status !== "cancelado" &&
+          !r?.truck_id &&
+          !isAcquisitionPayment(r),
+      )
       .map(reportExpenseValue),
   );
-  const opex = money(opexDireto + opexGeral);
+  const opex = money(opexGeral);
 
   // Compras do período (`calculatePurchases`): caminhões comprados, excluindo
   // offline e caminhões já representados por pagamento de aquisição, + pagamentos.
@@ -353,7 +337,7 @@ export function computePeriodReport(
 
   const lucroBruto = money(receita - custoCompra);
   const lucroLiquidoCaminhoes = money(lucroBruto - despesasCaminhao);
-  const resultadoGlobal = money(lucroBruto - opex);
+  const resultadoGlobal = money(lucroLiquidoCaminhoes - opex);
   const lucroOperacional = resultadoGlobal;
 
   // CRM: `status === "pago" || received_at`. Em receivable o status "pago" NUNCA
