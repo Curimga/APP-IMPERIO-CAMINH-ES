@@ -6,7 +6,7 @@ import { useTrucks } from "@/lib/mobile/queries";
 import { createGeneralExpense } from "@/lib/mobile/actions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { truckTitle } from "@/lib/truck-title";
-import { todayISO } from "@/lib/format";
+import { parseMoney, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
@@ -85,7 +85,7 @@ function RegisterExpense() {
     ev.preventDefault();
     setError(null);
     if (!selectedTruckId) return setError("Selecione o caminhão.");
-    const val = Number(amount.replace(/[^\d.]/g, ""));
+    const val = parseMoney(amount, 0);
     if (!Number.isFinite(val) || val <= 0) {
       setError("Informe um valor válido maior que zero.");
       return;
@@ -97,7 +97,7 @@ function RegisterExpense() {
         category: kind,
         description: description.trim() || null,
         notes: notes.trim() || null,
-        amount: Number(val.toFixed(2)),
+        amount: val,
         supplier: supplier.trim() || null,
         status: status || null,
         payment_method: paymentMethod || null,

@@ -7,6 +7,7 @@ import { useTruckDetail } from "@/lib/mobile/queries";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { isFinanceExecutive } from "@/lib/mobile/perm";
+import { parseMoney } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/garagem/novo")({
   validateSearch: (s: Record<string, unknown>) => {
@@ -68,7 +69,12 @@ const EMPTY: Form = {
 const PAYMENT_METHODS = ["PIX", "BOLETO", "TRANSFERENCIA", "DINHEIRO", "CARTAO", "OUTRO"] as const;
 
 const toNumber = (v: string) => {
-  const n = Number(v.replace(/[^\d.]/g, ""));
+  const n = parseMoney(v, NaN);
+  return Number.isFinite(n) ? n : null;
+};
+
+const toInt = (v: string) => {
+  const n = Number(String(v ?? "").replace(/\D/g, ""));
   return Number.isFinite(n) ? n : null;
 };
 
@@ -131,12 +137,12 @@ function NewTruck() {
     const payload = {
       brand: form.brand.trim(),
       model: form.model.trim(),
-      year: form.year ? toNumber(form.year) : null,
+      year: form.year ? toInt(form.year) : null,
       plate: form.plate.trim().toUpperCase() || null,
       color: form.color.trim() || null,
       chassis: form.chassis.trim() || null,
       renavam: form.renavam.trim() || null,
-      mileage: form.mileage ? toNumber(form.mileage) : null,
+      mileage: form.mileage ? toInt(form.mileage) : null,
       fuel: form.fuel.trim() || null,
       transmission: form.transmission.trim() || null,
       origin: form.origin.trim() || null,
@@ -146,7 +152,7 @@ function NewTruck() {
       purchase_price: form.purchase_price ? toNumber(form.purchase_price) : null,
       purchase_payment_method: form.purchase_payment_method || null,
       purchase_installments_count: form.purchase_installments_count
-        ? toNumber(form.purchase_installments_count)
+        ? toInt(form.purchase_installments_count)
         : null,
       purchase_total_paid: form.purchase_total_paid ? toNumber(form.purchase_total_paid) : null,
       purchase_total_pending: form.purchase_total_pending

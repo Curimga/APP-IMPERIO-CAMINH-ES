@@ -8,10 +8,14 @@
 
 /** Arredonda um valor monetário para exatamente 2 casas, eliminando resíduos de ponto flutuante. */
 export const money = (value: number | string | null | undefined): number => {
+  // strings passam pelo mesmo parser de brl(): "50,50" e "1.500,00" são válidos
+  if (typeof value === "string") return parseMoney(value);
   const n = typeof value === "number" ? value : Number(value ?? 0);
   if (!Number.isFinite(n)) return 0;
-  // usa string exponencial para evitar erros de binário (ex.: 1.005 -> 1.00)
-  const r = Math.round(Number(`${Math.abs(n)}e+2`)) / 100;
+  // half-up em centavos inteiros: 1.005 -> 1.01, 1.004 -> 1.00 (sem perder centavo)
+  const r = Math.round((Math.abs(n) + Number.EPSILON) * 100) / 100;
+  // evita "-0" (Object.is distingue -0 de 0 e ele vazaria para a tela/JSON)
+  if (r === 0) return 0;
   return n < 0 ? -r : r;
 };
 
@@ -41,7 +45,10 @@ export const parseMoney = (value: number | string | null | undefined, fallback =
   const normalized = raw.includes(",")
     ? raw.replace(/\./g, "").replace(",", ".")
     : raw;
-  const parsed = Number(normalized.replace(/[^0-9.-]/g, ""));
+  const cleaned = normalized.replace(/[^0-9.-]/g, "");
+  // "abc" -> "" e Number("") === 0, o que fazia texto inválido virar zero em vez do fallback
+  if (!cleaned || /^[.-]+$/.test(cleaned)) return fallback;
+  const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? money(parsed) : fallback;
 };
 

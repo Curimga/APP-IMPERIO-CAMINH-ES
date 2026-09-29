@@ -64,7 +64,7 @@ export interface TruckFinanceSnapshot {
  * compra + despesas; lucro = receita − custo; margem sobre a receita.
  */
 export function truckFinanceSnapshot(t: TruckFinanceInput | null | undefined): TruckFinanceSnapshot {
-  const sold = t?.status === "vendido";
+  const sold = t?.status === "vendido" || t?.status === "repasse";
   const purchasePrice = money(t?.purchase_price);
   const expensesTotal = money(t?.expenses_total);
   const investedCost = sumMoney([purchasePrice, expensesTotal]);
@@ -173,11 +173,12 @@ export interface TruckExpenseSource {
 /**
  * Valor efetivo de uma despesa geral — mesma regra do banco
  * (`fn_general_expense_effective_amount`) e dos relatórios do CRM
- * (`imperioShare`): compartilhada conta só a parte do Império; não
- * compartilhada conta o `amount` integral.
+   * (`imperioShare`): compartilhada conta só a parte do Império; não
+   * compartilhada conta o `amount` integral, caindo para `imperio_amount`
+   * quando o `amount` é nulo (mesma ordem de `reportExpenseValue` no CRM).
  */
 export function generalExpenseAmount(r: TruckExpenseSource): number {
-  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.amount ?? 0);
+  return r.shared ? Number(r.imperio_amount ?? 0) : Number(r.amount ?? r.imperio_amount ?? 0);
 }
 
 /**

@@ -20,7 +20,7 @@ import {
   MoneyStat,
 } from "@/components/mobile/ui";
 import { FinanceReport } from "@/components/mobile/finance-report";
-import { dateBR } from "@/lib/format";
+import { dateBR, money } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -60,7 +60,7 @@ function Financeiro() {
 
   const valuemaybe = (v: number, pre = "R$ "): string =>
     reveal
-      ? `${pre}${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ? `${pre}${money(Number(v ?? 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : "R$ ••••";
   const banks = (snap.banks ?? []) as Tables<"bank_accounts">[];
   const receivables = (snap.receivables ?? []) as Tables<"receivables">[];

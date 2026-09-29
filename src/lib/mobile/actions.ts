@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { TruckStatus } from "@/lib/truck-status";
+import { todayISO } from "@/lib/format";
 import {
   restoreStatusAfterService,
   serviceCategoryToTruckStatus,
@@ -437,6 +438,9 @@ export interface PaymentInput {
   installment_total?: number | null;
   payment_method?: Enums<"payment_method"> | null;
   notes?: string | null;
+  /** Data de ocorrência (YYYY-MM-DD). Padrão: hoje. Sem isso o lançamento nunca
+   * entra nos relatórios mensais/semanais, que filtram por `occurred_at`. */
+  occurred_at?: string | null;
 }
 
 /**
@@ -450,6 +454,7 @@ export interface PaymentInput {
  */
 export async function createPayment(input: PaymentInput): Promise<string> {
   const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const occurredAt = input.occurred_at?.trim() || todayISO();
 
   if (input.kind === "pagar") {
     const { data, error } = await supabase
@@ -463,6 +468,7 @@ export async function createPayment(input: PaymentInput): Promise<string> {
         notes: input.notes?.trim() || null,
         payment_method: input.payment_method ?? null,
         status: "aberto",
+        occurred_at: occurredAt,
         created_by: createdBy,
       })
       .select("id")
@@ -483,6 +489,7 @@ export async function createPayment(input: PaymentInput): Promise<string> {
       installment_number: input.installment_number ?? null,
       installment_total: input.installment_total ?? null,
       status: "aberto",
+      occurred_at: occurredAt,
       created_by: createdBy,
     })
     .select("id")
