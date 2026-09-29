@@ -273,34 +273,6 @@ export function FinanceReport({ snap, reveal }: { snap: DashboardSnapshot; revea
 
           <WaterfallCard report={current} reveal={reveal} />
 
-          {/* Compras e fluxo de caixa (espelho do CRM) */}
-          <MobileCard className="p-4">
-            <SectionTitle className="mb-1">
-              <span className="flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5 text-gold" /> Compras e fluxo de caixa
-              </span>
-            </SectionTitle>
-            <div className="grid grid-cols-2 gap-2">
-              <MoneyStat label="Compras" value={<Value value={current.compras} reveal={reveal} />} accent="muted" />
-              <MoneyStat label="Resultado do fluxo" value={<Value value={current.entradas - current.saidas} reveal={reveal} />} accent={current.entradas - current.saidas >= 0 ? "success" : "destructive"} />
-            </div>
-            <div className="mt-2 flex items-center justify-around gap-2 rounded-xl bg-muted/50 p-3">
-              <div className="text-center">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-success">Entradas</div>
-                <div className="mt-0.5 text-[14px] font-extrabold tabular-nums text-success">
-                  <Value value={current.entradas} reveal={reveal} />
-                </div>
-              </div>
-              <div className="h-8 w-px bg-border" />
-              <div className="text-center">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-destructive">Saídas</div>
-                <div className="mt-0.5 text-[14px] font-extrabold tabular-nums text-destructive">
-                  <Value value={current.saidas} reveal={reveal} />
-                </div>
-              </div>
-            </div>
-          </MobileCard>
-
           <PeriodCard
             header={isNew ? "Comparativo dos últimos 12 meses" : "Comparativo das últimas 8 semanas"}
             items={isNew ? months : weeks}
