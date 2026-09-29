@@ -147,14 +147,17 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
 
   // KPIs idênticos ao CRM (`computeExecutiveKpis` do dashboard): lucro bruto e
   // líquido são ACUMULADOS de todos os vendidos (lifetime); opex = contas pagas
-  // (status "pago") + despesas gerais dos últimos 12 meses. Espelho EXATO do CRM.
+  // (status "pago") + despesas gerais dos últimos 12 meses. Despesas gerais
+  // vinculadas a caminhões ficam fora para não duplicar o `expenses_total`.
   const grossProfit = sold.reduce((s, t) => s + (Number(t.sold_price ?? 0) - Number(t.purchase_price ?? 0)), 0);
   const totalExpenses = sumMoney((sold || []).map((t) => t?.expenses_total));
   const netProfit = money(grossProfit - totalExpenses);
 
   // CRM (dashboard-data.ts:102-103): gerais SEM filtro de status e como a
   // `imperioShare` do CRM (não compartilhada prefere imperio_amount).
-  const generalOpex = (s.generalExp ?? []).reduce((sum, r) => sum + imperioShare(r), 0);
+  const generalOpex = (s.generalExp ?? [])
+    .filter((r) => !r?.truck_id)
+    .reduce((sum, r) => sum + imperioShare(r), 0);
   const opex = s.payables.filter((p) => p.status === "pago").reduce((s, r) => s + Number(r.amount ?? 0), 0) + generalOpex;
 
   const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
@@ -262,18 +265,17 @@ const dmy = (d: Date | null) => (d ? `${pad2(d.getDate())}/${pad2(d.getMonth() +
  *   - Compra dos veículos = Σ `purchase_price` dos trucks vendidos.
  *   - Despesas diretas (caminhões) = Σ `expenses_total` dos trucks vendidos.
  *   - Custo total dos caminhões = compra + despesas diretas.
- *   - Despesas gerais/OPEX = payables com `truck_id` por `occurred_at` + todas
- *     as `general_expenses` do período.
+ *   - Despesas gerais/OPEX = payables com `truck_id` por `occurred_at` +
+ *     `general_expenses` sem vínculo de caminhão no período.
  *   - Lucro bruto = faturamento − compra dos veículos.
  *   - Lucro líquido caminhões = lucro bruto − despesas diretas.
  *   - Resultado líquido global = lucro bruto − despesas gerais/OPEX.
  * CMV (`costC`): Σ `sumMoney([purchase_price, expenses_total])` DOS VENDIDOS —
  *   `expenses_total` é lifetime do caminhão, não despesa do período.
  * Despesas (`getDesp`): `payables` com `truck_id` no período por `occurred_at`
- *   + TODAS as `general_expenses` do período (com ou sem vínculo de caminhão,
- *   inclusive as de compra). SEM filtro de status, SEM dedupe e a tabela
- *   `truck_expenses` NÃO é consultada. `monthly-report-data.ts:111-112,158-160`
- *   e `weekly-report-data.ts:75-76,101-102`.
+ *   + `general_expenses` sem `truck_id` no período. As gerais vinculadas a
+ *   caminhões já compõem `expenses_total` e não podem entrar novamente no OPEX.
+ *   SEM filtro de status e a tabela `truck_expenses` NÃO é consultada.
  * Lucro operacional no APP é um alias do resultado global para manter gráficos
  * antigos lendo o mesmo número exibido no card principal.
  *   `monthly-report-data.ts:208-230`.
@@ -306,14 +308,13 @@ export function computePeriodReport(
   // CRM: `sumMoney(map(t => sumMoney([t.purchase_price, t.expenses_total])))`.
   const custoTotal = sumMoney(sold.map((t) => sumMoney([t?.purchase_price, t?.expenses_total])));
 
-  // Despesas gerais/OPEX do CRM: contas a pagar com `truck_id` + TODAS as
-  // `general_expenses` do período. Sem filtro de status, sem excluir despesa de
-  // compra, sem `truck_expenses` e sem dedupe.
+  // Despesas gerais/OPEX do CRM: contas a pagar com `truck_id` + despesas
+  // gerais sem vínculo de caminhão. As vinculadas já estão em `expenses_total`.
   const opexDireto = sumMoney(
     (s.payables ?? []).filter((p) => !!p?.truck_id && inPeriod(p?.occurred_at)).map((p) => p?.amount),
   );
   const opexGeral = sumMoney(
-    (s.generalExp ?? []).filter((r) => inPeriod(r?.occurred_at)).map(reportExpenseValue),
+    (s.generalExp ?? []).filter((r) => !r?.truck_id && inPeriod(r?.occurred_at)).map(reportExpenseValue),
   );
   const opex = money(opexDireto + opexGeral);
 
