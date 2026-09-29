@@ -12,7 +12,7 @@ export async function fetchDashboardSnapshot() {
   const next30 = new Date(today.getTime() + 30 * 86400000).toISOString();
   // Este módulo é chamado apenas pelo Executivo (useMobileFinance é gated por
   // isAdmin). Usa consultas diretas reutilizando as políticas RLS do CRM.
-  const trucks = await supabase.from("trucks").select("*");
+  const trucks = await supabase.from("trucks").select("*").not("status", "eq", "offline");
   const [deals, customers, leads, payables, receivables, banks, txs, expenses, commissions, goals, employees, events, generalExp, services, purchaseInst] = await Promise.all([
     supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at"),
     supabase.from("customers").select("id,name,status,created_at"),
@@ -70,12 +70,15 @@ export function imperioShare(r: { shared?: boolean | null; amount?: number | nul
 }
 
 /**
- * Regra dos RELATÓRIOS do CRM (`e.shared ? e.imperio_amount : e.amount || 0`).
- * Não compartilhada conta o `amount` integral, mesmo com `imperio_amount`
- * preenchido — diferente do `imperioShare` do dashboard acima.
+ * Regra dos RELATÓRIOS do CRM mensal (`genEffective`): compartilhada usa a
+ * parte Império; não compartilhada usa `amount` e só cai para `imperio_amount`
+ * se `amount` vier nulo.
  */
 export const reportExpenseValue = (r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) =>
-  money(r.shared ? r.imperio_amount : r.amount || 0);
+  money(r.shared ? (r.imperio_amount ?? 0) : (r.amount ?? r.imperio_amount ?? 0));
+
+const isAcquisitionPayment = (r: { category?: string | null; purchase_installment_id?: string | null }) =>
+  r?.category === "custo_aquisicao" || !!r?.purchase_installment_id;
 
 /**
  * Converte "YYYY-MM-DD..." em data LOCAL (nunca UTC). `new Date("2026-09-14")`
@@ -93,7 +96,16 @@ const parseLocalDay = (iso: string | null | undefined): Date | null => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
+const dateOnly = (iso: string | null | undefined): string | null => {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+};
+
 const dayStart = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const completedSale = (status?: string | null) => status === "vendido" || status === "repasse";
+const activeStock = (status?: string | null) =>
+  !!status && ["disponivel", "consignado", "patio", "oficina", "pintura", "despachante", "reservado", "negociacao"].includes(status);
 
 /**
  * ────────────────────────────────────────────────────────────────────────────
@@ -106,9 +118,9 @@ const dayStart = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); retu
  * - A janela do KPI é DOMINGO→SÁBADO (`start - getDay()`), diferente do
  *   relatório semanal (segunda→domingo em `relatorios.semanal.tsx`).
  */
-const crmSameDay = (a: string, b: Date) => dayStart(new Date(a)).getTime() === dayStart(b).getTime();
+const crmSameDay = (a: string, b: Date) => dayStart(parseLocalDay(a) ?? new Date(a)).getTime() === dayStart(b).getTime();
 const crmSameWeek = (a: string, b: Date) => {
-  const da = new Date(a);
+  const da = parseLocalDay(a) ?? new Date(a);
   const start = new Date(b);
   start.setDate(start.getDate() - start.getDay());
   start.setHours(0, 0, 0, 0);
@@ -116,8 +128,8 @@ const crmSameWeek = (a: string, b: Date) => {
   end.setDate(end.getDate() + 7);
   return da >= start && da < end;
 };
-const crmSameMonth = (a: string, b: Date) => { const d = new Date(a); return d.getMonth() === b.getMonth() && d.getFullYear() === b.getFullYear(); };
-const crmSameYear = (a: string, b: Date) => new Date(a).getFullYear() === b.getFullYear();
+const crmSameMonth = (a: string, b: Date) => { const d = parseLocalDay(a) ?? new Date(a); return d.getMonth() === b.getMonth() && d.getFullYear() === b.getFullYear(); };
+const crmSameYear = (a: string, b: Date) => (parseLocalDay(a) ?? new Date(a)).getFullYear() === b.getFullYear();
 /** Receita do CRM: `t.sold_at || t.updated_at` (fallback proposital). */
 const crmSoldOn = (t: Tables<"trucks">) => t?.sold_at || t?.updated_at || null;
 
@@ -132,13 +144,13 @@ const startOfWeek = (ref: Date) => {
 
 export function computeExecutiveKpis(s: DashboardSnapshot) {
   const today = s.refs.today;
-  // CRM: só "vendido" (dashboard-data.ts:72). "repasse" é estoque lá.
-  const sold = s.trucks.filter((t) => t.status === "vendido");
-  const stock = s.trucks.filter((t) => t.status === "disponivel" || t.status === "consignado");
+  const sold = s.trucks.filter((t) => completedSale(t.status));
+  const pricedSold = sold.filter((t) => t.sold_price != null);
+  const stock = s.trucks.filter((t) => activeStock(t.status));
   const inDeal = s.trucks.filter((t) => t.status === "negociacao" || t.status === "reservado");
 
   const revenueOf = (inPeriod: (d: string) => boolean) =>
-    sold.filter((t) => crmSoldOn(t) && inPeriod(crmSoldOn(t) as string))
+    pricedSold.filter((t) => crmSoldOn(t) && inPeriod(crmSoldOn(t) as string))
       .reduce((acc, t) => acc + Number(t.sold_price ?? 0), 0);
   const revDay = revenueOf((d) => crmSameDay(d, today));
   const revWeek = revenueOf((d) => crmSameWeek(d, today));
@@ -149,19 +161,19 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
   // líquido são ACUMULADOS de todos os vendidos (lifetime); opex = contas pagas
   // (status "pago") + despesas gerais dos últimos 12 meses. Despesas gerais
   // vinculadas a caminhões ficam fora para não duplicar o `expenses_total`.
-  const grossProfit = sold.reduce((s, t) => s + (Number(t.sold_price ?? 0) - Number(t.purchase_price ?? 0)), 0);
-  const totalExpenses = sumMoney((sold || []).map((t) => t?.expenses_total));
+  const grossProfit = pricedSold.reduce((s, t) => s + (Number(t.sold_price) - Number(t.purchase_price ?? 0)), 0);
+  const totalExpenses = sumMoney((pricedSold || []).map((t) => t?.expenses_total));
   const netProfit = money(grossProfit - totalExpenses);
 
   // CRM (dashboard-data.ts:102-103): gerais SEM filtro de status e como a
   // `imperioShare` do CRM (não compartilhada prefere imperio_amount).
   const generalOpex = (s.generalExp ?? [])
-    .filter((r) => !r?.truck_id)
+    .filter((r) => !r?.truck_id && !isAcquisitionPayment(r))
     .reduce((sum, r) => sum + imperioShare(r), 0);
   const opex = s.payables.filter((p) => p.status === "pago").reduce((s, r) => s + Number(r.amount ?? 0), 0) + generalOpex;
 
   const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
-  const margins = sold
+  const margins = pricedSold
     .map((t) => {
       const revenue = Number(t.sold_price ?? 0);
       const cost = sumMoney([t.purchase_price, t.expenses_total]);
@@ -169,7 +181,7 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
     })
     .filter((n) => Number.isFinite(n));
   const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
-  const rois = sold
+  const rois = pricedSold
     .map((t) => {
       const cost = sumMoney([t.purchase_price, t.expenses_total]);
       const revenue = Number(t.sold_price ?? 0);
@@ -178,7 +190,8 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
     .filter((n) => Number.isFinite(n));
   const avgRoi = rois.length ? rois.reduce((a, b) => a + b, 0) / rois.length : 0;
   // CRM (dashboard-data.ts:100): divisão crua, sem money().
-  const ticketAvg = sold.length ? sold.reduce((s, t) => s + Number(t.sold_price ?? 0), 0) / sold.length : 0;
+  const pricedSoldThisMonth = pricedSold.filter((t) => crmSoldOn(t) && crmSameMonth(crmSoldOn(t) as string, today));
+  const ticketAvg = pricedSoldThisMonth.length ? revMonth / pricedSoldThisMonth.length : 0;
 
   // CRM (dashboard-data.ts:105): soma simples, sem money().
   const balance = s.banks.reduce((s, b) => s + Number(b.current_balance ?? 0), 0);
@@ -258,29 +271,31 @@ const dmy = (d: Date | null) => (d ? `${pad2(d.getDate())}/${pad2(d.getMonth() +
  * `relatorios/mensal-executivo` (`monthly-report-data.ts`) e
  * `relatorios/semanal` (`weekly-report-data.ts`).
  *
- * Receita: `trucks` com `sold_at` no período, SEM filtro de status e sem
- *   exigir `sold_price` (nulo entra como 0). `monthly-report-data.ts:107`
- *   / `weekly-report-data.ts:70` e `sumMoney(map(t => t.sold_price || 0))`.
+ * Receita: `trucks` com `sold_at` no período e status `vendido`/`repasse`.
+ *   Venda sem `sold_price` entra na contagem operacional, mas fica fora de
+ *   faturamento/compra/lucro/ticket. `monthly-report-data.ts:294-305` e
+ *   `completeSales`.
  * Estrutura do print do CRM:
  *   - Compra dos veículos = Σ `purchase_price` dos trucks vendidos.
  *   - Despesas diretas (caminhões) = Σ `expenses_total` dos trucks vendidos.
  *   - Custo total dos caminhões = compra + despesas diretas.
  *   - Despesas gerais/OPEX = payables com `truck_id` por `occurred_at` +
- *     `general_expenses` sem vínculo de caminhão no período.
+ *     `general_expenses` sem `truck_id` e sem `custo_aquisicao`/parcela de compra.
  *   - Lucro bruto = faturamento − compra dos veículos.
  *   - Lucro líquido caminhões = lucro bruto − despesas diretas.
  *   - Resultado líquido global = lucro bruto − despesas gerais/OPEX.
  * CMV (`costC`): Σ `sumMoney([purchase_price, expenses_total])` DOS VENDIDOS —
  *   `expenses_total` é lifetime do caminhão, não despesa do período.
- * Despesas (`getDesp`): `payables` com `truck_id` no período por `occurred_at`
- *   + `general_expenses` sem `truck_id` no período. As gerais vinculadas a
- *   caminhões já compõem `expenses_total` e não podem entrar novamente no OPEX.
- *   SEM filtro de status e a tabela `truck_expenses` NÃO é consultada.
+ * Despesas gerais (`despesasGerais`): `payables` com `truck_id` no período por
+ *   `occurred_at` + `general_expenses` do período filtradas por
+ *   `!isAcquisitionPayment(e) && !e.truck_id`. As gerais vinculadas a caminhão
+ *   já compõem `expenses_total`; aquisições são investimento, não OPEX.
  * Lucro operacional no APP é um alias do resultado global para manter gráficos
  * antigos lendo o mesmo número exibido no card principal.
  *   `monthly-report-data.ts:208-230`.
- * Compras: Σ `purchase_price` dos trucks com `purchase_date` no período, sem
- *   qualquer filtro de status ou exclusão. `monthly-report-data.ts:114,306-314`.
+ * Compras: investimento em caminhões: compras do período (exceto offline e
+ *   exceto caminhões já pagos por lançamento de aquisição) + pagamentos de
+ *   aquisição em `general_expenses`.
  * Entradas/Saídas: vencimento (`due_date`) no período e quitado
  *   (`status === "pago"` OU `received_at`/`paid_at`). Sem filtro de cancelado.
  *   `monthly-report-data.ts:108-109,374-393`.
@@ -294,35 +309,47 @@ export function computePeriodReport(
   const from = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const until = new Date(end.getFullYear(), end.getMonth(), end.getDate());
   until.setHours(23, 59, 59, 999);
+  const fromISO = `${from.getFullYear()}-${pad2(from.getMonth() + 1)}-${pad2(from.getDate())}`;
+  const untilISO = `${until.getFullYear()}-${pad2(until.getMonth() + 1)}-${pad2(until.getDate())}`;
   const inPeriod = (iso?: string | null) => {
-    const d = parseLocalDay(iso);
-    return !!d && d >= from && d <= until;
+    const d = dateOnly(iso);
+    return !!d && d >= fromISO && d <= untilISO;
   };
-  // O CRM usa a MESMA fórmula no mensal e no semanal; `mode` fica apenas para
-  // identificar o chamador e manter a assinatura estável.
-  const sold = (s.trucks ?? []).filter((t) => inPeriod(t?.sold_at));
-  const receita = sumMoney(sold.map((t) => t?.sold_price));
+  // CRM mensal: vendas operacionais são apenas vendido/repasse; vendas sem
+  // preço contam em quantidade, mas não entram nos valores financeiros.
+  const sold = (s.trucks ?? []).filter(
+    (t) => inPeriod(t?.sold_at) && (t?.status === "vendido" || t?.status === "repasse"),
+  );
+  const pricedSold = sold.filter((t) => t?.sold_price != null);
+  const receita = sumMoney(pricedSold.map((t) => t?.sold_price));
   // `costC` do CRM: CMV dos VENDIDOS. `expenses_total` é lifetime do caminhão.
-  const custoCompra = money(sold.reduce((sum, t) => sum + Number(t?.purchase_price ?? 0), 0));
-  const despesasCaminhao = money(sold.reduce((sum, t) => sum + Number(t?.expenses_total ?? 0), 0));
+  const custoCompra = sumMoney(pricedSold.map((t) => t?.purchase_price));
+  const despesasCaminhao = sumMoney(pricedSold.map((t) => t?.expenses_total));
   // CRM: `sumMoney(map(t => sumMoney([t.purchase_price, t.expenses_total])))`.
-  const custoTotal = sumMoney(sold.map((t) => sumMoney([t?.purchase_price, t?.expenses_total])));
+  const custoTotal = money(custoCompra + despesasCaminhao);
 
-  // Despesas gerais/OPEX do CRM: contas a pagar com `truck_id` + despesas
-  // gerais sem vínculo de caminhão. As vinculadas já estão em `expenses_total`.
+  // Despesas gerais/OPEX do CRM mensal: contas a pagar com `truck_id` + despesas
+  // gerais não vinculadas a caminhão e que não sejam aquisição.
   const opexDireto = sumMoney(
     (s.payables ?? []).filter((p) => !!p?.truck_id && inPeriod(p?.occurred_at)).map((p) => p?.amount),
   );
   const opexGeral = sumMoney(
-    (s.generalExp ?? []).filter((r) => !r?.truck_id && inPeriod(r?.occurred_at)).map(reportExpenseValue),
+    (s.generalExp ?? [])
+      .filter((r) => inPeriod(r?.occurred_at) && !r?.truck_id && !isAcquisitionPayment(r))
+      .map(reportExpenseValue),
   );
   const opex = money(opexDireto + opexGeral);
 
-  // Compras do período (`calculatePurchases`): Σ `purchase_price` dos trucks com
-  // `purchase_date` no período, sem nenhum filtro.
-  const compras = sumMoney(
-    (s.trucks ?? []).filter((t) => inPeriod(t?.purchase_date)).map((t) => t?.purchase_price),
+  // Compras do período (`calculatePurchases`): caminhões comprados, excluindo
+  // offline e caminhões já representados por pagamento de aquisição, + pagamentos.
+  const acquisitionPayments = (s.generalExp ?? []).filter((r) => inPeriod(r?.occurred_at) && isAcquisitionPayment(r));
+  const paidTruckIds = new Set(acquisitionPayments.filter((r) => r?.truck_id).map((r) => r.truck_id));
+  const comprasCaminhoes = sumMoney(
+    (s.trucks ?? [])
+      .filter((t) => inPeriod(t?.purchase_date) && String(t?.status) !== "offline" && !paidTruckIds.has(t.id))
+      .map((t) => t?.purchase_price),
   );
+  const compras = money(comprasCaminhoes + sumMoney(acquisitionPayments.map(reportExpenseValue)));
 
   const lucroBruto = money(receita - custoCompra);
   const lucroLiquidoCaminhoes = money(lucroBruto - despesasCaminhao);
