@@ -953,9 +953,11 @@ export type Database = {
           created_by: string | null
           description: string
           due_date: string | null
+          financial_event_kind: string
           id: string
           imperio_amount: number
           imperio_percent: number | null
+          include_in_profit: boolean
           is_urgent: boolean | null
           notes: string | null
           occurred_at: string
@@ -966,6 +968,8 @@ export type Database = {
           service_id: string | null
           shared: boolean
           status: string | null
+          stock_movement_id: string | null
+          stock_purchase_id: string | null
           supplier: string | null
           truck_id: string | null
           updated_at: string
@@ -992,6 +996,7 @@ export type Database = {
           created_by?: string | null
           description: string
           due_date?: string | null
+          financial_event_kind?: string
           id?: string
           imperio_amount?: number
           imperio_percent?: number | null
@@ -1005,6 +1010,8 @@ export type Database = {
           service_id?: string | null
           shared?: boolean
           status?: string | null
+          stock_movement_id?: string | null
+          stock_purchase_id?: string | null
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
@@ -1031,6 +1038,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           due_date?: string | null
+          financial_event_kind?: string
           id?: string
           imperio_amount?: number
           imperio_percent?: number | null
@@ -1044,6 +1052,8 @@ export type Database = {
           service_id?: string | null
           shared?: boolean
           status?: string | null
+          stock_movement_id?: string | null
+          stock_purchase_id?: string | null
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
@@ -1249,34 +1259,49 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          financial_event_kind: string
           id: string
           item_id: string
           movement_type: string
           notes: string | null
+          origin: string | null
           quantity: number
+          responsible_id: string | null
+          stock_purchase_id: string | null
           total_amount: number
+          truck_id: string | null
           unit_price: number
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          financial_event_kind?: string
           id?: string
           item_id: string
           movement_type: string
           notes?: string | null
+          origin?: string | null
           quantity: number
+          responsible_id?: string | null
+          stock_purchase_id?: string | null
           total_amount?: number
+          truck_id?: string | null
           unit_price?: number
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          financial_event_kind?: string
           id?: string
           item_id?: string
           movement_type?: string
           notes?: string | null
+          origin?: string | null
           quantity?: number
+          responsible_id?: string | null
+          stock_purchase_id?: string | null
           total_amount?: number
+          truck_id?: string | null
           unit_price?: number
         }
         Relationships: [
@@ -1513,6 +1538,7 @@ export type Database = {
           created_by: string | null
           description: string
           due_date: string
+          financial_event_kind: string
           id: string
           is_urgent: boolean | null
           notes: string | null
@@ -1524,6 +1550,7 @@ export type Database = {
           pix_key_type: string | null
           recurrence_id: string | null
           status: Database["public"]["Enums"]["payable_status"]
+          stock_purchase_id: string | null
           supplier: string | null
           truck_id: string | null
           updated_at: string
@@ -1544,6 +1571,7 @@ export type Database = {
           created_by?: string | null
           description: string
           due_date: string
+          financial_event_kind?: string
           id?: string
           is_urgent?: boolean | null
           notes?: string | null
@@ -1555,6 +1583,7 @@ export type Database = {
           pix_key_type?: string | null
           recurrence_id?: string | null
           status?: Database["public"]["Enums"]["payable_status"]
+          stock_purchase_id?: string | null
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
@@ -1575,6 +1604,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           due_date?: string
+          financial_event_kind?: string
           id?: string
           is_urgent?: boolean | null
           notes?: string | null
@@ -1586,6 +1616,7 @@ export type Database = {
           pix_key_type?: string | null
           recurrence_id?: string | null
           status?: Database["public"]["Enums"]["payable_status"]
+          stock_purchase_id?: string | null
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string

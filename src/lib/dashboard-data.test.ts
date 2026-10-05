@@ -127,6 +127,7 @@ function withGeneralExpense(
     category: string;
     purchase_installment_id: string | null;
     status: string;
+    financial_event_kind: string;
   }>,
 ) {
   return {
@@ -223,33 +224,45 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     expect(r.despesasCaminhao).toBe(5000);
     expect(r.custoTotal).toBe(85000);
     expect(r.despesasDiretas).toBe(5000);
-    expect(r.despesasGerais).toBe(1000);
-    expect(r.opex).toBe(1000);
     expect(r.lucroBruto).toBe(20000);
     expect(r.lucroLiquidoCaminhoes).toBe(15000);
-    expect(r.resultadoGlobal).toBe(14000);
-    expect(r.lucroOperacional).toBe(14000);
+    // OPEX do CRM (`monthly-report-data.ts:151-164`) tem DUAS pernas:
+    //   payable de caminhão 2000 (`truckPayables`, :155-157)
+    // + despesa geral compartilhada 1000 (`general`, :158-162)
+    expect(r.despesasGerais).toBe(3000);
+    expect(r.opex).toBe(3000);
+    // Resultado global = lucro líquido caminhões − OPEX (`segmentarVendidos():414`).
+    // A despesa direta (5000) é descontada UMA vez, em `lucroLiquidoCaminhoes`.
+    expect(r.resultadoGlobal).toBe(12000);
+    expect(r.lucroOperacional).toBe(12000);
     expect(r.margemBruta).toBeCloseTo(20, 5);
     expect(r.margemLiquidaCaminhoes).toBeCloseTo(15, 5);
-    expect(r.margemGlobal).toBeCloseTo(14, 5);
+    expect(r.margemGlobal).toBeCloseTo(12, 5);
     expect(r.roiPeriodo).toBeCloseTo((15000 / 85000) * 100, 5);
     expect(r.custoAquisicao).toBe(0);
     expect(r.compras).toBe(0);
     expect(r.vendas).toBe(1);
   });
 
-  it("receita NÃO filtra status: negociacao com sold_at entra", () => {
+  it("receita filtra status: só vendido/repasse entra (`fetchPeriodData:310`)", () => {
     const snap = withTruck(baseSnap(), { status: "negociacao" });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
-    expect(r.vendas).toBe(1);
-    expect(r.receita).toBe(100000);
+    // `soldTrucks` do CRM é `.in("status", ["vendido","repasse"])`: caminhão
+    // em negociação com `sold_at` NÃO é faturamento nem negócio concluído.
+    expect(r.vendas).toBe(0);
+    expect(r.receita).toBe(0);
+    expect(r.resultadoGlobal).toBe(0);
   });
 
-  it("receita NÃO exige sold_price: caminhão sem preço conta como venda com 0", () => {
+  it("venda sem sold_price conta como negócio mas não como faturamento (completeSales :147)", () => {
     const snap = withTruck(baseSnap(), { sold_price: null });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    // `completeSales` (:147-148) tira da conta o caminhão sem preço, mas
+    // `sales.count` (:685) conta `soldTrucks` cru. Nunca inventar prejuízo 0.
     expect(r.vendas).toBe(1);
     expect(r.receita).toBe(0);
+    expect(r.custoTotal).toBe(0);
+    expect(r.resultadoGlobal).toBe(0);
   });
 
   it("repasse com sold_at conta como venda no relatório", () => {
@@ -259,11 +272,14 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     expect(r.receita).toBe(100000);
   });
 
-  it("offline com sold_at entra como no CRM mensal", () => {
+  it("offline com sold_at NÃO entra no relatório do CRM", () => {
     const snap = withTruck(baseSnap(), { status: "offline" });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
-    expect(r.vendas).toBe(1);
-    expect(r.receita).toBe(100000);
+    // O fetch do CRM já restringe a `["vendido","repasse"]`, então `offline`
+    // fica fora de todo o relatório.
+    expect(r.vendas).toBe(0);
+    expect(r.receita).toBe(0);
+    expect(r.resultadoGlobal).toBe(0);
   });
 
   it("não usa updated_at como receita: sem sold_at o caminhão fica fora", () => {
@@ -314,13 +330,27 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
     expect(r.compras).toBe(80000);
   });
 
-  it("opex do card ignora despesa geral cancelada e payable de caminhão", () => {
+  it("opex inclui payable de caminhão e NÃO filtra status (filtro é includeInProfit)", () => {
     let snap = withPayable(baseSnap(), { status: "cancelado", amount: 2000 });
     snap = withGeneralExpense(snap, { id: "g2", status: "cancelado", amount: 4000, imperio_amount: 4000, shared: false });
     const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    // `despesasGerais` (:151-164) NÃO olha `status`: o filtro é estrutural
+    // (`includeInProfit`), não por baixa/cancelamento. E o `truckPayables`
+    // (:155-157) ENTRA no OPEX.
     expect(r.despesasDiretas).toBe(0);
-    expect(r.despesasGerais).toBe(0);
-    expect(r.opex).toBe(0);
+    expect(r.despesasGerais).toBe(6000);
+    expect(r.opex).toBe(6000);
+  });
+
+  it("OPEX ignora pagamento/aquisição de estoque e transferência interna", () => {
+    let snap = withGeneralExpense(baseSnap(), { id: "g1", financial_event_kind: "pagamento_estoque", amount: 900, imperio_amount: 900, shared: false });
+    snap = withGeneralExpense(snap, { id: "g2", financial_event_kind: "aquisicao_estoque", amount: 700, imperio_amount: 700, shared: false });
+    snap = withGeneralExpense(snap, { id: "g3", financial_event_kind: "transferencia_interna", amount: 500, imperio_amount: 500, shared: false });
+    snap = withGeneralExpense(snap, { id: "g4", financial_event_kind: "despesa_operacional", amount: 300, imperio_amount: 300, shared: false });
+    const r = computeMonthReport(snap, new Date(2026, 8, 1));
+    // REGRA DE OURO: um valor reduz o lucro UMA única vez. Só a despesa
+    // operacional entra (`financial-class.ts:includeInProfit`).
+    expect(r.opex).toBe(300);
   });
 
   it("truck_expenses NÃO entram no relatório mensal do CRM", () => {
@@ -372,6 +402,77 @@ describe("computeMonthReport — espelho de relatorios/mensal-executivo", () => 
   });
 });
 
+describe("paridade com o CRM — setembro/2026 (valores do relatório executivo do CRM)", () => {
+  // Réplica exata da tela `/relatorios/mensal-executivo` do CRM para
+  // setembro/2026. Se qualquer regra de `segmentarVendidos()` mudar, este
+  // teste quebra — é a trava que impede o APP de voltar a divergir do CRM.
+  function setembroCrm(): DashboardSnapshot {
+    let snap = baseSnap();
+    snap = withTruck(snap, { id: "t1", sold_price: 182500, purchase_price: 110750, expenses_total: 19000 });
+    snap = withTruck(snap, { id: "t2", sold_price: 100000, purchase_price: 70000, expenses_total: 7564.07 });
+    // Perna 1 do OPEX: payable de caminhão (`truckPayables`).
+    snap = withPayable(snap, { amount: 3000 });
+    // Perna 2 do OPEX: despesa geral sem `truck_id`.
+    snap = withGeneralExpense(snap, {
+      amount: 9905.49,
+      imperio_amount: 9905.49,
+      shared: false,
+    });
+    return snap;
+  }
+
+  const r = () => computeMonthReport(setembroCrm(), new Date(2026, 8, 1));
+
+  it("faturamento realizado", () => expect(r().receita).toBe(282500));
+
+  it("compra dos veículos", () => expect(r().custoCompra).toBe(180750));
+
+  it("lucro bruto = receita − compra", () => {
+    expect(r().lucroBruto).toBe(101750);
+    expect(r().margemBruta).toBeCloseTo(36.0, 1);
+  });
+
+  it("despesas diretas (caminhões)", () => {
+    expect(r().despesasDiretas).toBe(26564.07);
+    expect(r().custoTotal).toBe(207314.07);
+  });
+
+  it("lucro líquido caminhões = lucro bruto − despesas diretas", () => {
+    expect(r().lucroLiquidoCaminhoes).toBe(75185.93);
+    expect(r().margemLiquidaCaminhoes).toBeCloseTo(26.6, 1);
+  });
+
+  it("despesas gerais / OPEX", () => expect(r().opex).toBe(12905.49));
+
+  it("ROI do período = lucro líquido ÷ custo total", () => {
+    expect(r().roiPeriodo).toBeCloseTo(36.3, 1);
+  });
+
+  it("negócios concluídos", () => expect(r().vendas).toBe(2));
+
+  /**
+   * A trava principal. O APP mostrava `lucroBruto − OPEX` (88.844,51), o que
+   * zerava o efeito das despesas diretas e fazia o "lucro líquido global"
+   * aparecer igual ao lucro bruto. O CRM desconta a despesa direta UMA vez.
+   */
+  it("resultado líquido global = lucro líquido caminhões − OPEX", () => {
+    expect(r().resultadoGlobal).toBe(62280.44);
+    expect(r().lucroOperacional).toBe(62280.44);
+    // Guardas contra a regressão que igualava o resultado global ao bruto.
+    expect(r().resultadoGlobal).not.toBe(r().lucroBruto);
+    expect(r().resultadoGlobal).toBeCloseTo(62280.44, 2);
+  });
+
+  it("cadeia completa fecha sem buraco", () => {
+    const x = r();
+    // `money()` arredonda cada etapa; as subtrações cruas carregam erro de
+    // binário, por isso a comparação é por proximidade e não identidade.
+    expect(x.lucroBruto - x.despesasDiretas).toBeCloseTo(x.lucroLiquidoCaminhoes, 2);
+    expect(x.lucroLiquidoCaminhoes - x.opex).toBeCloseTo(x.resultadoGlobal, 2);
+    expect(x.resultadoGlobal).toBeCloseTo(x.receita - x.custoTotal - x.opex, 2);
+  });
+});
+
 describe("computeWeekReport — espelho de relatorios/semanal", () => {
   it("semana é segunda a domingo (getStartOfWeek do CRM)", () => {
     // 07/09/2026 é segunda; 13/09/2026 domingo fecha.
@@ -396,16 +497,16 @@ describe("computeWeekReport — espelho de relatorios/semanal", () => {
     expect(computeWeekReport(snap, new Date(2026, 8, 10)).vendas).toBe(0);
   });
 
-  it("opex semanal usa gerais não duplicadas", () => {
+  it("opex semanal soma payable de caminhão + geral não duplicada", () => {
     let snap = withTruck(baseSnap(), { sold_at: "2026-09-07" });
     snap = withPayable(snap, { occurred_at: "2026-09-08", amount: 2000 });
     snap = withGeneralExpense(snap, { occurred_at: "2026-09-08", amount: 2000, imperio_amount: 1000, shared: true });
     const r = computeWeekReport(snap, new Date(2026, 8, 10));
     expect(r.despesasDiretas).toBe(5000);
-    expect(r.despesasGerais).toBe(1000);
-    expect(r.opex).toBe(1000);
+    expect(r.despesasGerais).toBe(3000);
+    expect(r.opex).toBe(3000);
     expect(r.lucroLiquidoCaminhoes).toBe(15000);
-    expect(r.resultadoGlobal).toBe(100000 - 85000 - 1000);
+    expect(r.resultadoGlobal).toBe(12000);
   });
 
   it("truck_expenses NÃO entram no relatório semanal do CRM", () => {
@@ -415,13 +516,16 @@ describe("computeWeekReport — espelho de relatorios/semanal", () => {
     expect(r.opex).toBe(0);
   });
 
-  it("semanal não restringe status e venda sem sold_price mantém custo", () => {
+  it("semanal restringe status e venda sem sold_price não soma custo", () => {
     let snap = withTruck(baseSnap(), { status: "negociacao", sold_at: "2026-09-09", sold_price: 100000 });
     snap = withTruck(snap, { id: "t2", sold_at: "2026-09-09", sold_price: null, purchase_price: 90000, expenses_total: 1000 });
     const r = computeWeekReport(snap, new Date(2026, 8, 10));
-    expect(r.vendas).toBe(2);
-    expect(r.receita).toBe(100000);
-    expect(r.custoTotal).toBe(176000);
+    // `negociacao` está fora de `["vendido","repasse"]`; t2 é `vendido` mas
+    // sem `sold_price`, então `completeSales` o tira dos valores.
+    expect(r.vendas).toBe(1);
+    expect(r.receita).toBe(0);
+    expect(r.custoTotal).toBe(0);
+    expect(r.resultadoGlobal).toBe(0);
   });
 
   it("despesa de compra não entra no opex semanal", () => {

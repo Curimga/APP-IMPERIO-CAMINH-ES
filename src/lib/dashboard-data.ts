@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { monthKey, monthLabel, dateBR, brl as brlFmt, sumMoney, money } from "@/lib/format";
+import { includeInProfit, isAcquisitionPayment, isStockSale } from "@/lib/finance/financial-class";
 
 export type DashboardSnapshot = Awaited<ReturnType<typeof fetchDashboardSnapshot>>;
 
@@ -13,11 +14,11 @@ export async function fetchDashboardSnapshot() {
   // Este módulo é chamado apenas pelo Executivo (useMobileFinance é gated por
   // isAdmin). Usa consultas diretas reutilizando as políticas RLS do CRM.
   const trucks = await supabase.from("trucks").select("*").not("status", "eq", "offline");
-  const [deals, customers, leads, payables, receivables, banks, txs, expenses, commissions, goals, employees, events, generalExp, services, purchaseInst] = await Promise.all([
+  const [deals, customers, leads, payables, receivables, banks, txs, expenses, commissions, goals, employees, events, generalExp, services, purchaseInst, invMoves] = await Promise.all([
     supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at"),
     supabase.from("customers").select("id,name,status,created_at"),
     supabase.from("leads").select("id,status,source,created_at,owner_id"),
-    supabase.from("payables").select("id,description,supplier,amount,due_date,paid_at,status,category_id,truck_id,created_at,occurred_at"),
+    supabase.from("payables").select("id,description,supplier,amount,due_date,paid_at,status,category_id,truck_id,created_at,occurred_at,financial_event_kind,stock_purchase_id"),
     supabase.from("receivables").select("id,description,amount,due_date,received_at,status,category_id,truck_id,customer_id,created_at,occurred_at"),
     supabase.from("bank_accounts").select("id,name,current_balance,active").eq("active", true),
     supabase.from("bank_transactions").select("id,amount,type,occurred_at,category_id").gte("occurred_at", start12m),
@@ -26,9 +27,13 @@ export async function fetchDashboardSnapshot() {
     supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id"),
     supabase.from("employees").select("id,full_name,salary,commission_amount,status").eq("status", "ativo"),
     supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id").gte("starts_at", today.toISOString()).lte("starts_at", next30),
-    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id,status").gte("occurred_at", start12m.slice(0, 10)),
+    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id,status,financial_event_kind,stock_movement_id,stock_purchase_id").gte("occurred_at", start12m.slice(0, 10)),
     supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at"),
     supabase.from("truck_purchase_installments").select("*"),
+    // Sem limite superior: `computeMonthlyReports` cobre 12 meses para trás a
+    // partir de hoje, e a janela precisa conter todos eles. O limite tem que
+    // ser o INÍCIO da janela, não o mesmo dia do início.
+    supabase.from("inventory_movements").select("id,movement_type,total_amount,created_at,financial_event_kind,truck_id,stock_purchase_id,origin").gte("created_at", start12m.slice(0, 10)),
   ]);
 
   return {
@@ -48,6 +53,7 @@ export async function fetchDashboardSnapshot() {
     generalExp: (generalExp.data ?? []) as Tables<"general_expenses">[],
     services: (services.data ?? []) as Tables<"services">[],
     purchaseInst: (purchaseInst.data ?? []) as Tables<"truck_purchase_installments">[],
+    invMoves: (invMoves.data ?? []) as Tables<"inventory_movements">[],
     refs: { today, startYear, start12m },
   };
 }
@@ -75,10 +81,7 @@ export function imperioShare(r: { shared?: boolean | null; amount?: number | nul
  * se `amount` vier nulo.
  */
 export const reportExpenseValue = (r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) =>
-  money(r.shared ? (r.imperio_amount ?? 0) : (r.amount ?? r.imperio_amount ?? 0));
-
-const isAcquisitionPayment = (r: { category?: string | null; purchase_installment_id?: string | null }) =>
-  r?.category === "custo_aquisicao" || !!r?.purchase_installment_id;
+money(r.shared ? (r.imperio_amount ?? 0) : (r.amount ?? r.imperio_amount ?? 0));
 
 /**
  * Converte "YYYY-MM-DD..." em data LOCAL (nunca UTC). `new Date("2026-09-14")`
@@ -267,26 +270,31 @@ const dmy = (d: Date | null) => (d ? `${pad2(d.getDate())}/${pad2(d.getMonth() +
 /**
  * Relatório de um período ([start, end] — ambos datas-calendário, inclusive).
  *
- * ESPELHO BIT A BIT do CRM, bugs inclusive:
- * `relatorios/mensal-executivo` (`monthly-report-data.ts`) e
- * `relatorios/semanal` (`weekly-report-data.ts`).
+ * ESPELHO BIT A BIT do CRM, `relatorios/mensal-executivo`
+ * (`monthly-report-data.ts`) — espelhado a partir de `segmentarVendidos()`
+ * (`:404-426`), que é a única fonte de verdade dos cards do relatório.
  *
- * Receita: `trucks` com `sold_at` no período. O CRM não filtra status aqui.
+ * Receita: `trucks` com `sold_at` no período E status `vendido`/`repasse` E
+ *   `sold_price` preenchido (`completeSales`, `:147-148`), mais
+ *   `vendaEstoque` (`:428-430`): saídas de estoque classificadas como
+ *   `venda_estoque` entram como faturamento sem caminhão.
  * Compra dos veículos: Σ `purchase_price` DOS VENDIDOS.
  * Despesas diretas: Σ `expenses_total` DOS VENDIDOS — lifetime do caminhão.
- * Despesas gerais/OPEX: `general_expenses` ativas, sem `truck_id` e sem
- *   aquisição. Despesas vinculadas a caminhão já aparecem em `expenses_total`;
- *   aquisições são compra, não OPEX.
+ * OPEX (`despesasGerais`, `:151-164`): duas pernas, ambas só o que
+ *   `includeInProfit` (`financial-class.ts`):
+ *     1. `payables` do período com `truck_id` (preparação do caminhão);
+ *     2. `general_expenses` do período SEM `truck_id` — as com `truck_id` já
+ *        estão capitalizadas em `trucks.expenses_total` e contá-las aqui
+ *        subtrairia o mesmo valor duas vezes.
  * Cards do CRM:
- *   - Lucro bruto = faturamento − compra dos veículos.
+ *   - Lucro bruto = receita − compra dos veículos.
  *   - Lucro líquido caminhões = lucro bruto − despesas diretas.
- *   - Resultado líquido global = lucro líquido caminhões − despesas do período.
+ *   - Resultado líquido global = lucro líquido caminhões − OPEX.
  * Compras: investimento em caminhões: compras do período (exceto offline e
  *   exceto caminhões já pagos por lançamento de aquisição) + pagamentos de
  *   aquisição em `general_expenses`.
  * Entradas/Saídas: vencimento (`due_date`) no período e quitado
  *   (`status === "pago"` OU `received_at`/`paid_at`). Sem filtro de cancelado.
- *   `monthly-report-data.ts:108-109,374-393`.
  */
 export function computePeriodReport(
   s: DashboardSnapshot,
@@ -303,26 +311,47 @@ export function computePeriodReport(
     const d = dateOnly(iso);
     return !!d && d >= fromISO && d <= untilISO;
   };
-  const sold = (s.trucks ?? []).filter((t) => inPeriod(t?.sold_at));
-  const receita = sumMoney(sold.map((t) => t?.sold_price));
+  // ── VENDIDOS ──────────────────────────────────────────────────────────────
+  // Espelho de `segmentarVendidos()` (`monthly-report-data.ts:404-426`):
+  //  - `completeSales` (:147-148): caminhão vendido SEM `sold_price` é dado
+  //    incompleto — não entra em faturamento/compra/lucro (nunca inventar 0).
+  //  - Status da venda: `vendido` ou `repasse` (regra única do CRM).
+  //  - `vendaEstoque` (:428-430): saída de estoque marcada como VENDA entra
+  //    como faturamento gerencial, sem caminhão.
+  const soldRaw = (s.trucks ?? []).filter(
+    (t) => inPeriod(t?.sold_at) && completedSale(String(t?.status ?? "")),
+  );
+  const sold = soldRaw.filter((t) => t?.sold_price != null);
+  const vendaEstoque = sumMoney(
+    (s.invMoves ?? []).filter((m) => inPeriod(m?.created_at) && isStockSale(m)).map((m) => m?.total_amount),
+  );
+  const receita = money(sumMoney(sold.map((t) => t?.sold_price)) + vendaEstoque);
   const custoCompra = sumMoney(sold.map((t) => t?.purchase_price));
   const despesasCaminhao = sumMoney(sold.map((t) => t?.expenses_total));
   const custoTotal = money(custoCompra + despesasCaminhao);
 
-  // OPEX do card: somente despesas gerais não duplicadas. Contas/despesas
-  // vinculadas a caminhão já foram absorvidas em `expenses_total`.
+  // ── OPEX / DESPESAS GERAIS ────────────────────────────────────────────────
+  // Espelho de `despesasGerais()` (`monthly-report-data.ts:151-164`) — DUAS pernas:
+  //   1. `truckPayables`: `payables` com `truck_id` no período, só as que
+  //      `includeInProfit` (contas de preparação do caminhão são custo DIRETO,
+  //      mas o CRM as inclui aqui — paridade acima de opinião).
+  //   2. `general`: `general_expenses` do período SEM `truck_id` (as com
+  //      `truck_id` já estão capitalizadas em `trucks.expenses_total` e seriam
+  //      contadas duas vezes) e só as que `includeInProfit`.
+  // `includeInProfit` substitui o filtro antigo `!isAcquisitionPayment`: ele
+  // também descarta pagamento/aquisição de estoque, transferência interna e
+  // caminhão offline.
+  const opexTruckPayables = sumMoney(
+    (s.payables ?? [])
+      .filter((p) => inPeriod(p?.occurred_at) && !!p?.truck_id && includeInProfit(p))
+      .map((p) => p?.amount),
+  );
   const opexGeral = sumMoney(
     (s.generalExp ?? [])
-      .filter(
-        (r) =>
-          inPeriod(r?.occurred_at) &&
-          r?.status !== "cancelado" &&
-          !r?.truck_id &&
-          !isAcquisitionPayment(r),
-      )
+      .filter((r) => inPeriod(r?.occurred_at) && !r?.truck_id && includeInProfit(r))
       .map(reportExpenseValue),
   );
-  const opex = money(opexGeral);
+  const opex = money(opexTruckPayables + opexGeral);
 
   // Compras do período (`calculatePurchases`): caminhões comprados, excluindo
   // offline e caminhões já representados por pagamento de aquisição, + pagamentos.
@@ -335,10 +364,17 @@ export function computePeriodReport(
   );
   const compras = money(comprasCaminhoes + sumMoney(acquisitionPayments.map(reportExpenseValue)));
 
+  // ── LUCRO ─────────────────────────────────────────────────────────────────
+  // Cadeia do CRM (`segmentarVendidos():412-414`):
+  //   lucroBruto       = receita − compra
+  //   lucroLiquidoCam  = lucroBruto − despesas diretas dos vendidos
+  //   resultadoGlobal  = lucroLiquidoCam − OPEX
+  // A despesa direta é lifetime do caminhão (`expenses_total`) e NÃO pode ser
+  // somada de novo no OPEX — por isso o resultado global desconta ela UMA vez.
   const lucroBruto = money(receita - custoCompra);
   const lucroLiquidoCaminhoes = money(lucroBruto - despesasCaminhao);
   const resultadoGlobal = money(lucroLiquidoCaminhoes - opex);
-  const lucroOperacional = resultadoGlobal;
+const lucroOperacional = resultadoGlobal;
 
   // CRM: `status === "pago" || received_at`. Em receivable o status "pago" NUNCA
   // casa (o enum é aberto|recebido|vencido|cancelado) — replicamos só o
@@ -373,9 +409,12 @@ export function computePeriodReport(
     lucroOperacional,
     margemOperacional: receita > 0 ? (lucroOperacional / receita) * 100 : 0,
     resultadoGlobal,
-    margemGlobal: receita > 0 ? (resultadoGlobal / receita) * 100 : 0,
+margemGlobal: receita > 0 ? (resultadoGlobal / receita) * 100 : 0,
     roiPeriodo: custoTotal > 0 ? (lucroLiquidoCaminhoes / custoTotal) * 100 : 0,
-    vendas: sold.length,
+    // "Negócios concluídos" no CRM é `calculateSales` → `curr.soldTrucks.length`
+    // (`monthly-report-data.ts:685`), a contagem BRUTA de vendidos do período
+    // (antes de `completeSales`).
+    vendas: soldRaw.length,
     compras,
     entradas,
     saidas,

@@ -105,9 +105,13 @@ function WaterfallCard({ report, reveal }: { report: PeriodReport; reveal: boole
         <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           Resultado global do CRM
         </div>
-        <WaterfallRow label="Lucro bruto" raw={report.lucroBruto} sign="plus" reveal={reveal} />
         <WaterfallRow label="(−) Despesas gerais / OPEX" raw={-report.opex} sign="minus" reveal={reveal} />
-        <Subtotal label="(=) Resultado líquido global" raw={report.resultadoGlobal} pct={report.margemGlobal} reveal={reveal} />
+        <Subtotal
+          label="(=) Resultado líquido global"
+          raw={report.resultadoGlobal}
+          pct={report.margemGlobal}
+          reveal={reveal}
+        />
       </div>
     </MobileCard>
   );
