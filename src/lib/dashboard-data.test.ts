@@ -5,6 +5,7 @@ import {
   computeWeekReport,
   computeMonthlyReports,
   computeWeeklyReports,
+  fetchAllPages,
   imperioShare,
   reportExpenseValue,
   type DashboardSnapshot,
@@ -697,5 +698,156 @@ describe("computeExecutiveKpis — espelho de computeExecutiveKpis do CRM", () =
       snap = withTruck(snap, { id: `s${i}`, status, sold_at: null, purchase_price: 1000 });
     }
     expect(computeExecutiveKpis(snap).stockCount).toBe(4);
+  });
+});
+
+describe("paridade com o CRM — outubro/2026 (dados reais do banco lidos em 06/10/2026)", () => {
+  // As 17 linhas de `general_expenses` de outubro/2026 lidas direto do banco
+  // (todas `financial_event_kind = despesa_operacional`, nenhuma com
+  // `truck_id`, 2 compartilhadas com rateio Império). No fetch antigo a janela
+  // de 12 meses (1.170+ linhas) era cortada em 1.000 pelo PostgREST e só 2
+  // linhas sobreviviam → OPEX do APP = 736,59 em vez de 15.511,51 (CRM).
+  const OUTUBRO_GERAL: Array<{
+    id: string;
+    occurred_at: string;
+    amount: number;
+    imperio_amount: number;
+    shared: boolean;
+    category: string;
+  }> = [
+    { id: "ge01", occurred_at: "2026-10-01", amount: 50, imperio_amount: 50, shared: false, category: "colaborador" },
+    { id: "ge02", occurred_at: "2026-10-01", amount: 12484.66, imperio_amount: 12484.66, shared: false, category: "pecas_caminhao" },
+    { id: "ge03", occurred_at: "2026-10-01", amount: 204.21, imperio_amount: 102.11, shared: true, category: "refeicao" },
+    { id: "ge04", occurred_at: "2026-10-01", amount: 37.44, imperio_amount: 18.72, shared: true, category: "refeicao" },
+    { id: "ge05", occurred_at: "2026-10-01", amount: 250, imperio_amount: 250, shared: false, category: "pagamentos" },
+    { id: "ge06", occurred_at: "2026-10-02", amount: 55, imperio_amount: 55, shared: false, category: "caminhao" },
+    { id: "ge07", occurred_at: "2026-10-02", amount: 10, imperio_amount: 10, shared: false, category: "colaborador" },
+    { id: "ge08", occurred_at: "2026-10-02", amount: 681.59, imperio_amount: 681.59, shared: false, category: "veiculo_outros" },
+    { id: "ge09", occurred_at: "2026-10-02", amount: 59.9, imperio_amount: 59.9, shared: false, category: "materiais" },
+    { id: "ge10", occurred_at: "2026-10-02", amount: 15.15, imperio_amount: 15.15, shared: false, category: "pagamentos" },
+    { id: "ge11", occurred_at: "2026-10-02", amount: 150, imperio_amount: 150, shared: false, category: "colaborador" },
+    { id: "ge12", occurred_at: "2026-10-02", amount: 90, imperio_amount: 90, shared: false, category: "pagamentos" },
+    { id: "ge13", occurred_at: "2026-10-02", amount: 727.9, imperio_amount: 363.95, shared: true, category: "limpeza" },
+    { id: "ge14", occurred_at: "2026-10-02", amount: 164.85, imperio_amount: 82.43, shared: true, category: "refeicao" },
+    { id: "ge15", occurred_at: "2026-10-02", amount: 333.45, imperio_amount: 333.45, shared: false, category: "pagamentos" },
+    { id: "ge16", occurred_at: "2026-10-02", amount: 29.1, imperio_amount: 14.55, shared: true, category: "refeicao" },
+    { id: "ge17", occurred_at: "2026-10-02", amount: 750, imperio_amount: 750, shared: false, category: "colaborador" },
+  ];
+
+  // Os 2 caminhões vendidos em outubro/2026 (repasse + vendido, ambos em
+  // 02/10). `expenses_total` = lifetime; `truckExpenseRows` fica vazio, então
+  // `truckDirectExpenseTotal` cai no `expenses_total` (mesmo efeito das
+  // 13 linhas consolidadas reais, cuja soma bate com ele).
+  function outubroSnap(geral = OUTUBRO_GERAL): DashboardSnapshot {
+    let snap = baseSnap();
+    snap = withTruck(snap, {
+      id: "b00bdb08-635b-41d8-a3e8-c360564d0e46",
+      status: "repasse",
+      sold_at: "2026-10-02",
+      updated_at: "2026-10-05",
+      sold_price: 155000,
+      purchase_price: 96500,
+      expenses_total: 11298.69,
+      purchase_date: "2026-09-21",
+    });
+    snap = withTruck(snap, {
+      id: "c150905e-7fea-4969-9ac6-9d6beb238610",
+      status: "vendido",
+      sold_at: "2026-10-02",
+      updated_at: "2026-10-05",
+      sold_price: 127500,
+      purchase_price: 84250,
+      expenses_total: 16017.87,
+      purchase_date: "2025-12-15",
+    });
+    geral.forEach((g) => {
+      snap = withGeneralExpense(snap, { ...g, financial_event_kind: "despesa_operacional" });
+    });
+    return snap;
+  }
+
+  const r = (snap = outubroSnap()) => computeMonthReport(snap, new Date(2026, 9, 1));
+
+  it("faturamento realizado = 2 caminhões vendidos em 02/10", () => {
+    expect(r().receita).toBe(282500);
+    expect(r().vendas).toBe(2);
+  });
+
+  it("compra dos veículos e despesas diretas (lifetime)", () => {
+    expect(r().custoCompra).toBe(180750);
+    expect(r().despesasDiretas).toBe(27316.56);
+    expect(r().lucroLiquidoCaminhoes).toBe(74433.44);
+  });
+
+  it("OPEX/outubro = R$ 15.511,51 (as 17 despesas reais, 0 payables de caminhão)", () => {
+    expect(r().opex).toBe(15511.51);
+    expect(r().despesasGerais).toBe(15511.51);
+  });
+
+  it("resultado líquido global = R$ 58.921,93 (número do relatório do CRM)", () => {
+    expect(r().resultadoGlobal).toBe(58921.93);
+    expect(r().lucroOperacional).toBe(58921.93);
+  });
+
+  /**
+   * Regressão da incidência: com o fetch único sem paginação o PostgREST
+   * cortava a janela de 12 meses em 1.000 linhas e outubro ficava com 2 das
+   * 17 linhas (55,00 + 681,59 = 736,59) — exatamente o que o APP mostrava.
+   */
+  it("truncamento antigo: 2 das 17 linhas → OPEX 736,59 e global 73.696,85 (APP)", () => {
+    const sobreviventes = OUTUBRO_GERAL.filter((g) => g.id === "ge06" || g.id === "ge08");
+    const truncado = r(outubroSnap(sobreviventes));
+    expect(truncado.opex).toBe(736.59);
+    expect(truncado.resultadoGlobal).toBe(73696.85);
+    // A divergência reportada entre CRM e APP em outubro/2026.
+    expect(r().opex - truncado.opex).toBeCloseTo(14774.92, 2);
+    expect(truncado.resultadoGlobal - r().resultadoGlobal).toBeCloseTo(14774.92, 2);
+  });
+
+  it("cadeia completa de outubro fecha sem buraco", () => {
+    const x = r();
+    expect(x.lucroBruto - x.despesasDiretas).toBeCloseTo(x.lucroLiquidoCaminhoes, 2);
+    expect(x.lucroLiquidoCaminhoes - x.opex).toBeCloseTo(x.resultadoGlobal, 2);
+    expect(x.receita - x.custoCompra - x.despesasDiretas - x.opex).toBeCloseTo(x.resultadoGlobal, 2);
+  });
+});
+
+describe("fetchAllPages — paginação contra o max-rows do PostgREST", () => {
+  const makeRows = (n: number) => Array.from({ length: n }, (_, i) => ({ id: i }));
+
+  it("pagina até completar o total (caso real: 1.170 linhas > 1.000)", async () => {
+    const rows = makeRows(1170);
+    const offsets: number[] = [];
+    const out = await fetchAllPages((from, to) => {
+      offsets.push(from);
+      return Promise.resolve({ data: rows.slice(from, to + 1), count: rows.length, error: null });
+    });
+    expect(out).toHaveLength(1170);
+    expect(offsets).toEqual([0, 1000]);
+  });
+
+  it("não deixa buraco quando o servidor corta abaixo do pageSize (max-rows < 1.000)", async () => {
+    const rows = makeRows(1170);
+    const CAP = 400;
+    const out = await fetchAllPages((from, to) => {
+      const end = Math.min(to + 1, from + CAP);
+      return Promise.resolve({ data: rows.slice(from, end), count: rows.length, error: null });
+    }, 1000);
+    // 400 + 400 + 370 = 1.170, sem pulo de offset nem linha repetida.
+    expect(out).toHaveLength(1170);
+    expect(out.map((r) => r.id)).toEqual(rows.map((r) => r.id));
+  });
+
+  it("para em página vazia mesmo sem count", async () => {
+    const out = await fetchAllPages((from) =>
+      Promise.resolve({ data: from === 0 ? [{ id: 1 }] : [], count: null, error: null }),
+    );
+    expect(out).toEqual([{ id: 1 }]);
+  });
+
+  it("propaga erro da consulta em vez de engolir (data ?? [] antigo)", async () => {
+    await expect(
+      fetchAllPages(() => Promise.resolve({ data: null, count: null, error: { message: "boom" } })),
+    ).rejects.toThrow("boom");
   });
 });

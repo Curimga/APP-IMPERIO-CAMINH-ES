@@ -5,6 +5,42 @@ import { includeInProfit, isAcquisitionPayment, isStockSale } from "@/lib/financ
 
 export type DashboardSnapshot = Awaited<ReturnType<typeof fetchDashboardSnapshot>>;
 
+type PageOf<Row> = {
+  data: Row[] | null;
+  error: { message: string } | null;
+  count?: number | null;
+};
+
+/**
+ * Busca TODAS as linhas de uma consulta paginando por `id` estável.
+ *
+ * O PostgREST deste projeto corta cada resposta em `max-rows` (1.000). A
+ * janela de 12 meses de `general_expenses` (1.170+ linhas) voltava truncada e
+ * o relatório perdia OPEX inteiro: em outubro/2026 só 2 das 17 linhas
+ * sobreviviam → APP mostrava OPEX 736,59 em vez de 15.511,51 (CRM).
+ *
+ * `count: "exact"` dá o total da janela; o offset avança pelo que foi
+ * RECEBIDO, então não sobra buraco nem quando o servidor devolve menos que o
+ * pedido (max-rows menor que o pageSize). Erro da consulta propaga (throw)
+ * em vez de virar lista vazia silenciosa.
+ */
+export async function fetchAllPages<Row>(
+  buildPage: (from: number, to: number) => PromiseLike<PageOf<Row>>,
+  pageSize = 1000,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  let from = 0;
+  for (;;) {
+    const page = await buildPage(from, from + pageSize - 1);
+    if (page.error) throw new Error(page.error.message);
+    const chunk = page.data ?? [];
+    rows.push(...chunk);
+    if (chunk.length === 0) return rows;
+    if (page.count != null ? rows.length >= page.count : chunk.length < pageSize) return rows;
+    from += chunk.length;
+  }
+}
+
 export async function fetchDashboardSnapshot() {
   const today = new Date();
   const startYear = new Date(today.getFullYear(), 0, 1).toISOString();
@@ -13,49 +49,51 @@ export async function fetchDashboardSnapshot() {
   const next30 = new Date(today.getTime() + 30 * 86400000).toISOString();
   // Este módulo é chamado apenas pelo Executivo (useMobileFinance é gated por
   // isAdmin). Usa consultas diretas reutilizando as políticas RLS do CRM.
-  const trucks = await supabase.from("trucks").select("*").not("status", "eq", "offline");
-  const [deals, customers, leads, payables, receivables, banks, txs, expenses, truckExpenseRows, commissions, goals, employees, events, generalExp, services, purchaseInst, invMoves] = await Promise.all([
-    supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at"),
-    supabase.from("customers").select("id,name,status,created_at"),
-    supabase.from("leads").select("id,status,source,created_at,owner_id"),
-    supabase.from("payables").select("id,description,supplier,amount,due_date,paid_at,status,category_id,truck_id,created_at,occurred_at,financial_event_kind,stock_purchase_id"),
-    supabase.from("receivables").select("id,description,amount,due_date,received_at,status,category_id,truck_id,customer_id,created_at,occurred_at"),
-    supabase.from("bank_accounts").select("id,name,current_balance,active").eq("active", true),
-    supabase.from("bank_transactions").select("id,amount,type,occurred_at,category_id").gte("occurred_at", start12m),
-    supabase.from("truck_expenses").select("id,amount,truck_id,occurred_at,kind").gte("occurred_at", start12m.slice(0, 10)),
-    supabase.from("consolidated_truck_expenses").select("id,amount,imperio_amount,shared,truck_id,occurred_at,category"),
-    supabase.from("commissions").select("id,amount,status,employee_id,paid_at,created_at,occurred_at"),
-    supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id"),
-    supabase.from("employees").select("id,full_name,salary,commission_amount,status").eq("status", "ativo"),
-    supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id").gte("starts_at", today.toISOString()).lte("starts_at", next30),
-    supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id,status,financial_event_kind,stock_movement_id,stock_purchase_id").gte("occurred_at", start12m.slice(0, 10)),
-    supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at"),
-    supabase.from("truck_purchase_installments").select("*"),
+  // TODAS as consultas paginam via `fetchAllPages` (ver acima): uma resposta
+  // única era cortada em 1.000 linhas pelo PostgREST e descartava dados.
+  const [trucks, deals, customers, leads, payables, receivables, banks, txs, expenses, truckExpenseRows, commissions, goals, employees, events, generalExp, services, purchaseInst, invMoves] = await Promise.all([
+    fetchAllPages((from, to) => supabase.from("trucks").select("*", { count: "exact" }).not("status", "eq", "offline").order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customers").select("id,name,status,created_at", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("leads").select("id,status,source,created_at,owner_id", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("payables").select("id,description,supplier,amount,due_date,paid_at,status,category_id,truck_id,created_at,occurred_at,financial_event_kind,stock_purchase_id", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("receivables").select("id,description,amount,due_date,received_at,status,category_id,truck_id,customer_id,created_at,occurred_at", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_accounts").select("id,name,current_balance,active", { count: "exact" }).eq("active", true).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_transactions").select("id,amount,type,occurred_at,category_id", { count: "exact" }).gte("occurred_at", start12m).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("truck_expenses").select("id,amount,truck_id,occurred_at,kind", { count: "exact" }).gte("occurred_at", start12m.slice(0, 10)).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("consolidated_truck_expenses").select("id,amount,imperio_amount,shared,truck_id,occurred_at,category", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("commissions").select("id,amount,status,employee_id,paid_at,created_at,occurred_at", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("employees").select("id,full_name,salary,commission_amount,status", { count: "exact" }).eq("status", "ativo").order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id", { count: "exact" }).gte("starts_at", today.toISOString()).lte("starts_at", next30).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id,status,financial_event_kind,stock_movement_id,stock_purchase_id", { count: "exact" }).gte("occurred_at", start12m.slice(0, 10)).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("truck_purchase_installments").select("*", { count: "exact" }).order("id").range(from, to)),
     // Sem limite superior: `computeMonthlyReports` cobre 12 meses para trás a
     // partir de hoje, e a janela precisa conter todos eles. O limite tem que
     // ser o INÍCIO da janela, não o mesmo dia do início.
-    supabase.from("inventory_movements").select("id,movement_type,total_amount,created_at,financial_event_kind,truck_id,stock_purchase_id,origin").gte("created_at", start12m.slice(0, 10)),
+    fetchAllPages((from, to) => supabase.from("inventory_movements").select("id,movement_type,total_amount,created_at,financial_event_kind,truck_id,stock_purchase_id,origin", { count: "exact" }).gte("created_at", start12m.slice(0, 10)).order("id").range(from, to)),
   ]);
 
   return {
-    trucks: (trucks.data ?? []) as Tables<"trucks">[],
-    deals: (deals.data ?? []) as Tables<"deals">[],
-    customers: (customers.data ?? []) as Tables<"customers">[],
-    leads: (leads.data ?? []) as Tables<"leads">[],
-    payables: (payables.data ?? []) as Tables<"payables">[],
-    receivables: (receivables.data ?? []) as Tables<"receivables">[],
-    banks: (banks.data ?? []) as Tables<"bank_accounts">[],
-    txs: (txs.data ?? []) as Tables<"bank_transactions">[],
-    expenses: (expenses.data ?? []) as Tables<"truck_expenses">[],
-    truckExpenseRows: (truckExpenseRows.data ?? []) as Tables<"consolidated_truck_expenses">[],
-    commissions: (commissions.data ?? []) as Tables<"commissions">[],
-    goals: (goals.data ?? []) as Tables<"goals">[],
-    employees: (employees.data ?? []) as Tables<"employees">[],
-    events: (events.data ?? []) as Tables<"calendar_events">[],
-    generalExp: (generalExp.data ?? []) as Tables<"general_expenses">[],
-    services: (services.data ?? []) as Tables<"services">[],
-    purchaseInst: (purchaseInst.data ?? []) as Tables<"truck_purchase_installments">[],
-    invMoves: (invMoves.data ?? []) as Tables<"inventory_movements">[],
+    trucks: trucks as Tables<"trucks">[],
+    deals: deals as Tables<"deals">[],
+    customers: customers as Tables<"customers">[],
+    leads: leads as Tables<"leads">[],
+    payables: payables as Tables<"payables">[],
+    receivables: receivables as Tables<"receivables">[],
+    banks: banks as Tables<"bank_accounts">[],
+    txs: txs as Tables<"bank_transactions">[],
+    expenses: expenses as Tables<"truck_expenses">[],
+    truckExpenseRows: truckExpenseRows as Tables<"consolidated_truck_expenses">[],
+    commissions: commissions as Tables<"commissions">[],
+    goals: goals as Tables<"goals">[],
+    employees: employees as Tables<"employees">[],
+    events: events as Tables<"calendar_events">[],
+    generalExp: generalExp as Tables<"general_expenses">[],
+    services: services as Tables<"services">[],
+    purchaseInst: purchaseInst as Tables<"truck_purchase_installments">[],
+    invMoves: invMoves as Tables<"inventory_movements">[],
     refs: { today, startYear, start12m },
   };
 }
