@@ -14,7 +14,7 @@ export async function fetchDashboardSnapshot() {
   // Este módulo é chamado apenas pelo Executivo (useMobileFinance é gated por
   // isAdmin). Usa consultas diretas reutilizando as políticas RLS do CRM.
   const trucks = await supabase.from("trucks").select("*").not("status", "eq", "offline");
-  const [deals, customers, leads, payables, receivables, banks, txs, expenses, commissions, goals, employees, events, generalExp, services, purchaseInst, invMoves] = await Promise.all([
+  const [deals, customers, leads, payables, receivables, banks, txs, expenses, truckExpenseRows, commissions, goals, employees, events, generalExp, services, purchaseInst, invMoves] = await Promise.all([
     supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at"),
     supabase.from("customers").select("id,name,status,created_at"),
     supabase.from("leads").select("id,status,source,created_at,owner_id"),
@@ -23,6 +23,7 @@ export async function fetchDashboardSnapshot() {
     supabase.from("bank_accounts").select("id,name,current_balance,active").eq("active", true),
     supabase.from("bank_transactions").select("id,amount,type,occurred_at,category_id").gte("occurred_at", start12m),
     supabase.from("truck_expenses").select("id,amount,truck_id,occurred_at,kind").gte("occurred_at", start12m.slice(0, 10)),
+    supabase.from("consolidated_truck_expenses").select("id,amount,imperio_amount,shared,truck_id,occurred_at,category"),
     supabase.from("commissions").select("id,amount,status,employee_id,paid_at,created_at,occurred_at"),
     supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id"),
     supabase.from("employees").select("id,full_name,salary,commission_amount,status").eq("status", "ativo"),
@@ -46,6 +47,7 @@ export async function fetchDashboardSnapshot() {
     banks: (banks.data ?? []) as Tables<"bank_accounts">[],
     txs: (txs.data ?? []) as Tables<"bank_transactions">[],
     expenses: (expenses.data ?? []) as Tables<"truck_expenses">[],
+    truckExpenseRows: (truckExpenseRows.data ?? []) as Tables<"consolidated_truck_expenses">[],
     commissions: (commissions.data ?? []) as Tables<"commissions">[],
     goals: (goals.data ?? []) as Tables<"goals">[],
     employees: (employees.data ?? []) as Tables<"employees">[],
@@ -81,7 +83,13 @@ export function imperioShare(r: { shared?: boolean | null; amount?: number | nul
  * se `amount` vier nulo.
  */
 export const reportExpenseValue = (r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) =>
-money(r.shared ? (r.imperio_amount ?? 0) : (r.amount ?? r.imperio_amount ?? 0));
+  money(r.shared ? (r.imperio_amount ?? 0) : (r.amount ?? r.imperio_amount ?? 0));
+
+function truckDirectExpenseTotal(s: DashboardSnapshot, truck: Tables<"trucks">): number {
+  const rows = (s.truckExpenseRows ?? []).filter((r) => r?.truck_id === truck.id);
+  if (rows.length) return sumMoney(rows.map(reportExpenseValue));
+  return Number(truck.expenses_total ?? 0);
+}
 
 /**
  * Converte "YYYY-MM-DD..." em data LOCAL (nunca UTC). `new Date("2026-09-14")`
@@ -327,7 +335,7 @@ export function computePeriodReport(
   );
   const receita = money(sumMoney(sold.map((t) => t?.sold_price)) + vendaEstoque);
   const custoCompra = sumMoney(sold.map((t) => t?.purchase_price));
-  const despesasCaminhao = sumMoney(sold.map((t) => t?.expenses_total));
+  const despesasCaminhao = sumMoney(sold.map((t) => truckDirectExpenseTotal(s, t)));
   const custoTotal = money(custoCompra + despesasCaminhao);
 
   // ── OPEX / DESPESAS GERAIS ────────────────────────────────────────────────

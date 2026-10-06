@@ -8,9 +8,10 @@
 -- PARTE 1 — DIAGNÓSTICO (somente leitura)
 -- ---------------------------------------------------------------------------
 -- 1.1 Tabelas que o app espera em tempo real (fonte única: src/lib/mobile/realtime-map.ts).
---      São as 28 chaves assinadas pelo hub (src/components/dashboard/use-realtime-sync.tsx).
+--      São as 29 chaves assinadas pelo hub (src/components/dashboard/use-realtime-sync.tsx).
 --      Obs.: financeiro/secretária NÃO assinam payables, receivables, bank_accounts,
---      bank_transactions, commissions, financial_categories e general_expenses
+--      bank_transactions, commissions, financial_categories, general_expenses e
+--      inventory_movements
 --      (perfis de papel via RLS no nível do cliente).
 --
 -- 1.2 Conferir o que está publicado agora:
@@ -52,7 +53,8 @@ order by el.relname;
 --   public.notifications,
 --   public.financial_categories,
 --   public.general_expenses,
---   public.inventory_items;
+--   public.inventory_items,
+--   public.inventory_movements;
 
 -- ---------------------------------------------------------------------------
 -- PARTE 3 — REPLICA IDENTITY FULL (SE a leitura do registro antigo for exigida)

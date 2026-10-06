@@ -40,6 +40,7 @@ export interface RealtimeKeyMap {
   financial_categories: string[];
   general_expenses: string[];
   inventory_items: string[];
+  inventory_movements: string[];
 }
 
 export const TABLE_KEYS: RealtimeKeyMap = {
@@ -84,6 +85,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "sold-trucks-mobile",
     "finance-mobile",
     "dashboard-snapshot",
+    "capital-imobilizado",
     "truck-expenses",
     "truck-expenses-sum",
   ],
@@ -176,6 +178,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "general-expenses",
     "finance-mobile",
     "truck-detail",
+    "capital-imobilizado",
     "truck-expenses",
     "truck-expenses-sum",
     "dashboard-snapshot",
@@ -186,6 +189,17 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "inventory-item",
     "inventory-summary",
     "dashboard-snapshot",
+  ],
+  inventory_movements: [
+    "finance-mobile",
+    "dashboard-snapshot",
+    "inventory-mobile",
+    "inventory-items",
+    "inventory-summary",
+    "truck-detail",
+    "truck-expenses",
+    "truck-expenses-sum",
+    "capital-imobilizado",
   ],
 };
 

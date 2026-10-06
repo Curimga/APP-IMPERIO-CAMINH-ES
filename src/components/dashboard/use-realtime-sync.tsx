@@ -39,6 +39,7 @@ export const FINANCIAL_TABLES: readonly (keyof RealtimeKeyMap)[] = [
   "commissions",
   "financial_categories",
   "general_expenses",
+  "inventory_movements",
 ];
 
 /** Função pura: quais tabelas assinar para um perfil. Financeiras só p/ Executivo autorizado. */

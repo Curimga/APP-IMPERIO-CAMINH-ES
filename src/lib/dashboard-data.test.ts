@@ -44,8 +44,39 @@ function baseSnap(): DashboardSnapshot {
     receivables: [],
     banks: [],
     expenses: [],
+    truckExpenseRows: [],
     purchaseInst: [],
     goals: [],
+  } as unknown as DashboardSnapshot;
+}
+
+function withConsolidatedTruckExpense(
+  snap: DashboardSnapshot,
+  over: Partial<{
+    id: string;
+    amount: number;
+    imperio_amount: number | null;
+    shared: boolean;
+    truck_id: string | null;
+    occurred_at: string;
+    category: string;
+  }>,
+) {
+  return {
+    ...snap,
+    truckExpenseRows: [
+      ...(((snap as unknown as { truckExpenseRows?: never[] }).truckExpenseRows ?? []) as never[]),
+      {
+        id: "ce1",
+        amount: 752.49,
+        imperio_amount: 752.49,
+        shared: false,
+        truck_id: "t1",
+        occurred_at: "2026-09-03",
+        category: "manutencao",
+        ...over,
+      } as never,
+    ],
   } as unknown as DashboardSnapshot;
 }
 
@@ -435,6 +466,15 @@ describe("paridade com o CRM — setembro/2026 (valores do relatório executivo 
   it("despesas diretas (caminhões)", () => {
     expect(r().despesasDiretas).toBe(26564.07);
     expect(r().custoTotal).toBe(207314.07);
+  });
+
+  it("despesas diretas usam despesas consolidadas reais quando existirem", () => {
+    let snap = baseSnap();
+    snap = withTruck(snap, { id: "t1", sold_price: 282500, purchase_price: 180750, expenses_total: 1 });
+    snap = withConsolidatedTruckExpense(snap, { truck_id: "t1", amount: 27316.56, imperio_amount: 27316.56 });
+    const x = computeMonthReport(snap, new Date(2026, 8, 1));
+    expect(x.despesasDiretas).toBe(27316.56);
+    expect(x.lucroLiquidoCaminhoes).toBe(74433.44);
   });
 
   it("lucro líquido caminhões = lucro bruto − despesas diretas", () => {

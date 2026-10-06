@@ -57,6 +57,7 @@ describe("realtime-map — todos os prefixes mobile de queries.ts são invalidá
       "truck_status_history",
       "truck_expenses",
       "general_expenses",
+      "inventory_movements",
       "services",
       "calendar_events",
       "customers",
@@ -66,6 +67,13 @@ describe("realtime-map — todos os prefixes mobile de queries.ts são invalidá
       expect(TABLE_KEYS[t], `faltou TABLE_KEYS.${t}`).toBeDefined();
       expect(TABLE_KEYS[t].length).toBeGreaterThan(0);
     }
+  });
+
+  it("inventory_movements invalida financeiro e estoque (venda/consumo de estoque do CRM)", () => {
+    expect(TABLE_KEYS.inventory_movements).toContain("finance-mobile");
+    expect(TABLE_KEYS.inventory_movements).toContain("dashboard-snapshot");
+    expect(TABLE_KEYS.inventory_movements).toContain("inventory-mobile");
+    expect(TABLE_KEYS.inventory_movements).toContain("capital-imobilizado");
   });
 });
 
