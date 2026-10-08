@@ -40,7 +40,7 @@ function Menu() {
   const { data } = useNotifications();
   const pendencias = usePendencies();
   const install = useInstallPrompt();
-  const items = MOBILE_MENU.filter((m) => m.allowed(roles, user?.email));
+  const items = MOBILE_MENU.filter((m) => m.allowed(roles, user?.email, user?.id));
   const unread = data?.unread ?? 0;
 
   return (

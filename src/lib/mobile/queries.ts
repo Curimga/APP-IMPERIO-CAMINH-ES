@@ -1,9 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchDashboardSnapshot, computeExecutiveKpis } from "@/lib/dashboard-data";
 import { spaTodayISO } from "@/lib/mobile/dates";
 import { useAuth } from "@/hooks/use-auth";
-import { isFinanceExecutive } from "@/lib/mobile/perm";
+import { canAccessBanking, isFinanceExecutive } from "@/lib/mobile/perm";
+import { parseMoney } from "@/lib/format";
 import type { Tables } from "@/integrations/supabase/types";
 import type { TruckCustomerRef, TruckDealRef } from "@/lib/mobile/truck-detail";
 
@@ -187,6 +188,42 @@ export interface GlobalSearchResults {
   customers: CustomerItem[];
   services: GlobalSearchService[];
   hasQuery: boolean;
+}
+
+export type BankTxType = "entrada" | "saida";
+export type BankPeriod = "7d" | "30d" | "90d";
+
+export type BankingAccount = Pick<Tables<"bank_accounts">, "id" | "name" | "bank" | "current_balance" | "active"> & {
+  period_in: number;
+  period_out: number;
+  last_movement_at: string | null;
+};
+
+export type BankingTransaction = Tables<"bank_transactions"> & {
+  bank_accounts: Pick<Tables<"bank_accounts">, "name" | "bank"> | null;
+  financial_categories: Pick<Tables<"financial_categories">, "name" | "kind"> | null;
+};
+
+export interface BankingFilters {
+  period: BankPeriod;
+  accountId: string;
+  type: "all" | BankTxType;
+}
+
+export interface BankMovementInput {
+  type: BankTxType;
+  bankAccountId: string;
+  amount: string;
+  occurredAt: string;
+  categoryId?: string;
+  description?: string;
+}
+
+export interface BankTransferInput {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: string;
+  description?: string;
 }
 
 export type TruckDetail = Tables<"trucks"> & {
@@ -840,6 +877,171 @@ export function useMobileFinance() {
       return { snap, kpis };
     },
     staleTime: 30_000,
+  });
+}
+
+function bankingRange(period: BankPeriod) {
+  const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - days + 1);
+  from.setHours(0, 0, 0, 0);
+  to.setHours(23, 59, 59, 999);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+export function useBankingAccess() {
+  const { roles, user } = useAuth();
+  return canAccessBanking(roles, user?.email, user?.id);
+}
+
+export function useBankingData(filters: BankingFilters) {
+  const canAccess = useBankingAccess();
+  return useQuery({
+    queryKey: ["banking-mobile", filters],
+    enabled: canAccess,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const range = bankingRange(filters.period);
+      const accountsQuery = supabase
+        .from("bank_accounts")
+        .select("id,name,bank,current_balance,active")
+        .eq("active", true)
+        .order("name", { ascending: true });
+
+      let txQuery = supabase
+        .from("bank_transactions")
+        .select("*, bank_accounts!bank_transactions_bank_account_id_fkey(name, bank), financial_categories(name, kind)")
+        .gte("occurred_at", range.from)
+        .lte("occurred_at", range.to)
+        .order("occurred_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (filters.accountId !== "all") txQuery = txQuery.eq("bank_account_id", filters.accountId);
+      if (filters.type !== "all") txQuery = txQuery.eq("type", filters.type);
+
+      const [accountsResult, txResult, categoriesResult] = await Promise.all([
+        accountsQuery,
+        txQuery,
+        supabase.from("financial_categories").select("id,name,kind").order("name", { ascending: true }),
+      ]);
+
+      if (accountsResult.error) throw accountsResult.error;
+      if (txResult.error) throw txResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
+
+      const transactions = (txResult.data ?? []) as unknown as BankingTransaction[];
+      const accountTotals = new Map<string, { period_in: number; period_out: number; last_movement_at: string | null }>();
+      for (const tx of transactions) {
+        const current = accountTotals.get(tx.bank_account_id) ?? {
+          period_in: 0,
+          period_out: 0,
+          last_movement_at: null,
+        };
+        if (tx.type === "entrada") current.period_in += Number(tx.amount ?? 0);
+        if (tx.type === "saida") current.period_out += Number(tx.amount ?? 0);
+        if (!current.last_movement_at || tx.occurred_at > current.last_movement_at) {
+          current.last_movement_at = tx.occurred_at;
+        }
+        accountTotals.set(tx.bank_account_id, current);
+      }
+
+      const accounts = ((accountsResult.data ?? []) as Pick<Tables<"bank_accounts">, "id" | "name" | "bank" | "current_balance" | "active">[]).map(
+        (account) => ({
+          ...account,
+          ...(accountTotals.get(account.id) ?? { period_in: 0, period_out: 0, last_movement_at: null }),
+        }),
+      );
+
+      return {
+        accounts,
+        transactions,
+        categories: categoriesResult.data ?? [],
+        totals: transactions.reduce(
+          (acc, tx) => {
+            if (tx.type === "entrada") acc.in += Number(tx.amount ?? 0);
+            if (tx.type === "saida") acc.out += Number(tx.amount ?? 0);
+            return acc;
+          },
+          { in: 0, out: 0 },
+        ),
+      };
+    },
+  });
+}
+
+export function useCreateBankMovement() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: BankMovementInput) => {
+      const amount = parseMoney(input.amount);
+      if (!input.bankAccountId) throw new Error("Escolha a conta bancária.");
+      if (amount <= 0) throw new Error("Informe um valor maior que zero.");
+      if (!input.occurredAt || Number.isNaN(new Date(input.occurredAt).getTime())) throw new Error("Informe uma data válida.");
+
+      const { error } = await supabase.from("bank_transactions").insert({
+        type: input.type,
+        amount,
+        bank_account_id: input.bankAccountId,
+        category_id: input.categoryId || null,
+        description: input.description?.trim() || null,
+        source: input.type === "entrada" ? "entrada_manual" : "saida_manual",
+        occurred_at: new Date(input.occurredAt).toISOString(),
+        created_by: user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      ["banking-mobile", "finance-mobile", "bank_transactions", "bank_accounts", "dashboard-snapshot"].forEach((key) =>
+        qc.invalidateQueries({ queryKey: [key] }),
+      );
+    },
+  });
+}
+
+export function useCreateBankTransfer() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: BankTransferInput) => {
+      const amount = parseMoney(input.amount);
+      if (!input.fromAccountId || !input.toAccountId) throw new Error("Escolha as duas contas.");
+      if (input.fromAccountId === input.toAccountId) throw new Error("Escolha contas diferentes.");
+      if (amount <= 0) throw new Error("Informe um valor maior que zero.");
+      const occurredAt = new Date().toISOString();
+      const description = input.description?.trim() || "Transferência entre contas";
+
+      const { error: outError } = await supabase.from("bank_transactions").insert({
+        type: "saida",
+        amount,
+        bank_account_id: input.fromAccountId,
+        transfer_account_id: input.toAccountId,
+        source: "transferencia",
+        description: `Transferência - saída - ${description}`,
+        occurred_at: occurredAt,
+        created_by: user?.id ?? null,
+      });
+      if (outError) throw outError;
+
+      const { error: inError } = await supabase.from("bank_transactions").insert({
+        type: "entrada",
+        amount,
+        bank_account_id: input.toAccountId,
+        transfer_account_id: input.fromAccountId,
+        source: "transferencia",
+        description: `Transferência - entrada - ${description}`,
+        occurred_at: occurredAt,
+        created_by: user?.id ?? null,
+      });
+      if (inError) throw inError;
+    },
+    onSuccess: () => {
+      ["banking-mobile", "finance-mobile", "bank_transactions", "bank_accounts", "dashboard-snapshot"].forEach((key) =>
+        qc.invalidateQueries({ queryKey: [key] }),
+      );
+    },
   });
 }
 

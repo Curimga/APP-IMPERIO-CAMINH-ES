@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Download, Check, Mail, Phone, LogOut, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Download, Check, Mail, Phone, LogOut, RefreshCw, KeyRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { roleLabel } from "@/lib/mobile/perm";
 import { MobileCard, SectionTitle, ListRow } from "@/components/mobile/ui";
 import { useInstallPrompt, useSwUpdate } from "@/lib/mobile/install";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/perfil")({
@@ -21,12 +23,40 @@ function Perfil() {
   const nav = useNavigate();
   const install = useInstallPrompt();
   const sw = useSwUpdate();
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const initial = (profile?.full_name?.[0] ?? user?.email?.[0] ?? "U").toUpperCase();
 
   const logout = async () => {
     await signOut();
     nav({ to: "/login" });
+  };
+
+  const changePassword = async () => {
+    const password = newPassword.trim();
+    if (password.length < 6) {
+      toast.error("Use uma senha com pelo menos 6 caracteres.");
+      return;
+    }
+    if (password !== confirmPassword.trim()) {
+      toast.error("As senhas digitadas não conferem.");
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Senha alterada com sucesso.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível alterar a senha.");
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   return (
@@ -64,6 +94,57 @@ function Perfil() {
               </span>
             ) : null}
           </div>
+        </div>
+      </MobileCard>
+
+      {/* Senha */}
+      <MobileCard className="p-3">
+        <SectionTitle>Senha de acesso</SectionTitle>
+        <div className="space-y-3 px-1 pb-1">
+          <div className="flex items-start gap-3 rounded-2xl bg-surface-secondary p-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold text-gold-foreground">
+              <KeyRound className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="text-sm font-bold">Alterar senha</div>
+              <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                Digite a nova senha duas vezes. Não precisa informar a senha atual.
+              </p>
+            </div>
+          </div>
+
+          <label className="grid gap-1.5 text-sm font-bold">
+            Nova senha
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Digite a nova senha"
+              className="h-12 rounded-xl border bg-background px-3 text-base outline-none focus:border-gold"
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-bold">
+            Confirmar nova senha
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Digite novamente"
+              className="h-12 rounded-xl border bg-background px-3 text-base outline-none focus:border-gold"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={changePassword}
+            disabled={savingPassword || !newPassword || !confirmPassword}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gold text-sm font-extrabold text-gold-foreground active:opacity-80 disabled:opacity-50"
+          >
+            <KeyRound className="h-4 w-4" /> {savingPassword ? "Alterando..." : "Alterar senha"}
+          </button>
         </div>
       </MobileCard>
 

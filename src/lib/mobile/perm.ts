@@ -28,6 +28,25 @@ export function isFinanceExecutive(roles: AppRole[], email?: string | null) {
   return roles.includes("admin") && !isFinanceBlockedEmail(email);
 }
 
+/**
+ * Permissão individual para o módulo de contas bancárias.
+ *
+ * Preencher com o UUID real de `auth.users.id` do Edson Luiz após confirmação
+ * do administrador. Não usar nome/e-mail, pois não são identificadores imutáveis.
+ */
+export const EDSON_BANKING_USER_IDS = new Set<string>([
+  // "00000000-0000-0000-0000-000000000000",
+]);
+
+export function isEdsonBankingUser(userId?: string | null) {
+  return Boolean(userId && EDSON_BANKING_USER_IDS.has(userId));
+}
+
+/** Contas bancárias e movimentações: Executivo/Admin ou UUID individual autorizado. */
+export function canAccessBanking(roles: AppRole[], email?: string | null, userId?: string | null) {
+  return isFinanceExecutive(roles, email) || isEdsonBankingUser(userId);
+}
+
 /** Executivo: acesso ao módulo Financeiro. */
 export function canSeeFinance(roles: AppRole[], email?: string | null) {
   return isFinanceExecutive(roles, email);
@@ -64,7 +83,7 @@ export const MOBILE_MENU: {
   label: string;
   to: string;
   icon: string;
-  allowed: (roles: AppRole[], email?: string | null) => boolean;
+  allowed: (roles: AppRole[], email?: string | null, userId?: string | null) => boolean;
   description: string;
 }[] = [
   {
@@ -106,8 +125,8 @@ export const MOBILE_MENU: {
     label: "Financeiro",
     to: "/financeiro",
     icon: "dollar",
-    allowed: isFinanceExecutive,
-    description: "Indicadores e lançamentos",
+    allowed: canAccessBanking,
+    description: "Contas e movimentações",
   },
   {
     label: "Estoque",

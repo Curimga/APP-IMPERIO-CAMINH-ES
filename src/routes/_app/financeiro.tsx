@@ -8,19 +8,35 @@ import {
   ArrowUpRight,
   LayoutDashboard,
   FileBarChart2,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  CheckCircle2,
+  RefreshCw,
+  WalletCards,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useMobileFinance, useCapitalImobilizado } from "@/lib/mobile/queries";
-import { canSeeFinance } from "@/lib/mobile/perm";
+import {
+  useBankingAccess,
+  useBankingData,
+  useCapitalImobilizado,
+  useCreateBankMovement,
+  useCreateBankTransfer,
+  useMobileFinance,
+  type BankPeriod,
+  type BankTxType,
+} from "@/lib/mobile/queries";
+import { canAccessBanking, canSeeFinance } from "@/lib/mobile/perm";
 import {
   MobileCard,
   SectionTitle,
   SkeletonRows,
   EmptyState,
   MoneyStat,
+  Chip,
 } from "@/components/mobile/ui";
 import { FinanceReport } from "@/components/mobile/finance-report";
-import { dateBR, money } from "@/lib/format";
+import { brl, dateBR, money, parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -37,34 +53,37 @@ function Financeiro() {
   const { roles, user } = useAuth();
   const navigate = useNavigate();
   const [reveal, setReveal] = useState(false);
-  const [tab, setTab] = useState<"indicadores" | "relatorios">("indicadores");
+  const [tab, setTab] = useState<"contas" | "indicadores" | "relatorios">("contas");
+  const canBank = canAccessBanking(roles, user?.email, user?.id);
+  const canExecutive = canSeeFinance(roles, user?.email);
   const { data, isLoading, isError } = useMobileFinance();
   const cap = useCapitalImobilizado();
 
-  if (!canSeeFinance(roles, user?.email)) {
+  if (!canBank) {
     return (
       <EmptyState
         title="Você não possui permissão para acessar esta área"
-        hint="O módulo Financeiro é restrito ao Executivo."
+        hint="Contas bancárias são restritas ao Executivo/Admin e ao usuário individual autorizado."
         actionLabel="Voltar para o início"
         onAction={() => navigate({ to: "/" })}
       />
     );
   }
 
-  if (isLoading || !data) return <SkeletonRows rows={4} height={84} />;
-  if (isError)
+  if (canExecutive && (isLoading || !data)) return <SkeletonRows rows={4} height={84} />;
+  if (canExecutive && isError)
     return <EmptyState title="Erro ao carregar indicadores" hint="Verifique sua conexão." />;
 
-  const { snap, kpis } = data;
+  const snap = data?.snap;
+  const kpis = data?.kpis;
 
   const valuemaybe = (v: number, pre = "R$ "): string =>
     reveal
       ? `${pre}${money(Number(v ?? 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : "R$ ••••";
-  const banks = (snap.banks ?? []) as Tables<"bank_accounts">[];
-  const receivables = (snap.receivables ?? []) as Tables<"receivables">[];
-  const payables = (snap.payables ?? []) as Tables<"payables">[];
+  const banks = (snap?.banks ?? []) as Tables<"bank_accounts">[];
+  const receivables = (snap?.receivables ?? []) as Tables<"receivables">[];
+  const payables = (snap?.payables ?? []) as Tables<"payables">[];
   const hasOpenDue =
     receivables.some((r) => r.received_at == null && r.due_date) ||
     payables.some((p) => p.paid_at == null && p.due_date);
@@ -83,8 +102,21 @@ function Financeiro() {
         </button>
       </div>
 
-      {/* Alternador Indicadores / Relatórios */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className={cn("grid gap-2", canExecutive ? "grid-cols-3" : "grid-cols-1")}>
+        <button
+          type="button"
+          onClick={() => setTab("contas")}
+          className={cn(
+            "flex h-10 items-center justify-center gap-1.5 rounded-xl border text-[13px] font-bold pressable",
+            tab === "contas"
+              ? "border-gold bg-gold text-gold-foreground"
+              : "bg-card text-muted-foreground active:bg-muted/60",
+          )}
+        >
+          <WalletCards className="h-4 w-4" /> Contas
+        </button>
+        {canExecutive ? (
+          <>
         <button
           type="button"
           onClick={() => setTab("indicadores")}
@@ -109,20 +141,24 @@ function Financeiro() {
         >
           <FileBarChart2 className="h-4 w-4" /> Relatórios
         </button>
+          </>
+        ) : null}
       </div>
 
-      {tab === "relatorios" ? (
+      {tab === "contas" ? (
+        <BankingPanel />
+      ) : tab === "relatorios" && snap ? (
         <FinanceReport snap={snap} reveal={reveal} />
       ) : (
         <>
           {/* Principais indicadores */}
           <div className="grid grid-cols-2 gap-2">
-            <MoneyStat
-              label="Saldo em conta"
-              value={valuemaybe(kpis.balance ?? 0)}
-              accent={kpis.balance >= 0 ? "success" : "destructive"}
+              <MoneyStat
+                label="Saldo em conta"
+              value={valuemaybe(kpis?.balance ?? 0)}
+              accent={(kpis?.balance ?? 0) >= 0 ? "success" : "destructive"}
             />
-            <MoneyStat label="Receita do mês" value={valuemaybe(kpis.revMonth ?? 0)} accent="gold" />
+            <MoneyStat label="Receita do mês" value={valuemaybe(kpis?.revMonth ?? 0)} accent="gold" />
           </div>
 
           {/* Capital imobilizado */}
@@ -214,6 +250,177 @@ function Financeiro() {
           </MobileCard>
         </>
       )}
+    </>
+  );
+}
+
+function BankingPanel() {
+  const canAccess = useBankingAccess();
+  const [period, setPeriod] = useState<BankPeriod>("30d");
+  const [accountId, setAccountId] = useState("all");
+  const [type, setType] = useState<"all" | BankTxType>("all");
+  const [mode, setMode] = useState<"list" | "entrada" | "saida" | "transferencia" | "review">("list");
+  const [reviewTxType, setReviewTxType] = useState<BankTxType>("entrada");
+  const [form, setForm] = useState({ bankAccountId: "", amount: "", occurredAt: new Date().toISOString().slice(0, 10), categoryId: "", description: "" });
+  const [transfer, setTransfer] = useState({ fromAccountId: "", toAccountId: "", amount: "", description: "" });
+  const banking = useBankingData({ period, accountId, type });
+  const movement = useCreateBankMovement();
+  const transferMutation = useCreateBankTransfer();
+
+  if (!canAccess) return null;
+  if (banking.isLoading) return <SkeletonRows rows={5} height={92} />;
+  if (banking.isError) {
+    return <EmptyState title="Não foi possível carregar as contas" hint="Confira sua conexão e tente novamente." />;
+  }
+
+  const data = banking.data;
+  if (!data) return null;
+  const activeCategories = data.categories.filter((c) => (mode === "entrada" ? c.kind === "receita" : c.kind === "despesa"));
+  const selectedAccount = data.accounts.find((a) => a.id === form.bankAccountId);
+  const reviewType = mode === "review" ? reviewTxType : mode;
+  const canReviewMovement = form.bankAccountId && parseMoney(form.amount) > 0 && form.occurredAt;
+  const saveMovement = async (txType: BankTxType) => {
+    await movement.mutateAsync({ ...form, type: txType });
+    setForm({ bankAccountId: "", amount: "", occurredAt: new Date().toISOString().slice(0, 10), categoryId: "", description: "" });
+    setMode("list");
+  };
+
+  if (mode === "entrada" || mode === "saida") {
+    const txType = mode;
+    return (
+      <MobileCard className="space-y-4 p-4">
+        <SectionTitle>{txType === "entrada" ? "Adicionar entrada" : "Adicionar saída"}</SectionTitle>
+        <div className="grid gap-3">
+          <label className="grid gap-1 text-sm font-bold">Conta
+            <select className="h-12 rounded-xl border bg-background px-3 text-base" value={form.bankAccountId} onChange={(e) => setForm({ ...form, bankAccountId: e.target.value })}>
+              <option value="">Escolha a conta</option>
+              {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-bold">Valor
+            <input className="h-12 rounded-xl border bg-background px-3 text-lg font-bold" inputMode="decimal" placeholder="0,00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+          </label>
+          <label className="grid gap-1 text-sm font-bold">Data
+            <input className="h-12 rounded-xl border bg-background px-3 text-base" type="date" value={form.occurredAt} onChange={(e) => setForm({ ...form, occurredAt: e.target.value })} />
+          </label>
+          <label className="grid gap-1 text-sm font-bold">Categoria
+            <select className="h-12 rounded-xl border bg-background px-3 text-base" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+              <option value="">Sem categoria</option>
+              {activeCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-bold">Descrição
+            <input className="h-12 rounded-xl border bg-background px-3 text-base" placeholder="Ex.: depósito, tarifa, pagamento" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="h-12 rounded-xl border bg-card font-bold" onClick={() => setMode("list")}>Cancelar</button>
+          <button type="button" className="h-12 rounded-xl bg-gold font-extrabold text-gold-foreground disabled:opacity-50" disabled={!canReviewMovement} onClick={() => { setReviewTxType(txType); setMode("review"); }}>Revisar</button>
+        </div>
+      </MobileCard>
+    );
+  }
+
+  if (mode === "review") {
+    return (
+      <MobileCard className="space-y-4 p-4">
+        <SectionTitle>Confirmar antes de salvar</SectionTitle>
+        <div className="rounded-2xl bg-surface-secondary p-4 text-sm leading-7">
+          <div><b>Tipo:</b> {reviewType === "saida" ? "Saída" : "Entrada"}</div>
+          <div><b>Conta:</b> {selectedAccount?.name ?? "Conta selecionada"}</div>
+          <div><b>Valor:</b> {brl(parseMoney(form.amount))}</div>
+          <div><b>Data:</b> {dateBR(form.occurredAt)}</div>
+          <div><b>Descrição:</b> {form.description || "Sem descrição"}</div>
+        </div>
+        {movement.isError ? <p className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">Não foi possível salvar. Confira os dados e tente novamente.</p> : null}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="h-12 rounded-xl border bg-card font-bold" disabled={movement.isPending} onClick={() => setMode(reviewType === "saida" ? "saida" : "entrada")}>Voltar</button>
+          <button type="button" className="h-12 rounded-xl bg-gold font-extrabold text-gold-foreground disabled:opacity-50" disabled={movement.isPending} onClick={() => void saveMovement(reviewType === "saida" ? "saida" : "entrada").catch(() => undefined)}>{movement.isPending ? "Salvando..." : "Confirmar"}</button>
+        </div>
+      </MobileCard>
+    );
+  }
+
+  if (mode === "transferencia") {
+    const canTransfer = transfer.fromAccountId && transfer.toAccountId && transfer.fromAccountId !== transfer.toAccountId && parseMoney(transfer.amount) > 0;
+    return (
+      <MobileCard className="space-y-4 p-4">
+        <SectionTitle>Transferir entre contas</SectionTitle>
+        <p className="text-sm text-muted-foreground">O APP registra uma saída na origem e uma entrada no destino, igual ao CRM.</p>
+        <label className="grid gap-1 text-sm font-bold">Conta de origem
+          <select className="h-12 rounded-xl border bg-background px-3" value={transfer.fromAccountId} onChange={(e) => setTransfer({ ...transfer, fromAccountId: e.target.value })}>
+            <option value="">Escolha</option>{data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold">Conta de destino
+          <select className="h-12 rounded-xl border bg-background px-3" value={transfer.toAccountId} onChange={(e) => setTransfer({ ...transfer, toAccountId: e.target.value })}>
+            <option value="">Escolha</option>{data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold">Valor
+          <input className="h-12 rounded-xl border bg-background px-3 text-lg font-bold" inputMode="decimal" value={transfer.amount} onChange={(e) => setTransfer({ ...transfer, amount: e.target.value })} placeholder="0,00" />
+        </label>
+        <label className="grid gap-1 text-sm font-bold">Descrição
+          <input className="h-12 rounded-xl border bg-background px-3" value={transfer.description} onChange={(e) => setTransfer({ ...transfer, description: e.target.value })} placeholder="Motivo da transferência" />
+        </label>
+        {transferMutation.isSuccess ? <p className="rounded-xl bg-success/10 p-3 text-sm font-bold text-success"><CheckCircle2 className="mr-1 inline h-4 w-4" /> Transferência registrada</p> : null}
+        {transferMutation.isError ? <p className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">Não foi possível transferir. Confira os dados e tente novamente.</p> : null}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="h-12 rounded-xl border bg-card font-bold" disabled={transferMutation.isPending} onClick={() => setMode("list")}>Cancelar</button>
+          <button type="button" className="h-12 rounded-xl bg-gold font-extrabold text-gold-foreground disabled:opacity-50" disabled={!canTransfer || transferMutation.isPending} onClick={() => void transferMutation.mutateAsync(transfer).then(() => setTransfer({ fromAccountId: "", toAccountId: "", amount: "", description: "" })).catch(() => undefined)}>{transferMutation.isPending ? "Salvando..." : "Confirmar"}</button>
+        </div>
+      </MobileCard>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-success text-success-foreground font-extrabold" onClick={() => setMode("entrada")}><ArrowDownCircle className="h-5 w-5" /> Adicionar entrada</button>
+        <button type="button" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-destructive text-destructive-foreground font-extrabold" onClick={() => setMode("saida")}><ArrowUpCircle className="h-5 w-5" /> Adicionar saída</button>
+      </div>
+      <button type="button" className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border bg-card font-bold text-gold" onClick={() => setMode("transferencia")}><ArrowLeftRight className="h-5 w-5" /> Transferir entre contas</button>
+      {movement.isSuccess ? <p className="rounded-xl bg-success/10 p-3 text-sm font-bold text-success"><CheckCircle2 className="mr-1 inline h-4 w-4" /> Movimentação registrada</p> : null}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        <Chip label="7 dias" active={period === "7d"} onClick={() => setPeriod("7d")} />
+        <Chip label="30 dias" active={period === "30d"} onClick={() => setPeriod("30d")} />
+        <Chip label="90 dias" active={period === "90d"} onClick={() => setPeriod("90d")} />
+        <Chip label="Todas" active={type === "all"} onClick={() => setType("all")} />
+        <Chip label="Entradas" active={type === "entrada"} tone="success" onClick={() => setType("entrada")} />
+        <Chip label="Saídas" active={type === "saida"} tone="destructive" onClick={() => setType("saida")} />
+      </div>
+      <MobileCard className="p-3">
+        <label className="grid gap-1 text-sm font-bold">Filtrar por conta
+          <select className="h-11 rounded-xl border bg-background px-3" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <option value="all">Todas as contas</option>
+            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+      </MobileCard>
+      <div className="grid grid-cols-2 gap-2">
+        <MoneyStat label="Entradas" value={brl(data.totals.in)} accent="success" />
+        <MoneyStat label="Saídas" value={brl(data.totals.out)} accent="destructive" />
+      </div>
+      <MobileCard className="p-3">
+        <SectionTitle right={<button type="button" className="text-gold" onClick={() => void banking.refetch()} aria-label="Atualizar"><RefreshCw className="h-4 w-4" /></button>}>Contas bancárias</SectionTitle>
+        {data.accounts.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma conta ativa.</p> : data.accounts.map((a) => (
+          <div key={a.id} className="border-t py-3 first:border-t-0">
+            <div className="flex justify-between gap-3"><div><div className="font-bold">{a.name}</div><div className="text-xs text-muted-foreground">{a.bank || "Banco não informado"}</div></div><div className="text-right font-extrabold tabular-nums">{brl(a.current_balance)}</div></div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-[12px]"><span>Entradas: <b>{brl(a.period_in)}</b></span><span>Saídas: <b>{brl(a.period_out)}</b></span><span>Última: <b>{dateBR(a.last_movement_at)}</b></span></div>
+          </div>
+        ))}
+      </MobileCard>
+      <MobileCard className="p-3">
+        <SectionTitle>Movimentações</SectionTitle>
+        {data.transactions.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">Nenhuma movimentação neste filtro.</p> : data.transactions.map((tx) => (
+          <div key={tx.id} className="border-t py-3 first:border-t-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0"><div className="font-bold">{tx.type === "entrada" ? "Entrada" : "Saída"} · {tx.financial_categories?.name ?? "Sem categoria"}</div><div className="text-sm text-muted-foreground">{tx.description || "Sem descrição"}</div><div className="text-xs text-muted-foreground">{dateBR(tx.occurred_at)} · {tx.bank_accounts?.name ?? "Conta"} · {tx.source ?? "manual"}</div></div>
+              <div className={cn("shrink-0 text-right font-extrabold tabular-nums", tx.type === "entrada" ? "text-success" : "text-destructive")}>{tx.type === "entrada" ? "+" : "-"}{brl(tx.amount)}</div>
+            </div>
+          </div>
+        ))}
+      </MobileCard>
     </>
   );
 }
