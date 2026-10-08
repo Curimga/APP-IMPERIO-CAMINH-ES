@@ -432,26 +432,28 @@ function BankingPanel() {
 
   return (
     <>
-      <MobileCard className={cn("border-gold/40", walletOpen ? "bg-gold/10 p-3" : "p-2")}>
+      <MobileCard className={cn("overflow-hidden border-gold/35", walletOpen ? "bg-gold/10 p-3" : "p-2")}>
         <button
           type="button"
           onClick={() => setWalletOpen((open) => !open)}
           aria-expanded={walletOpen}
           className={cn(
-            "flex w-full items-center gap-3 rounded-xl text-left active:bg-muted/60",
+            "flex w-full items-center gap-2.5 rounded-xl text-left active:bg-muted/60",
             walletOpen ? "min-h-11 px-1" : "min-h-12 px-2",
           )}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold text-gold-foreground">
-            <WalletCards className="h-5 w-5" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold text-gold-foreground shadow-sm">
+            <WalletCards className="h-4.5 w-4.5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-extrabold">Carteira das contas</span>
-            <span className="block truncate text-xs text-muted-foreground">
+            <span className="block truncate text-[14px] font-bold leading-tight">Carteira das contas</span>
+            <span className="block truncate text-[11px] leading-snug text-muted-foreground">
               {walletOpen ? "Toque novamente para recolher" : "Toque para ver os saldos"}
             </span>
           </span>
-          <span className="text-xs font-bold text-gold">{walletOpen ? "Fechar" : "Abrir"}</span>
+          <span className="shrink-0 rounded-full border border-gold/30 bg-background/70 px-2 py-1 text-[11px] font-bold leading-none text-gold">
+            {walletOpen ? "Fechar" : "Abrir"}
+          </span>
         </button>
 
         {walletOpen ? (
@@ -460,22 +462,22 @@ function BankingPanel() {
               <p className="px-2 py-3 text-sm text-muted-foreground">Nenhuma conta ativa.</p>
             ) : (
               data.accounts.map((account) => (
-                <div key={account.id} className="rounded-xl border bg-card p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-extrabold leading-tight">{account.name}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{account.bank || "Banco não informado"}</div>
+                <div key={account.id} className="rounded-xl border bg-card/95 p-2.5 shadow-sm">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                    <div className="min-w-0 overflow-hidden">
+                      <div className="truncate text-[13px] font-bold leading-tight">{account.name}</div>
+                      <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{account.bank || "Banco não informado"}</div>
                     </div>
-                    <div className="shrink-0 text-right text-[15px] font-extrabold leading-tight tabular-nums text-gold-dark">
+                    <div className="max-w-[48vw] truncate text-right text-[14px] font-bold leading-tight tabular-nums text-gold-dark sm:max-w-[220px]">
                       {brl(account.current_balance)}
                     </div>
                   </div>
                   <button
                     type="button"
-                    className="mt-2 h-9 w-full rounded-lg border bg-background text-xs font-bold text-gold active:bg-muted/60"
+                    className="mt-2 flex h-8 w-full items-center justify-center rounded-lg border bg-background px-2 text-[12px] font-bold leading-none text-gold active:bg-muted/60"
                     onClick={() => startBalanceAdjustment(account)}
                   >
-                    Definir saldo desta conta
+                    Definir saldo
                   </button>
                 </div>
               ))
