@@ -226,6 +226,13 @@ export interface BankTransferInput {
   description?: string;
 }
 
+export interface BankBalanceAdjustmentInput {
+  bankAccountId: string;
+  currentBalance: number;
+  targetBalance: string;
+  notes: string;
+}
+
 export type TruckDetail = Tables<"trucks"> & {
   truck_photos: TruckPhoto[];
   truck_expenses: Tables<"truck_expenses">[];
@@ -1036,6 +1043,38 @@ export function useCreateBankTransfer() {
         created_by: user?.id ?? null,
       });
       if (inError) throw inError;
+    },
+    onSuccess: () => {
+      ["banking-mobile", "finance-mobile", "bank_transactions", "bank_accounts", "dashboard-snapshot"].forEach((key) =>
+        qc.invalidateQueries({ queryKey: [key] }),
+      );
+    },
+  });
+}
+
+export function useAdjustBankBalance() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: BankBalanceAdjustmentInput) => {
+      const target = parseMoney(input.targetBalance);
+      const current = Number(input.currentBalance ?? 0);
+      const diff = target - current;
+      if (!input.bankAccountId) throw new Error("Escolha a conta bancária.");
+      if (!Number.isFinite(target)) throw new Error("Informe um saldo válido.");
+      if (diff === 0) throw new Error("O saldo informado é igual ao saldo atual.");
+      if (!input.notes.trim()) throw new Error("Informe o motivo do ajuste.");
+
+      const { error } = await supabase.from("bank_transactions").insert({
+        type: diff >= 0 ? "entrada" : "saida",
+        amount: Math.abs(diff),
+        bank_account_id: input.bankAccountId,
+        source: "ajuste_manual",
+        notes: input.notes.trim(),
+        description: `Ajuste manual de saldo (de ${current.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} para ${target.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`,
+        created_by: user?.id ?? null,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       ["banking-mobile", "finance-mobile", "bank_transactions", "bank_accounts", "dashboard-snapshot"].forEach((key) =>

@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   useBankingAccess,
   useBankingData,
+  useAdjustBankBalance,
   useCapitalImobilizado,
   useCreateBankMovement,
   useCreateBankTransfer,
@@ -259,13 +260,16 @@ function BankingPanel() {
   const [period, setPeriod] = useState<BankPeriod>("30d");
   const [accountId, setAccountId] = useState("all");
   const [type, setType] = useState<"all" | BankTxType>("all");
-  const [mode, setMode] = useState<"list" | "entrada" | "saida" | "transferencia" | "review">("list");
+  const [mode, setMode] = useState<"list" | "entrada" | "saida" | "transferencia" | "ajuste" | "review">("list");
+  const [walletOpen, setWalletOpen] = useState(false);
   const [reviewTxType, setReviewTxType] = useState<BankTxType>("entrada");
   const [form, setForm] = useState({ bankAccountId: "", amount: "", occurredAt: new Date().toISOString().slice(0, 10), categoryId: "", description: "" });
   const [transfer, setTransfer] = useState({ fromAccountId: "", toAccountId: "", amount: "", description: "" });
+  const [adjustment, setAdjustment] = useState({ bankAccountId: "", targetBalance: "", notes: "" });
   const banking = useBankingData({ period, accountId, type });
   const movement = useCreateBankMovement();
   const transferMutation = useCreateBankTransfer();
+  const adjustBalance = useAdjustBankBalance();
 
   if (!canAccess) return null;
   if (banking.isLoading) return <SkeletonRows rows={5} height={92} />;
@@ -277,12 +281,25 @@ function BankingPanel() {
   if (!data) return null;
   const activeCategories = data.categories.filter((c) => (mode === "entrada" ? c.kind === "receita" : c.kind === "despesa"));
   const selectedAccount = data.accounts.find((a) => a.id === form.bankAccountId);
+  const selectedAdjustmentAccount = data.accounts.find((a) => a.id === adjustment.bankAccountId);
   const reviewType = mode === "review" ? reviewTxType : mode;
   const canReviewMovement = form.bankAccountId && parseMoney(form.amount) > 0 && form.occurredAt;
+  const targetBalance = parseMoney(adjustment.targetBalance);
+  const adjustmentDiff = selectedAdjustmentAccount ? targetBalance - Number(selectedAdjustmentAccount.current_balance ?? 0) : 0;
+  const canAdjustBalance = Boolean(selectedAdjustmentAccount && adjustmentDiff !== 0 && adjustment.notes.trim());
   const saveMovement = async (txType: BankTxType) => {
     await movement.mutateAsync({ ...form, type: txType });
     setForm({ bankAccountId: "", amount: "", occurredAt: new Date().toISOString().slice(0, 10), categoryId: "", description: "" });
     setMode("list");
+  };
+
+  const startBalanceAdjustment = (account: { id: string; current_balance: number }) => {
+    setAdjustment({
+      bankAccountId: account.id,
+      targetBalance: String(account.current_balance ?? 0),
+      notes: "",
+    });
+    setMode("ajuste");
   };
 
   if (mode === "entrada" || mode === "saida") {
@@ -373,8 +390,99 @@ function BankingPanel() {
     );
   }
 
+  if (mode === "ajuste") {
+    return (
+      <MobileCard className="space-y-4 p-4">
+        <SectionTitle>Definir saldo atual</SectionTitle>
+        <p className="text-sm text-muted-foreground">
+          O APP não sobrescreve o saldo. Ele registra um ajuste manual auditável no extrato, igual ao CRM.
+        </p>
+        <label className="grid gap-1 text-sm font-bold">Conta
+          <select className="h-12 rounded-xl border bg-background px-3" value={adjustment.bankAccountId} onChange={(e) => {
+            const account = data.accounts.find((a) => a.id === e.target.value);
+            setAdjustment({ bankAccountId: e.target.value, targetBalance: account ? String(account.current_balance ?? 0) : "", notes: adjustment.notes });
+          }}>
+            <option value="">Escolha</option>
+            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name} - {brl(a.current_balance)}</option>)}
+          </select>
+        </label>
+        <div className="rounded-2xl bg-surface-secondary p-3 text-sm">
+          Saldo atual: <b>{brl(selectedAdjustmentAccount?.current_balance ?? 0)}</b>
+        </div>
+        <label className="grid gap-1 text-sm font-bold">Saldo correto agora
+          <input className="h-12 rounded-xl border bg-background px-3 text-lg font-bold" inputMode="decimal" value={adjustment.targetBalance} onChange={(e) => setAdjustment({ ...adjustment, targetBalance: e.target.value })} placeholder="0,00" />
+        </label>
+        {selectedAdjustmentAccount && adjustmentDiff !== 0 ? (
+          <div className={cn("rounded-xl p-3 text-sm font-bold", adjustmentDiff > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+            Será lançado {adjustmentDiff > 0 ? "uma entrada" : "uma saída"} de {brl(Math.abs(adjustmentDiff))} para chegar ao saldo informado.
+          </div>
+        ) : null}
+        <label className="grid gap-1 text-sm font-bold">Motivo do ajuste
+          <textarea className="min-h-20 rounded-xl border bg-background px-3 py-2 text-base" value={adjustment.notes} onChange={(e) => setAdjustment({ ...adjustment, notes: e.target.value })} placeholder="Ex.: conferência do extrato bancário" />
+        </label>
+        {adjustBalance.isSuccess ? <p className="rounded-xl bg-success/10 p-3 text-sm font-bold text-success"><CheckCircle2 className="mr-1 inline h-4 w-4" /> Saldo ajustado</p> : null}
+        {adjustBalance.isError ? <p className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">Não foi possível ajustar. Confira os dados e tente novamente.</p> : null}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="h-12 rounded-xl border bg-card font-bold" disabled={adjustBalance.isPending} onClick={() => setMode("list")}>Cancelar</button>
+          <button type="button" className="h-12 rounded-xl bg-gold font-extrabold text-gold-foreground disabled:opacity-50" disabled={!canAdjustBalance || adjustBalance.isPending} onClick={() => void adjustBalance.mutateAsync({ bankAccountId: adjustment.bankAccountId, currentBalance: Number(selectedAdjustmentAccount?.current_balance ?? 0), targetBalance: adjustment.targetBalance, notes: adjustment.notes }).then(() => setMode("list")).catch(() => undefined)}>{adjustBalance.isPending ? "Salvando..." : "Confirmar ajuste"}</button>
+        </div>
+      </MobileCard>
+    );
+  }
+
   return (
     <>
+      <MobileCard className={cn("border-gold/40", walletOpen ? "bg-gold/10 p-3" : "p-2")}>
+        <button
+          type="button"
+          onClick={() => setWalletOpen((open) => !open)}
+          aria-expanded={walletOpen}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-xl text-left active:bg-muted/60",
+            walletOpen ? "min-h-11 px-1" : "min-h-12 px-2",
+          )}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold text-gold-foreground">
+            <WalletCards className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-extrabold">Carteira das contas</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {walletOpen ? "Toque novamente para recolher" : "Toque para ver os saldos"}
+            </span>
+          </span>
+          <span className="text-xs font-bold text-gold">{walletOpen ? "Fechar" : "Abrir"}</span>
+        </button>
+
+        {walletOpen ? (
+          <div className="mt-2 grid gap-2">
+            {data.accounts.length === 0 ? (
+              <p className="px-2 py-3 text-sm text-muted-foreground">Nenhuma conta ativa.</p>
+            ) : (
+              data.accounts.map((account) => (
+                <div key={account.id} className="rounded-xl border bg-card p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-extrabold leading-tight">{account.name}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">{account.bank || "Banco não informado"}</div>
+                    </div>
+                    <div className="shrink-0 text-right text-[15px] font-extrabold leading-tight tabular-nums text-gold-dark">
+                      {brl(account.current_balance)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-2 h-9 w-full rounded-lg border bg-background text-xs font-bold text-gold active:bg-muted/60"
+                    onClick={() => startBalanceAdjustment(account)}
+                  >
+                    Definir saldo desta conta
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
+      </MobileCard>
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-success text-success-foreground font-extrabold" onClick={() => setMode("entrada")}><ArrowDownCircle className="h-5 w-5" /> Adicionar entrada</button>
         <button type="button" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-destructive text-destructive-foreground font-extrabold" onClick={() => setMode("saida")}><ArrowUpCircle className="h-5 w-5" /> Adicionar saída</button>
@@ -407,6 +515,7 @@ function BankingPanel() {
           <div key={a.id} className="border-t py-3 first:border-t-0">
             <div className="flex justify-between gap-3"><div><div className="font-bold">{a.name}</div><div className="text-xs text-muted-foreground">{a.bank || "Banco não informado"}</div></div><div className="text-right font-extrabold tabular-nums">{brl(a.current_balance)}</div></div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-[12px]"><span>Entradas: <b>{brl(a.period_in)}</b></span><span>Saídas: <b>{brl(a.period_out)}</b></span><span>Última: <b>{dateBR(a.last_movement_at)}</b></span></div>
+            <button type="button" className="mt-3 h-10 w-full rounded-xl border bg-card text-sm font-bold text-gold active:bg-muted/60" onClick={() => startBalanceAdjustment(a)}>Definir saldo atual</button>
           </div>
         ))}
       </MobileCard>
