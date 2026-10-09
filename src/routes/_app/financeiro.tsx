@@ -443,7 +443,7 @@ function BankingPanel() {
           )}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold text-gold-foreground shadow-sm">
-            <WalletCards className="h-4.5 w-4.5" />
+            <WalletCards className="h-[18px] w-[18px]" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[14px] font-bold leading-tight">Carteira das contas</span>
@@ -462,19 +462,20 @@ function BankingPanel() {
               <p className="px-2 py-3 text-sm text-muted-foreground">Nenhuma conta ativa.</p>
             ) : (
               data.accounts.map((account) => (
-                <div key={account.id} className="rounded-xl border bg-card/95 p-2.5 shadow-sm">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                    <div className="min-w-0 overflow-hidden">
-                      <div className="truncate text-[13px] font-bold leading-tight">{account.name}</div>
-                      <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{account.bank || "Banco não informado"}</div>
-                    </div>
-                    <div className="max-w-[48vw] truncate text-right text-[14px] font-bold leading-tight tabular-nums text-gold-dark sm:max-w-[220px]">
+                <div key={account.id} className="min-w-0 overflow-hidden rounded-xl border bg-card/95 p-3 shadow-sm">
+                  <div className="min-w-0 overflow-hidden">
+                    <div className="truncate text-[13px] font-semibold leading-snug">{account.name}</div>
+                    <div className="truncate text-[11px] leading-snug text-muted-foreground">{account.bank || "Banco não informado"}</div>
+                  </div>
+                  <div className="mt-2 rounded-lg bg-surface-secondary px-2.5 py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Saldo atual</div>
+                    <div className="mt-0.5 max-w-full truncate text-[15px] font-bold leading-tight tabular-nums text-gold-dark">
                       {brl(account.current_balance)}
                     </div>
                   </div>
                   <button
                     type="button"
-                    className="mt-2 flex h-8 w-full items-center justify-center rounded-lg border bg-background px-2 text-[12px] font-bold leading-none text-gold active:bg-muted/60"
+                    className="mt-2 flex h-8 w-full items-center justify-center rounded-lg border bg-background px-2 text-[12px] font-semibold leading-none text-gold active:bg-muted/60"
                     onClick={() => startBalanceAdjustment(account)}
                   >
                     Definir saldo
@@ -486,10 +487,10 @@ function BankingPanel() {
         ) : null}
       </MobileCard>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-success text-success-foreground font-extrabold" onClick={() => setMode("entrada")}><ArrowDownCircle className="h-5 w-5" /> Adicionar entrada</button>
-        <button type="button" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-destructive text-destructive-foreground font-extrabold" onClick={() => setMode("saida")}><ArrowUpCircle className="h-5 w-5" /> Adicionar saída</button>
+        <button type="button" className="flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl bg-success px-2 text-[13px] font-bold leading-none text-success-foreground active:opacity-85" onClick={() => setMode("entrada")}><ArrowDownCircle className="h-4 w-4 shrink-0" /> <span className="truncate whitespace-nowrap">Adicionar entrada</span></button>
+        <button type="button" className="flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl bg-destructive px-2 text-[13px] font-bold leading-none text-destructive-foreground active:opacity-85" onClick={() => setMode("saida")}><ArrowUpCircle className="h-4 w-4 shrink-0" /> <span className="truncate whitespace-nowrap">Adicionar saída</span></button>
       </div>
-      <button type="button" className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border bg-card font-bold text-gold" onClick={() => setMode("transferencia")}><ArrowLeftRight className="h-5 w-5" /> Transferir entre contas</button>
+      <button type="button" className="flex h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl border bg-card px-3 text-[13px] font-bold leading-none text-gold active:bg-muted/60" onClick={() => setMode("transferencia")}><ArrowLeftRight className="h-4 w-4 shrink-0" /> <span className="truncate whitespace-nowrap">Transferir entre contas</span></button>
       {movement.isSuccess ? <p className="rounded-xl bg-success/10 p-3 text-sm font-bold text-success"><CheckCircle2 className="mr-1 inline h-4 w-4" /> Movimentação registrada</p> : null}
       <div className="flex gap-2 overflow-x-auto pb-1">
         <Chip label="7 dias" active={period === "7d"} onClick={() => setPeriod("7d")} />
@@ -508,8 +509,14 @@ function BankingPanel() {
         </label>
       </MobileCard>
       <div className="grid grid-cols-2 gap-2">
-        <MoneyStat label="Entradas" value={brl(data.totals.in)} accent="success" />
-        <MoneyStat label="Saídas" value={brl(data.totals.out)} accent="destructive" />
+        <MobileCard className="min-w-0 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Entradas</div>
+          <div className="mt-1 max-w-full truncate text-[14px] font-bold leading-tight tabular-nums text-success">{brl(data.totals.in)}</div>
+        </MobileCard>
+        <MobileCard className="min-w-0 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Saídas</div>
+          <div className="mt-1 max-w-full truncate text-[14px] font-bold leading-tight tabular-nums text-destructive">{brl(data.totals.out)}</div>
+        </MobileCard>
       </div>
       <MobileCard className="p-3">
         <SectionTitle right={<button type="button" className="text-gold" onClick={() => void banking.refetch()} aria-label="Atualizar"><RefreshCw className="h-4 w-4" /></button>}>Contas bancárias</SectionTitle>
