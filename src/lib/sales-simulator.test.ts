@@ -101,6 +101,7 @@ describe("CRM-like sale proposal simulator", () => {
     expect(result.commissionCents).toBeNull();
     expect(saleSimulatorFinanceAccess(["secretaria"], "x@imperio.test").canAccess).toBe(false);
     expect(saleSimulatorFinanceAccess(["admin"], "admin@imperio.test").canAccess).toBe(true);
+    expect(saleSimulatorFinanceAccess([], "josemar.essing@gmail.com").canAccess).toBe(true);
   });
 
   it("simulação não escreve no CRM e confirmação exige fluxo real acessível", () => {

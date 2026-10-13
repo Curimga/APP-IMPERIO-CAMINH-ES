@@ -231,8 +231,15 @@ export function paymentDiffMessage(diffCents: MoneyCents): string {
   return `Faltam ${formatCents(Math.abs(diffCents))} para fechar o preço proposto.`;
 }
 
+const SALE_SIMULATOR_ALLOWED_EMAILS = new Set(["josemar.essing@gmail.com"]);
+
+function hasIndividualSaleSimulatorAccess(email?: string | null) {
+  return SALE_SIMULATOR_ALLOWED_EMAILS.has(email?.toLowerCase() ?? "");
+}
+
 export function saleSimulatorFinanceAccess(roles: AppRole[], email?: string | null) {
   if (isFinanceExecutive(roles, email)) return { canAccess: true, reason: null };
+  if (hasIndividualSaleSimulatorAccess(email)) return { canAccess: true, reason: null };
   return {
     canAccess: false,
     reason: "Valores internos, comissão e dados financeiros são exclusivos do Executivo/Admin.",
