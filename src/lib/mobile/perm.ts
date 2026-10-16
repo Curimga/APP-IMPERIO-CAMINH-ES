@@ -29,22 +29,40 @@ export function isFinanceExecutive(roles: AppRole[], email?: string | null) {
 }
 
 /**
- * Permissão individual para o módulo de contas bancárias.
+ * Permissão financeira INDIVIDUAL, identificada APENAS por `auth.users.id`
+ * (nunca por nome/e-mail, que não são identificadores imutáveis).
  *
- * Preencher com o UUID real de `auth.users.id` do Edson Luiz após confirmação
- * do administrador. Não usar nome/e-mail, pois não são identificadores imutáveis.
+ * IMPORTANTE — isto NÃO é segurança. É um gate de interface: quem controla o
+ * acesso real aos dados é a RLS do banco. A RLS atual do projeto exige
+ * `is_admin()` em todas as tabelas financeiras, então um usuário não-admin
+ * continua bloqueado no banco mesmo que conste aqui (ver relatório/proposta em
+ * docs/proposals/finance-individual-access-proposta-sql.sql).
+ *
+ * Deve ser mantido idêntico ao secret `PUSH_FINANCE_INDIVIDUAL_USER_IDS` da Edge
+ * Function `push-send` para que app e push usem a mesma regra.
+ *
+ * Preencher somente com o UUID real, após autorização do administrador.
  */
-export const EDSON_BANKING_USER_IDS = new Set<string>([
-  // "00000000-0000-0000-0000-000000000000",
+export const FINANCE_INDIVIDUAL_USER_IDS = new Set<string>([
+  // "<uuid-de-auth.users.id-autorizado>",
 ]);
 
-export function isEdsonBankingUser(userId?: string | null) {
-  return Boolean(userId && EDSON_BANKING_USER_IDS.has(userId));
+export function isIndividualFinanceUser(userId?: string | null) {
+  return Boolean(userId && FINANCE_INDIVIDUAL_USER_IDS.has(userId));
 }
 
 /** Contas bancárias e movimentações: Executivo/Admin ou UUID individual autorizado. */
 export function canAccessBanking(roles: AppRole[], email?: string | null, userId?: string | null) {
-  return isFinanceExecutive(roles, email) || isEdsonBankingUser(userId);
+  return isFinanceExecutive(roles, email) || isIndividualFinanceUser(userId);
+}
+
+/** Notificações financeiras: Executivo/Admin ou UUID individual autorizado. */
+export function canSeeFinanceNotifications(
+  roles: AppRole[],
+  email?: string | null,
+  userId?: string | null,
+) {
+  return isFinanceExecutive(roles, email) || isIndividualFinanceUser(userId);
 }
 
 /** Executivo: acesso ao módulo Financeiro. */

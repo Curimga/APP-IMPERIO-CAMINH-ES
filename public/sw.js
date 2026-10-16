@@ -10,8 +10,40 @@
  *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
 const CACHE_PREFIX = "imperio-";
-const VERSION = "imperio-v14-2026.09.29-financeiro-crm-paridade";
+const VERSION = "imperio-v15-2026.10.16-webpush";
 const APP_SHELL = "/";
+const DEFAULT_ICON = "/icons/crown-192.png";
+const DEFAULT_BADGE = "/icons/crown-96.png";
+
+/*
+ * Rotas reais do app (history routing). Mantido em paridade com
+ * src/lib/mobile/notification-link.ts (testado em src/lib/mobile/sw-parity.test.ts).
+ * Um push com link fora destas rotas abre a raiz em vez de uma tela quebrada.
+ */
+const APP_ROUTES = new Set([
+  "/garagem",
+  "/servicos",
+  "/agenda",
+  "/clientes",
+  "/financeiro",
+  "/estoque",
+  "/vendidos",
+  "/notificacoes",
+  "/menu",
+  "/pendencias",
+  "/busca",
+  "/perfil",
+]);
+
+function resolveAppRoute(link) {
+  if (!link || typeof link !== "string") return null;
+  const path = link.split(/[?#]/)[0];
+  const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path || "/";
+  if (APP_ROUTES.has(normalized)) return normalized;
+  const match = normalized.match(/^\/garagem\/([^/]+)$/);
+  if (match) return `/garagem/${match[1]}`;
+  return null;
+}
 const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -65,6 +97,81 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("message", (e) => {
   if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+/*
+ * Web Push: entrega real mesmo com o app fechado. O payload é montado pela
+ * Edge Function (ver supabase/functions/push-send/index.ts) com o mesmo formato
+ * de src/lib/mobile/push.ts: { title, body, link, notificationId, tag }.
+ */
+self.addEventListener("push", (event) => {
+  let payload = null;
+  try {
+    payload = event.data ? event.data.json() : null;
+  } catch {
+    payload = null;
+  }
+
+  const title = payload && payload.title ? String(payload.title) : "Império Caminhões";
+  const body = payload && (payload.body || payload.message) ? String(payload.body || payload.message) : "";
+  const link = resolveAppRoute(payload && payload.link) || "/";
+  const tagSource = payload && (payload.tag || payload.notificationId);
+  const options = {
+    body,
+    icon: DEFAULT_ICON,
+    badge: DEFAULT_BADGE,
+    data: {
+      link,
+      notificationId: payload && payload.notificationId ? payload.notificationId : null,
+    },
+  };
+  if (tagSource) {
+    options.tag = String(tagSource);
+    options.renotify = true;
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/* Clique na notificação: foca a aba existente (navegando na rota) ou abre uma nova. */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const route = resolveAppRoute(data.link) || "/";
+  const targetUrl = new URL(route, self.location.origin).href;
+
+  event.waitUntil(
+    (async () => {
+      const clientList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clientList) {
+        let sameOrigin = false;
+        try {
+          sameOrigin = new URL(client.url).origin === self.location.origin;
+        } catch {
+          sameOrigin = false;
+        }
+        if (!sameOrigin) continue;
+        if ("focus" in client) {
+          try {
+            await client.focus();
+          } catch {
+            /* segue para navegação */
+          }
+        }
+        if ("navigate" in client) {
+          try {
+            await client.navigate(targetUrl);
+            return;
+          } catch {
+            /* navegação indisponível — usa postMessage abaixo */
+          }
+        }
+        client.postMessage({ type: "imperio:notification-click", link: route });
+        return;
+      }
+      if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+    })()
+  );
 });
 
 self.addEventListener("fetch", (e) => {

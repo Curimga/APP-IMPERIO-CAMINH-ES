@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeSync } from "@/components/dashboard/use-realtime-sync";
 import { AppShell } from "@/components/mobile/app-shell";
+import { PushNotificationsProvider } from "@/hooks/use-push-notifications";
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: async () => {
@@ -34,6 +35,20 @@ function AppLayout() {
     }
   }, [loading, session, profile, nav]);
 
+  // Fallback do clique na notificação do Service Worker quando a navegação
+  // direta do cliente não está disponível (ver public/sw.js).
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      const data = event.data as { type?: string; link?: string } | null;
+      if (data?.type === "imperio:notification-click" && typeof data.link === "string") {
+        nav({ to: data.link as never });
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => navigator.serviceWorker.removeEventListener("message", handler);
+  }, [nav]);
+
   if (loading || !profile || profile.status !== "active") {
     return (
       <div className="min-h-dvh grid place-items-center bg-[#0B0B0B]">
@@ -48,8 +63,10 @@ function AppLayout() {
   }
 
   return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <PushNotificationsProvider>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </PushNotificationsProvider>
   );
 }

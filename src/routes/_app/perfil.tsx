@@ -4,6 +4,7 @@ import { ArrowLeft, Download, Check, Mail, Phone, LogOut, RefreshCw, KeyRound } 
 import { useAuth } from "@/hooks/use-auth";
 import { roleLabel } from "@/lib/mobile/perm";
 import { MobileCard, SectionTitle, ListRow } from "@/components/mobile/ui";
+import { PushNotificationSettings } from "@/components/mobile/push-settings";
 import { useInstallPrompt, useSwUpdate } from "@/lib/mobile/install";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -195,6 +196,9 @@ function Perfil() {
           </ol>
         )}
       </MobileCard>
+
+      {/* Notificações no celular */}
+      <PushNotificationSettings />
 
       {/* Atualização do app */}
       {sw.updateReady && (
