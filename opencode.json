@@ -6,6 +6,12 @@
       "url": "https://mcp.supabase.com/mcp?project_ref=fjvctjizmvvkbbstrobx",
       "enabled": true,
       "timeout": 30000
+    },
+    "kaio_supabase_lzortptqkhpapzegdftz": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?project_ref=lzortptqkhpapzegdftz",
+      "enabled": true,
+      "timeout": 30000
     }
   },
   "permission": {
@@ -22,6 +28,20 @@
     "kaio_supabase_fjvctjizmvvkbbstrobx_get_edge_function": "allow",
     "kaio_supabase_fjvctjizmvvkbbstrobx_search_docs": "allow",
     "kaio_supabase_fjvctjizmvvkbbstrobx_list_branches": "allow",
-    "kaio_supabase_fjvctjizmvvkbbstrobx_get_storage_config": "allow"
+    "kaio_supabase_fjvctjizmvvkbbstrobx_get_storage_config": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_*": "ask",
+    "kaio_supabase_lzortptqkhpapzegdftz_list_tables": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_list_extensions": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_list_migrations": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_get_logs": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_get_advisors": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_get_project_url": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_get_publishable_keys": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_generate_typescript_types": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_list_edge_functions": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_get_edge_function": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_search_docs": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_list_branches": "allow",
+    "kaio_supabase_lzortptqkhpapzegdftz_get_storage_config": "allow"
   }
 }
