@@ -224,9 +224,8 @@ function isInsecureContext() {
 /**
  * Ativa as notificações: pede permissão (ação explícita do usuário) e, quando
  * o servidor está configurado, inscreve no PushManager e salva a subscription
- * vinculada ao UUID autenticado. Sem VAPID configurado, habilita apenas o
- * aviso com o app aberto (complemento) e informa que a entrega em segundo
- * plano depende da configuração no servidor.
+ * vinculada ao UUID autenticado. Sem VAPID configurado, não solicita permissão
+ * e informa que a ativação depende da configuração do servidor.
  */
 export async function enablePush(userId: string): Promise<PushEnableResult> {
   if (!isPushSupported()) {
@@ -236,14 +235,16 @@ export async function enablePush(userId: string): Promise<PushEnableResult> {
     return { ok: false, reason: "insecure", message: pushEnableMessage("insecure") };
   }
 
+  const vapidKey = getVapidPublicKey();
+  if (!vapidKey) {
+    return { ok: false, reason: "not_configured", message: pushEnableMessage("not_configured") };
+  }
+
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
       return { ok: false, reason: "denied", message: pushEnableMessage("denied") };
     }
-
-    const vapidKey = getVapidPublicKey();
-    if (!vapidKey) return { ok: true, background: false };
 
     const registration = await getRegistration();
     if (!registration) {

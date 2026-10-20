@@ -12,21 +12,27 @@ function subtitleFor(state: {
   if (!state.supported) return "Não suportado neste navegador.";
   if (state.iosNeedsInstall) return "No iPhone, instale o app na Tela de Início para ativar.";
   if (state.permission === "denied") return "Bloqueadas no navegador. Libere nas configurações do site.";
-  if (state.subscribed) return "Ativas neste aparelho (funciona com o app fechado).";
+  if (state.subscribed) return "Ativas neste aparelho.";
+  if (!state.configured) {
+    return "A ativação depende da configuração do servidor (VAPID).";
+  }
   if (state.permission === "granted") {
-    return state.configured
-      ? "Permissão concedida. Toque para ativar a entrega em segundo plano."
-      : "Avisos com o app aberto. Entrega em segundo plano aguarda configuração do servidor.";
+    return "Permissão concedida. Toque para ativar neste aparelho.";
   }
   return "Toque para permitir notificações neste aparelho.";
 }
 
 export function PushNotificationSettings() {
   const push = usePushNotifications();
-  const { supported, permission, subscribed, busy } = push;
+  const { supported, permission, subscribed, busy, configured } = push;
 
-  const canToggle = supported && permission !== "denied" && !push.iosNeedsInstall;
   const isOn = subscribed;
+  const canToggle =
+    supported &&
+    !push.iosNeedsInstall &&
+    permission !== "denied" &&
+    configured &&
+    !busy;
 
   const icon = isOn ? (
     <span className="text-success">
@@ -38,15 +44,29 @@ export function PushNotificationSettings() {
     </span>
   );
 
+  let title = "Ativar notificações";
+  if (isOn) title = "Notificações ativas";
+  else if (!supported) title = "Notificações no celular";
+  else if (push.iosNeedsInstall) title = "Notificações no celular";
+  else if (permission === "denied") title = "Notificações no celular";
+  else if (!configured) title = "Notificações no celular";
+
+  const right = canToggle ? (
+    <span className="text-[12px] font-bold text-gold">{busy ? "Aguarde" : isOn ? "Desativar" : "Ativar"}</span>
+  ) : undefined;
+
+  const onClick =
+    canToggle && !busy ? () => (isOn ? push.disable() : push.enable()) : undefined;
+
   return (
     <MobileCard className="p-3">
-      <SectionTitle>Notificações</SectionTitle>
+      <SectionTitle>Notificações no celular</SectionTitle>
       <ListRow
-        title={isOn ? "Notificações ativas" : "Ativar notificações"}
+        title={title}
         subtitle={subtitleFor(push)}
         icon={icon}
-        right={canToggle ? <span className="text-[12px] font-bold text-gold">{busy ? "Aguarde" : isOn ? "Desativar" : "Ativar"}</span> : undefined}
-        onClick={canToggle && !busy ? () => (isOn ? push.disable() : push.enable()) : undefined}
+        right={right}
+        onClick={onClick}
       />
     </MobileCard>
   );
