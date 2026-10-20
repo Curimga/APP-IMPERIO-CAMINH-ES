@@ -22,7 +22,8 @@ describe("buildPushPayload — payload exibido pelo Service Worker", () => {
 
   it("valida o link contra as rotas reais do app", () => {
     expect(buildPushPayload({ id: "n2", title: "Serviço", link: "/garagem/abc" }).link).toBe("/garagem/abc");
-    expect(buildPushPayload({ id: "n3", title: "Financeiro", link: "/financeiro/contas-pagar" }).link).toBeNull();
+    expect(buildPushPayload({ id: "n3", title: "Financeiro", link: "/financeiro/contas-pagar" }).link).toBe("/financeiro");
+    expect(buildPushPayload({ id: "n5", title: "Financeiro", link: "/financeiro/contas-receber?id=abc" }).link).toBe("/financeiro");
     expect(buildPushPayload({ id: "n4", title: "Externo", link: "https://example.com" }).link).toBeNull();
   });
 });

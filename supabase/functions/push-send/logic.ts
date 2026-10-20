@@ -94,8 +94,30 @@ export async function authorizeRequest(input: {
   return { kind: "continue" };
 }
 
-export function isFinancialNotification(n: NotificationRecord): boolean {
-  if (typeof n.link === "string" && n.link.startsWith("/financeiro")) return true;
+/**
+ * Rota do app que só pode ser acessada com autorização financeira. Qualquer
+ * notificação que aponte para o módulo financeiro é tratada como financeira,
+ * independentemente do `type` (o link é a evidência mais forte do conteúdo).
+ */
+const FINANCE_LINK_PREFIX = "/financeiro";
+
+/**
+ * Tipos de notificação conhecidos. `financeiro` é restrito; os demais tipos
+ * explícitos NUNCA são financeiros, mesmo que o título/mensagem contenham
+ * palavras como "pagamento" (ex.: um compromisso chamado "Pagamento fornecedor"
+ * continua sendo apenas um evento de agenda).
+ */
+const FINANCE_TYPE = "financeiro";
+const EXPLICIT_NON_FINANCE_TYPES = new Set([
+  "agenda",
+  "manutencao",
+  "vendas",
+  "estoque",
+  "clientes",
+  "sistema",
+]);
+
+function hasFinanceSignal(n: NotificationRecord): boolean {
   const text = `${n.title ?? ""} ${n.message ?? ""}`.toLowerCase();
   return (
     /(r\$|us\$|ca\$\.\$)|\b(dinheiro|pagamento|recebimento|vencimento)\b/.test(text) ||
@@ -103,6 +125,27 @@ export function isFinancialNotification(n: NotificationRecord): boolean {
       text,
     )
   );
+}
+
+/**
+ * Classifica se a notificação é financeira (e, portanto, deve ser entregue
+ * apenas a destinatários autorizados).
+ *
+ * Precedência (da evidência mais forte para a mais fraca):
+ *   1. link do módulo financeiro -> FINANCEIRA (rota restrita);
+ *   2. type `financeiro`         -> FINANCEIRA;
+ *   3. type explícito não-financeiro (agenda/servicos/etc.) -> NÃO financeira,
+ *      mesmo que o texto cite "pagamento" (evita falso positivo);
+ *   4. type/link desconhecidos   -> fallback CONSERVADOR: só é financeira se o
+ *      texto trouxer sinal financeiro forte. Assim uma notificação antiga ou
+ *      ambígua que mencione valores nunca é exposta sem autorização.
+ */
+export function isFinancialNotification(n: NotificationRecord): boolean {
+  if (typeof n.link === "string" && n.link.startsWith(FINANCE_LINK_PREFIX)) return true;
+  const type = typeof n.type === "string" ? n.type.trim().toLowerCase() : "";
+  if (type === FINANCE_TYPE) return true;
+  if (EXPLICIT_NON_FINANCE_TYPES.has(type)) return false;
+  return hasFinanceSignal(n);
 }
 
 export function extractRecord(body: unknown): NotificationRecord | null {

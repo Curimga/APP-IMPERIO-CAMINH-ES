@@ -145,6 +145,137 @@ describe("classificação financeira", () => {
     expect(isFinancialNotification({ id: "1", title: "Novo caminhão cadastrado" })).toBe(false);
     expect(isFinancialNotification({ id: "1", title: "Serviço atualizado" })).toBe(false);
   });
+
+  it("não classifica compromissos e serviços concluídos como financeiros", () => {
+    expect(
+      isFinancialNotification({
+        id: "e1",
+        title: "Novo compromisso",
+        message: "Test drive — 12/10/2025 14:00",
+        link: "/agenda",
+        type: "agenda",
+      }),
+    ).toBe(false);
+    expect(
+      isFinancialNotification({
+        id: "e2",
+        title: "Compromisso alterado",
+        message: "Reunião — 12/10/2025 14:00",
+        link: "/agenda",
+        type: "agenda",
+      }),
+    ).toBe(false);
+    expect(
+      isFinancialNotification({
+        id: "s1",
+        title: "Serviço concluído",
+        message: "Troca de óleo foi concluído.",
+        link: "/servicos",
+        type: "manutencao",
+      }),
+    ).toBe(false);
+  });
+
+  it("classifica pagamento/recebimento como financeiro (destinatário restrito)", () => {
+    expect(
+      isFinancialNotification({
+        id: "p1",
+        title: "Pagamento realizado",
+        message: "Fornecedor X — R$ 1.500,00 — pago em 12/10/2025",
+        link: "/financeiro",
+        type: "financeiro",
+      }),
+    ).toBe(true);
+    expect(
+      isFinancialNotification({
+        id: "r1",
+        title: "Recebimento registrado",
+        message: "Cliente Y — R$ 2.000,00",
+        link: "/financeiro",
+        type: "financeiro",
+      }),
+    ).toBe(true);
+  });
+
+  it("compromisso 'Pagamento fornecedor' com type agenda/link /agenda NÃO é financeiro", () => {
+    expect(
+      isFinancialNotification({
+        id: "ag1",
+        title: "Pagamento fornecedor",
+        message: "Pagamento fornecedor — 12/10/2025 14:00",
+        link: "/agenda",
+        type: "agenda",
+      }),
+    ).toBe(false);
+  });
+
+  it("conta a pagar com título genérico e link financeiro É financeira", () => {
+    expect(
+      isFinancialNotification({
+        id: "ap1",
+        title: "Compromisso",
+        message: "Vence 12/10/2025",
+        link: "/financeiro/contas-pagar?id=abc",
+        type: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("recebimento com type financeiro É financeiro", () => {
+    expect(
+      isFinancialNotification({
+        id: "rc1",
+        title: "Atualização",
+        message: "Lançamento atualizado.",
+        link: null,
+        type: "financeiro",
+      }),
+    ).toBe(true);
+  });
+
+  it("type/link desconhecidos têm comportamento restritivo (fallback conservador)", () => {
+    // Ambíguo com sinal financeiro forte -> tratado como financeiro (restrito).
+    expect(
+      isFinancialNotification({
+        id: "u1",
+        title: "Conta a receber",
+        message: "Parcela 3/6",
+        link: "/algum-modulo",
+        type: "outro",
+      }),
+    ).toBe(true);
+    expect(
+      isFinancialNotification({
+        id: "u2",
+        title: "Aviso",
+        message: "Boleto gerado",
+        link: null,
+        type: undefined,
+      }),
+    ).toBe(true);
+    // Sem nenhum sinal financeiro -> não financeira.
+    expect(
+      isFinancialNotification({
+        id: "u3",
+        title: "Aviso geral",
+        message: "Tudo certo por aqui.",
+        link: "/menu",
+        type: "custom",
+      }),
+    ).toBe(false);
+  });
+
+  it("link financeiro prevalece sobre type não-financeiro (não vaza rota restrita)", () => {
+    expect(
+      isFinancialNotification({
+        id: "lz1",
+        title: "Compromisso",
+        message: "Reunião",
+        link: "/financeiro/contas-pagar?id=abc",
+        type: "agenda",
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("autorização financeira individual (sem cargo admin)", () => {

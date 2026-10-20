@@ -117,6 +117,43 @@ describe("isFinancialNotification — apenas Executivo vê financeiro", () => {
     expect(isFinancialNotification({ title: "Caminhão chegou", message: "BBY5H79 no pátio" })).toBe(false);
     expect(isFinancialNotification({ title: "Serviço em andamento", link: "/servicos/1" })).toBe(false);
   });
+
+  it("compromisso 'Pagamento fornecedor' (type agenda/link /agenda) → não financeira", () => {
+    expect(
+      isFinancialNotification({
+        title: "Pagamento fornecedor",
+        message: "Pagamento fornecedor — 12/10/2025 14:00",
+        link: "/agenda",
+        type: "agenda",
+      }),
+    ).toBe(false);
+  });
+
+  it("conta a pagar com título genérico e link financeiro → financeira", () => {
+    expect(
+      isFinancialNotification({
+        title: "Compromisso",
+        message: "Vence 12/10/2025",
+        link: "/financeiro/contas-pagar?id=abc",
+        type: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("recebimento com type financeiro → financeira", () => {
+    expect(
+      isFinancialNotification({ title: "Atualização", message: "Lançamento", link: null, type: "financeiro" }),
+    ).toBe(true);
+  });
+
+  it("type/link desconhecidos → fallback conservador", () => {
+    expect(
+      isFinancialNotification({ title: "Conta a receber", message: "Parcela 3/6", link: "/x", type: "outro" }),
+    ).toBe(true);
+    expect(
+      isFinancialNotification({ title: "Aviso geral", message: "Tudo certo", link: "/menu", type: "custom" }),
+    ).toBe(false);
+  });
 });
 
 describe("status display — trucks.status é a única fonte (sem transformação)", () => {

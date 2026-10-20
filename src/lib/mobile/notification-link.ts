@@ -23,6 +23,19 @@ const LIST_ROUTES = new Set([
   "/perfil",
 ]);
 
+/**
+ * Sub-rotas do CRM que nǜo existem como pǭgina no app, mas devem abrir a tela
+ * equivalente. O CRM cria alertas financeiros apontando para
+ * `/financeiro/contas-pagar?id=<id>` e `/financeiro/contas-receber?id=<id>`;
+ * o app s�� tem a rota `/financeiro`, entǜo redirecionamos para ela em vez de
+ * esconder o "Ver detalhes".
+ */
+const FINANCE_SUBROUTES = new Set([
+  "/financeiro/contas-pagar",
+  "/financeiro/contas-receber",
+  "/financeiro/contas",
+]);
+
 /** Extrai o caminho sem query/hash e normaliza a barra final. */
 function normalizePath(link: string): string {
   const path = link.split(/[?#]/)[0];
@@ -37,6 +50,7 @@ export function notificationLinkTarget(
   if (!link) return undefined;
   const path = normalizePath(link);
   if (LIST_ROUTES.has(path)) return path;
+  if (FINANCE_SUBROUTES.has(path)) return "/financeiro";
   const truck = path.match(/^\/garagem\/([^/]+)$/);
   if (truck) return `/garagem/${truck[1]}`;
   return undefined;

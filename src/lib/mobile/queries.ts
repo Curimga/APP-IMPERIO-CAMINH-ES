@@ -1146,15 +1146,39 @@ export function useSoldTrucks() {
 }
 
 /**
+ * Tipos de notificação que NUNCA são financeiros, mesmo que o título/mensagem
+ * citem termos como "pagamento". Mantém paridade com a Edge Function push-send.
+ */
+const EXPLICIT_NON_FINANCE_TYPES = new Set([
+  "agenda",
+  "manutencao",
+  "vendas",
+  "estoque",
+  "clientes",
+  "sistema",
+]);
+
+/**
  * Classifica uma notificação como financeira (deve aparecer apenas no módulo
  * Financeiro, que é exclusivo do Executivo).
+ *
+ * Mesma precedência usada pela Edge Function push-send (logic.ts):
+ *   1. link do módulo financeiro -> financeira;
+ *   2. type `financeiro`        -> financeira;
+ *   3. type explícito não-financeiro (agenda/serviços/etc.) -> NÃO financeira,
+ *      mesmo que o texto cite "pagamento";
+ *   4. type/link desconhecidos  -> fallback conservador pelo texto.
  */
 export function isFinancialNotification(n: {
   title?: string | null;
   message?: string | null;
   link?: string | null;
+  type?: string | null;
 }): boolean {
   if (typeof n.link === "string" && n.link.startsWith("/financeiro")) return true;
+  const type = typeof n.type === "string" ? n.type.trim().toLowerCase() : "";
+  if (type === "financeiro") return true;
+  if (EXPLICIT_NON_FINANCE_TYPES.has(type)) return false;
   const text = `${n.title ?? ""} ${n.message ?? ""}`.toLowerCase();
   return (
     /(r\$|us\$|ca\$\.\$)|\b(dinheiro|pagamento|recebimento|vencimento)\b/.test(text) ||

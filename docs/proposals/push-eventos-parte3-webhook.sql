@@ -1,0 +1,78 @@
+-- ===========================================================================
+-- PROPOSTA — PARTE 3 de 3 — WEBHOOK notifications -> push-send
+-- NÃO EXECUTAR SEM AUTORIZAÇÃO DO TIME DO CRM
+-- Projeto: lzortptqkhpapzegdftz.supabase.co
+-- Revisão final somente-leitura: 20/10/2026
+-- ===========================================================================
+--
+-- CONFIRMADO NA REVISÃO
+--   - Edge Function push-send v1, verify_jwt=false, já publicada.
+--   - Ela exige x-webhook-secret e compara com a env PUSH_WEBHOOK_SECRET.
+--   - Ela ignora inserções de tipo != INSERT (retorna skipped) — o webhook
+--     pode ficar só em Insert.
+--   - Ela filtra push financeiro por admin (exceto e-mail bloqueado) OU UUID
+--     em PUSH_FINANCE_INDIVIDUAL_USER_IDS. O SQL da Parte 1/2 usa esse mesmo
+--     conjunto, então nada é ampliado.
+--
+-- OBJETIVO
+--   Fazer cada INSERT em public.notifications disparar a Edge Function
+--   push-send, que entrega o Web Push real (inclusive com o app fechado).
+--
+-- O QUE JÁ EXISTE (confirmado por leitura em 20/10/2026)
+--   - Edge Function push-send PUBLICADA (verify_jwt=false). Ela exige o
+--     cabeçalho x-webhook-secret e compara com a env var PUSH_WEBHOOK_SECRET
+--     da própria função.
+--   - NÃO existe supabase_functions.hooks, NÃO existe trigger em notifications,
+--     NÃO há pg_net instalado. => Hoje o push-send NUNCA é chamado.
+--
+-- >>> ESTA PARTE É 100% CONFIGURADA PELO PAINEL DO SUPABASE.
+--     NÃO se cria trigger, NÃO se instala pg_net, NÃO se grava o
+--     PUSH_WEBHOOK_SECRET no banco. O segredo fica SOMENTE:
+--       - na env var da Edge Function push-send (servidor), e
+--       - no cabeçalho configurado no webhook do painel (armazenado pelo
+--         Supabase, não em tabela pública).
+--
+-- ===========================================================================
+-- PASSO A PASSO (painel Supabase)
+-- ===========================================================================
+-- 1. Dashboard do projeto lzortptqkhpapzegdftz -> Database -> Webhooks.
+-- 2. Create a new hook:
+--      Name    : notifications-to-push-send
+--      Table   : public.notifications
+--      Events  : Insert  (apenas INSERT; a função ignora outros tipos)
+--      Type    : HTTP Request (POST)
+--      URL     : https://lzortptqkhpapzegdftz.supabase.co/functions/v1/push-send
+--      Method  : POST
+--      Headers :
+--        Content-Type      : application/json
+--        x-webhook-secret  : <valor de PUSH_WEBHOOK_SECRET>   (NÃO versionar)
+-- 3. Salvar. NÃO registrar o segredo em arquivo do repositório.
+--
+-- VERIFICAÇÃO (após habilitar)
+--   - Inserir manualmente uma notificação de teste e conferir o resultado
+--     retornado pela função nos logs (Edge Functions -> push-send -> Logs).
+--   - Conferir que push_deliveries ganha linha (notification_id, subscription_id).
+--   - Se der 401: o cabeçalho x-webhook-secret não confere com a env var.
+--   - Se der 503: PUSH_WEBHOOK_SECRET ou VAPID ausentes na função.
+--
+-- COMO REVERTER
+--   Dashboard -> Database -> Webhooks -> excluir "notifications-to-push-send".
+--   (Sem SQL. Sem alteração de dados.)
+--
+-- ===========================================================================
+-- POR QUE NÃO usar trigger + pg_net (alternativa descartada)
+-- ===========================================================================
+--   A alternativa "create extension pg_net + trigger http_post" exigiria
+--   gravar o segredo dentro do corpo da função SQL (senha em texto claro no
+--   banco) e instalar extensão. Foi DESCARTADA para não expor o segredo no
+--   banco. O webhook do painel mantém o segredo fora das tabelas.
+--
+-- ===========================================================================
+-- DEPENDÊNCIAS (todas fora do banco)
+-- ===========================================================================
+--   - VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT  (env da função)
+--   - PUSH_WEBHOOK_SECRET                                    (env da função)
+--   - PUSH_FINANCE_INDIVIDUAL_USER_IDS                       (env da função)
+--   - VITE_VAPID_PUBLIC_KEY                                  (build do app)
+--   - Sem estas envs o INSERT funciona, mas a função responde 503 e nada chega.
+-- ===========================================================================
