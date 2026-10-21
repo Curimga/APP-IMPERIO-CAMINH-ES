@@ -193,6 +193,53 @@ export function ListRow({
   return inner;
 }
 
+/**
+ * Interruptor no estilo iOS: trilho com botão que desliza.
+ * Usado para ativar/desativar recursos de uma linha (ex.: notificações).
+ */
+export function ToggleSwitch({
+  checked,
+  onCheckedChange,
+  disabled,
+  busy,
+  label,
+}: {
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+  disabled?: boolean;
+  busy?: boolean;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled || busy}
+      onClick={(event) => {
+        event.stopPropagation();
+        onCheckedChange(!checked);
+      }}
+      className={cn(
+        "relative inline-flex h-[31px] w-[51px] shrink-0 items-center rounded-full p-0.5",
+        "transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70",
+        checked ? "bg-success" : "bg-muted-foreground/30",
+        disabled ? "cursor-not-allowed opacity-60" : "pressable active:scale-95",
+        busy && "opacity-70",
+      )}
+    >
+      <span
+        className={cn(
+          "block h-[27px] w-[27px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)]",
+          "transition-transform duration-200 ease-out",
+          checked ? "translate-x-[20px]" : "translate-x-0",
+        )}
+      />
+    </button>
+  );
+}
+
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
   const tone = STATUS_TONE[status];
   const label = STATUS_LABEL[status] ?? status;

@@ -1,6 +1,7 @@
 import { Bell, BellOff, BellRing } from "lucide-react";
-import { MobileCard, SectionTitle, ListRow } from "@/components/mobile/ui";
+import { MobileCard, SectionTitle, ListRow, ToggleSwitch } from "@/components/mobile/ui";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { cn } from "@/lib/utils";
 
 function subtitleFor(state: {
   supported: boolean;
@@ -8,7 +9,9 @@ function subtitleFor(state: {
   permission: NotificationPermission | "unsupported";
   subscribed: boolean;
   iosNeedsInstall: boolean;
+  busy: boolean;
 }): string {
+  if (state.busy) return "Aguarde…";
   if (!state.supported) return "Não suportado neste navegador.";
   if (state.iosNeedsInstall) return "No iPhone, instale o app na Tela de Início para ativar.";
   if (state.permission === "denied") return "Bloqueadas no navegador. Libere nas configurações do site.";
@@ -51,23 +54,37 @@ export function PushNotificationSettings() {
   else if (permission === "denied") title = "Notificações no celular";
   else if (!configured) title = "Notificações no celular";
 
-  const right = canToggle ? (
-    <span className="text-[12px] font-bold text-gold">{busy ? "Aguarde" : isOn ? "Desativar" : "Ativar"}</span>
-  ) : undefined;
-
-  const onClick =
-    canToggle && !busy ? () => (isOn ? push.disable() : push.enable()) : undefined;
+  const toggle = () => (isOn ? push.disable() : push.enable());
 
   return (
     <MobileCard className="p-3">
       <SectionTitle>Notificações no celular</SectionTitle>
-      <ListRow
-        title={title}
-        subtitle={subtitleFor(push)}
-        icon={icon}
-        right={right}
-        onClick={onClick}
-      />
+      <div
+        onClick={canToggle ? toggle : undefined}
+        className={cn("rounded-xl", canToggle && "tap-gold cursor-pointer active:bg-muted/50")}
+      >
+        <ListRow
+          title={title}
+          subtitle={subtitleFor({
+            supported,
+            configured,
+            permission,
+            subscribed,
+            iosNeedsInstall: push.iosNeedsInstall,
+            busy,
+          })}
+          icon={icon}
+          right={
+            <ToggleSwitch
+              checked={isOn}
+              onCheckedChange={toggle}
+              disabled={!canToggle}
+              busy={busy}
+              label={isOn ? "Desativar notificações" : "Ativar notificações"}
+            />
+          }
+        />
+      </div>
     </MobileCard>
   );
 }
