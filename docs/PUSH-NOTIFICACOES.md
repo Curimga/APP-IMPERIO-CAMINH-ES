@@ -230,16 +230,20 @@ Aplicado em 21/10/2026 no projeto real (`lzortptqkhpapzegdftz`):
    (a cada 10 min; o segredo é lido do banco dentro do job, não fica no comando);
 4. **validado de ponta a ponta**: aviso original + lembrete repetido recebidos
    no iPhone com o app fechado; idempotência conferida (2ª execução não
-   reenvia); distribuição conferida (15h, 18h e 20h no fuso de São Paulo).
+   reenvia); distribuição conferida (15h, 18h e 20h no fuso de São Paulo);
+5. **Parte 2 aplicada** (autorizada em 21/10/2026, migration
+   `push_lembretes_parte2_crm`): o CRM passa a gravar aviso ao criar um
+   **compromisso** (tipo `agenda`, prioridade herdada do evento) e ao deixar
+   um **serviço** em `pendente` (tipo `manutencao`), sempre com o id da
+   entidade no link (`/agenda?id=<uuid>`, `/servicos?id=<uuid>`) — é assim
+   que o `push-reminders` descobre o que continua pendente.
+   - um aviso por entidade (não duplica em edição de título/horário/status);
+   - não avisa compromisso que já começou nem serviço que não está `pendente`;
+   - não é retroativo: só vale para agenda/serviços criados a partir de agora;
+   - índice `idx_notif_user_link` para o "já avisei?" não varrer a tabela.
 
-Pendente (opcional, requer autorização):
+Agora os lembretes cobrem **financeiro, agenda e serviço**.
 
-5. para lembretes de **agenda/serviço** existirem, o CRM precisa gerar aviso
-   desses tipos — proposta em
-   `docs/proposals/push-lembretes-parte2-triggers-crm.sql` (muda o
-   comportamento do CRM; **não aplicada**). Hoje, os lembretes em produção
-   valem para os avisos de financeiro (o gerador atual já grava o link com o
-   id da conta a pagar).
-
-Até a confirmação de entrega real no aparelho, o recurso **não é declarado
-como funcionando em segundo plano**.
+Os lembretes só saem para quem tem a preferência > 0 (0 = só o aviso
+original). Até a confirmação de entrega real no aparelho, o recurso **não é
+declarado como funcionando em segundo plano**.

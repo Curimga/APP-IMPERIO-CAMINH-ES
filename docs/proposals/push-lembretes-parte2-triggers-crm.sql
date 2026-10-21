@@ -1,7 +1,8 @@
 -- =====================================================================
--- PARTE 2 (OPCIONAL) — avisos de AGENDA e de SERVIÇO no CRM
+-- PARTE 2 — avisos de AGENDA e de SERVIÇO no CRM
 -- =====================================================================
--- Status: PROPOSTA. NÃO APLICAR sem autorização explícita do dono do app.
+-- Status: APLICADA em 21/10/2026 no projeto real `lzortptqkhpapzegdftz`
+-- (migration `push_lembretes_parte2_crm`), com autorização do dono do app.
 --
 -- Por que existe
 --   Hoje o CRM só gera aviso automático de contas a pagar
@@ -14,26 +15,36 @@
 --   novas em `notifications`). Nada aqui é necessário para os lembretes de
 --   financeiro, que já funcionam com o gerador atual.
 --
--- Depende da Parte 1 (`push-lembretes-proposta-sql.sql`) para que os
+-- Depende da Parte 1 (`push_lembretes-proposta-sql.sql`) para que os
 -- lembretes sejam planejados automaticamente.
 --
 -- Regras implementadas
 --   - Agenda: um aviso por compromisso (por usuário), criado quando o
 --     compromisso nasce ou muda; não avisa compromisso que já começou.
---     Prioridade herda de `calendar_events.priority`.
+--     Prioridade herda de `calendar_events.priority` (deal_priority:
+--     baixa/media/alta -> notification_priority).
 --   - Serviço: um aviso por serviço (por usuário), criado quando o serviço
 --     entra em `pendente` (ou nasce pendente).
 --   - O aviso usa o mesmo link do APP:
 --       /agenda?id=<uuid>        /servicos?id=<uuid>
 --     O `push-reminders` reconhece esses links e para os lembretes quando o
 --     compromisso começa ou o serviço é concluído/cancelado.
+--   - Não é retroativo: os triggers só valem para inserts/updates futuros.
 --
 -- Rollback
 --   drop trigger if exists trg_notify_calendar_event on public.calendar_events;
 --   drop function if exists public.fn_notify_calendar_event();
 --   drop trigger if exists trg_notify_service_pending on public.services;
 --   drop function if exists public.fn_notify_service_pending();
+--   drop index if exists public.idx_notif_user_link;
 -- =====================================================================
+
+-- Índice de apoio: o "já avisei?" de cada trigger consulta (user_id, link);
+-- sem índice vira varredura sequencial da tabela de notificações.
+create index if not exists idx_notif_user_link
+  on public.notifications (user_id, link)
+  where link is not null;
+
 
 -- ---------------------------------------------------------------------
 -- Agenda
