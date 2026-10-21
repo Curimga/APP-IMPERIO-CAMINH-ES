@@ -1,6 +1,12 @@
 import { Bell, BellOff, BellRing } from "lucide-react";
-import { MobileCard, SectionTitle, ListRow, ToggleSwitch } from "@/components/mobile/ui";
+import { MobileCard, SectionTitle, ListRow, ToggleSwitch, Chip } from "@/components/mobile/ui";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { usePushPreferences } from "@/hooks/use-push-preferences";
+import {
+  REMINDERS_PER_DAY_OPTIONS,
+  remindersPerDayDescription,
+  remindersPerDayLabel,
+} from "@/lib/mobile/push-preferences";
 import { cn } from "@/lib/utils";
 
 function subtitleFor(state: {
@@ -27,6 +33,7 @@ function subtitleFor(state: {
 
 export function PushNotificationSettings() {
   const push = usePushNotifications();
+  const prefs = usePushPreferences();
   const { supported, permission, subscribed, busy, configured } = push;
 
   const isOn = subscribed;
@@ -84,6 +91,32 @@ export function PushNotificationSettings() {
             />
           }
         />
+      </div>
+
+      {/* Lembretes repetidos por aviso pendente */}
+      <div className="mt-3 rounded-xl border border-border bg-card/40 p-3">
+        <p className="text-sm font-semibold">Lembretes por aviso pendente por dia</p>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">
+          {prefs.available
+            ? remindersPerDayDescription(prefs.value)
+            : "Preferência indisponível no servidor por enquanto."}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {REMINDERS_PER_DAY_OPTIONS.map((option) => (
+            <Chip
+              key={option}
+              label={remindersPerDayLabel(option)}
+              active={prefs.value === option}
+              onClick={
+                prefs.available && !prefs.saving ? () => void prefs.choose(option) : undefined
+              }
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+          Os lembretes saem entre 9h e 20h (horário de São Paulo), um de cada vez, e param
+          sozinhos quando o aviso deixa de estar pendente.
+        </p>
       </div>
     </MobileCard>
   );

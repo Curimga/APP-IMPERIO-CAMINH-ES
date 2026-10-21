@@ -175,3 +175,55 @@ lê-las no app. É seguro **desde que** o CRM só use `user_id` nulo para avisos
 não sensíveis; se um aviso sensível for gravado com nulo e texto neutro que não
 case com o classificador `isFinancialNotification`, ele seria transmitido a
 todos os inscritos — por isso o classificador roda antes do envio.
+
+## Lembretes repetidos de avisos pendentes (0 a 3 por dia)
+
+Recurso pedido pelo dono: cada usuário escolhe **quantos lembretes repetidos
+recebe por dia** para cada aviso que **continua pendente** (0 = padrão, ou seja,
+só o aviso original). O aviso original nunca muda: continua saindo uma vez, pelo
+`push-send`.
+
+### Como funciona
+
+| Peça | Onde | Papel |
+| --- | --- | --- |
+| Preferência por usuário | `public.push_preferences` | `reminders_per_day` (0..3). Fica no banco, então acompanha o usuário em todos os aparelhos. |
+| Plano de ocorrências | `public.push_reminder_plans` | Um por (aviso, dispositivo): guarda os horários e o estado (`planned/active/sent/cancelled/expired`). |
+| Entrega | `public.push_deliveries.occurrence` | `0` = aviso original, `1..N` = lembretes. Índice único `(notification_id, subscription_id, occurrence)` garante **idempotência**. |
+| Agendador | `public.push_scheduler_secret` + `pg_cron` | A cada 10 min chama a Edge Function `push-reminders` com `x-scheduler-secret`. |
+| Execução | `supabase/functions/push-reminders` | Envia **no máximo 1 lembrete por plano por execução** (distribui durante o dia). |
+
+Regras dentro da Edge Function:
+
+- horários: **9h, 12h, 15h, 18h e 20h** (America/Sao_Paulo), nunca dentro do
+  horário silencioso (21h–08h);
+- antes de enviar, revalida: a preferência continua valendo? o aviso continua
+  pendente? o usuário ainda pode receber aviso financeiro?
+  - conta a pagar/receber: continua em `aberto`/`vencido` (pago/recebido/cancelado encerram);
+  - compromisso: ainda não começou (`calendar_events.starts_at` > agora);
+  - serviço: `pendente`/`em_andamento` (concluído/cancelado encerram);
+- permissões financeiras: **nunca ampliadas** — usa as mesmas regras do
+  `push-send` (`isFinancialRecipientAllowed`), incluindo a lista de bloqueio;
+- aviso sem entidade reconhecível (link sem id) ou aviso de tipo não previsto:
+  **sem lembrete** (prudência).
+
+### Onde o usuário mexe
+
+Perfil → **Notificações no celular** → *Lembretes por aviso pendente por dia*
+(0, 1, 2 ou 3). A escolha é salva em `push_preferences` (RLS: cada usuário só
+lê/escreve a própria linha) e a tela escuta o Realtime para atualizar quando a
+opção muda em outro aparelho.
+
+### O que ainda depende de configuração no projeto
+
+1. migration `docs/proposals/push-lembretes-proposta-sql.sql` aplicada no
+   projeto real (**ainda não aplicada** — é aditiva e tem rollback);
+2. Edge Function `push-reminders` implantada (mesmas env de `push-send`);
+3. `pg_cron` habilitado no projeto (o papel `postgres` não é superuser: é um
+   passo de plataforma) e o job `push-reminders-a-cada-10-min` criado;
+4. para lembretes de agenda/serviço existirem, o CRM precisa gerar aviso
+   desses tipos — proposta opcional (muda o comportamento do CRM) em
+   `docs/proposals/push-lembretes-parte2-triggers-crm.sql`.
+
+Até a confirmação de entrega real no aparelho, o recurso **não é declarado
+como funcionando em segundo plano**.

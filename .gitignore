@@ -16,3 +16,7 @@ preview*.log
 # Cache do TanStack Router (gerado em tempo de dev/build)
 .tanstack/
 .env.local
+
+# Arquivos temporarios do Supabase CLI (contem o project ref)
+supabase/.temp/
+
