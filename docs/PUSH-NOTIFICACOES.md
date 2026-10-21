@@ -117,19 +117,23 @@ Web Push + Edge Function + webhook na tabela `notifications`.
 **Conferência de entrega**: a resposta da função retorna
 `{ total, sent, skipped, expired, failed }`.
 
-## O que ainda NÃO está concluído
+## Estado da entrega em segundo plano
 
-A entrega em segundo plano só é considerada concluída quando **todos** abaixo
-estiverem feitos e validados com o app fechado:
+A entrega em segundo plano foi **validada no projeto real** (`lzortptqkhpapzegdftz`):
 
-- [ ] tabelas criadas no projeto real;
-- [ ] secrets VAPID e `PUSH_WEBHOOK_SECRET` cadastrados;
-- [ ] Edge Function `push-send` implantada;
-- [ ] webhook conectado à tabela `notifications`;
-- [ ] teste autenticado em Android **e** iPhone confirmando a chegada fechada.
+- [x] tabelas `push_subscriptions`/`push_deliveries` criadas no projeto real;
+- [x] secrets VAPID e `PUSH_WEBHOOK_SECRET` cadastrados;
+- [x] Edge Function `push-send` implantada (v1, `verify_jwt=false`);
+- [x] webhook conectado à tabela `notifications`;
+- [x] **iPhone (iOS 18.7) confirmado pelo dono: aviso recebido com o app fechado.**
 
-Enquanto isso, o app funciona com o **complemento** (avisos com o app aberto)
-e a CI local; nada é declarado como "push em segundo plano" sem a validação acima.
+Detalhes da validação: uma inserção em `notifications` disparou o webhook
+(`POST /functions/v1/push-send` → **200**, `{"total":1,"sent":1}`), com a linha
+correspondente em `push_deliveries` e a chegada confirmada no aparelho.
+
+Ainda não validado em aparelho: **Android** (mesmo caminho de código, sem
+aparelho de teste). O app mantém o **complemento** (avisos com o app aberto)
+para os casos em que o aparelho não tem push ativo.
 
 ## Segurança
 
@@ -216,14 +220,26 @@ opção muda em outro aparelho.
 
 ### O que ainda depende de configuração no projeto
 
-1. migration `docs/proposals/push-lembretes-proposta-sql.sql` aplicada no
-   projeto real (**ainda não aplicada** — é aditiva e tem rollback);
-2. Edge Function `push-reminders` implantada (mesmas env de `push-send`);
-3. `pg_cron` habilitado no projeto (o papel `postgres` não é superuser: é um
-   passo de plataforma) e o job `push-reminders-a-cada-10-min` criado;
-4. para lembretes de agenda/serviço existirem, o CRM precisa gerar aviso
-   desses tipos — proposta opcional (muda o comportamento do CRM) em
-   `docs/proposals/push-lembretes-parte2-triggers-crm.sql`.
+Aplicado em 21/10/2026 no projeto real (`lzortptqkhpapzegdftz`):
+
+1. migration `push_lembretes` (de `docs/proposals/push-lembretes-proposta-sql.sql`)
+   aplicada — `push_preferences`, `push_reminder_plans`, `push_scheduler_secret`,
+   `occurrence` em `push_deliveries` e o trigger `trg_push_plan_reminders`;
+2. Edge Function `push-reminders` implantada (v1, `verify_jwt=false`);
+3. `pg_cron` habilitado e job `push-reminders-a-cada-10-min` criado
+   (a cada 10 min; o segredo é lido do banco dentro do job, não fica no comando);
+4. **validado de ponta a ponta**: aviso original + lembrete repetido recebidos
+   no iPhone com o app fechado; idempotência conferida (2ª execução não
+   reenvia); distribuição conferida (15h, 18h e 20h no fuso de São Paulo).
+
+Pendente (opcional, requer autorização):
+
+5. para lembretes de **agenda/serviço** existirem, o CRM precisa gerar aviso
+   desses tipos — proposta em
+   `docs/proposals/push-lembretes-parte2-triggers-crm.sql` (muda o
+   comportamento do CRM; **não aplicada**). Hoje, os lembretes em produção
+   valem para os avisos de financeiro (o gerador atual já grava o link com o
+   id da conta a pagar).
 
 Até a confirmação de entrega real no aparelho, o recurso **não é declarado
 como funcionando em segundo plano**.
