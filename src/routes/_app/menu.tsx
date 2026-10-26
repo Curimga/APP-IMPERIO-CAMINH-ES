@@ -13,13 +13,16 @@ import {
   ListTodo,
   BrainCircuit,
   ReceiptText,
+  FileCheck2,
 } from "lucide-react";
-import { MOBILE_MENU } from "@/lib/mobile/perm";
+import { canAccessTruckFlow, canApproveExpenses, MOBILE_MENU } from "@/lib/mobile/perm";
 import { useAuth } from "@/hooks/use-auth";
 import { MobileCard, ListRow } from "@/components/mobile/ui";
 import { useNotifications } from "@/lib/mobile/queries";
 import { useInstallPrompt } from "@/lib/mobile/install";
 import { usePendencies } from "@/routes/_app/pendencias";
+import { useTruckFlowAccess } from "@/lib/mobile/truck-flow";
+import { useExpenseApprovalAccess, useExpenseApprovalRequests } from "@/lib/mobile/expense-approval";
 
 export const Route = createFileRoute("/_app/menu")({
   component: Menu,
@@ -35,6 +38,7 @@ const ICONS: Record<string, React.ReactNode> = {
   shield: <ShieldCheck className="h-5 w-5" />,
   assistant: <BrainCircuit className="h-5 w-5" />,
   receipt: <ReceiptText className="h-5 w-5" />,
+  "file-check": <FileCheck2 className="h-5 w-5" />,
 };
 
 function Menu() {
@@ -42,7 +46,19 @@ function Menu() {
   const { data } = useNotifications();
   const pendencias = usePendencies();
   const install = useInstallPrompt();
-  const items = MOBILE_MENU.filter((m) => m.allowed(roles, user?.email, user?.id));
+  const { data: flowAccess } = useTruckFlowAccess();
+  const { data: approvalAccess } = useExpenseApprovalAccess();
+  const { data: approvalRequests = [] } = useExpenseApprovalRequests();
+  const hasReturnedRequest = approvalRequests.some((request) => request.status === "returned");
+  const items = [
+    ...MOBILE_MENU.filter((m) => m.allowed(roles, user?.email, user?.id)),
+    ...(canAccessTruckFlow(flowAccess?.access_level)
+      ? [{ label: "Fluxo de caminhão", to: "/fluxo-caminhao", icon: "truck", description: "Etapas do caminhão" }]
+      : []),
+    ...(canApproveExpenses(approvalAccess) || hasReturnedRequest
+      ? [{ label: "Confirmação de despesas", to: "/confirmacao-despesas", icon: "file-check", description: "Aprovar ou devolver lançamentos" }]
+      : []),
+  ];
   const unread = data?.unread ?? 0;
 
   return (

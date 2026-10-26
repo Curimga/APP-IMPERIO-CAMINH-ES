@@ -1,0 +1,3 @@
+-- As RPCs atomicas de aprovacao fazem parte da migration consolidada
+-- 20261026182459_truck_flow_expense_schema.sql em ambientes novos.
+-- Esta migration preserva paridade com o historico remoto.

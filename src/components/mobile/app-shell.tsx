@@ -18,10 +18,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import {
   canEditInventory,
+  canEditTruckFlow,
   canManageGeneralExpenses,
   canSeeServices,
   isFinanceExecutive,
 } from "@/lib/mobile/perm";
+import { useTruckFlowAccess } from "@/lib/mobile/truck-flow";
 import { AppHeader } from "@/components/mobile/header";
 import { OfflineBanner } from "@/components/mobile/connection";
 import { haptic } from "@/lib/mobile/haptic";
@@ -70,7 +72,22 @@ export function MobileTabBar() {
   const { roles } = useAuth();
   const { data: notif } = useNotifications();
   const { data: services } = useServices();
-  const tabs = TABS.filter((tab) => tab.to !== "/servicos" || canSeeServices(roles));
+  const { data: flowAccess } = useTruckFlowAccess();
+  const isFlowEditor = canEditTruckFlow(flowAccess?.access_level);
+
+  const finalTabs = TABS.flatMap((tab) => {
+    if (tab.to !== "/servicos") return [tab];
+    if (isFlowEditor) {
+      return [{
+        to: "/fluxo-caminhao",
+        label: "Fluxo",
+        icon: Truck,
+        active: (path: string) => path.startsWith("/fluxo-caminhao"),
+      }];
+    }
+    return canSeeServices(roles) ? [tab] : [];
+  });
+
   const unread = notif?.unread ?? 0;
   const delayedCount = (services ?? []).filter(
     (s) =>
@@ -86,9 +103,9 @@ export function MobileTabBar() {
     >
       <div
         className="mx-auto grid max-w-2xl"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${finalTabs.length}, minmax(0, 1fr))` }}
       >
-        {tabs.map((t) => {
+        {finalTabs.map((t) => {
           const Icon = t.icon;
           const isActive = t.active(location.pathname);
           const badge =

@@ -33,6 +33,8 @@ const APP_ROUTES = new Set([
   "/pendencias",
   "/busca",
   "/perfil",
+  "/fluxo-caminhao",
+  "/confirmacao-despesas",
 ]);
 
 function resolveAppRoute(link) {
@@ -42,6 +44,8 @@ function resolveAppRoute(link) {
   if (APP_ROUTES.has(normalized)) return normalized;
   const match = normalized.match(/^\/garagem\/([^/]+)$/);
   if (match) return `/garagem/${match[1]}`;
+  const flowMatch = normalized.match(/^\/fluxo-caminhao(?:\/([^/]+))?$/);
+  if (flowMatch) return flowMatch[1] ? `/fluxo-caminhao/${flowMatch[1]}` : "/fluxo-caminhao";
   return null;
 }
 const OFFLINE_HTML = `<!doctype html>

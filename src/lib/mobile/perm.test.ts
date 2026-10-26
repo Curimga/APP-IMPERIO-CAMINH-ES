@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   canAccessBanking,
+  canAccessTruckFlow,
+  canApproveExpenses,
+  canEditTruckFlow,
+  canViewTruckFlow,
   canSeeFinanceNotifications,
+  isPathAllowedForRoles,
   isFinanceExecutive,
   isIndividualFinanceUser,
 } from "./perm";
@@ -43,5 +48,30 @@ describe("permissão financeira individual (por UUID, sem admin)", () => {
         canSeeFinanceNotifications(roles, email, userId),
       );
     }
+  });
+});
+
+describe("permissões individuais carregadas do banco", () => {
+  it("diferencia editor, visualizador e usuário sem acesso ao fluxo", () => {
+    expect(canAccessTruckFlow("editor")).toBe(true);
+    expect(canEditTruckFlow("editor")).toBe(true);
+    expect(canViewTruckFlow("editor")).toBe(false);
+    expect(canAccessTruckFlow("viewer")).toBe(true);
+    expect(canEditTruckFlow("viewer")).toBe(false);
+    expect(canViewTruckFlow("viewer")).toBe(true);
+    expect(canAccessTruckFlow(null)).toBe(false);
+  });
+
+  it("não deriva aprovação de nome, e-mail ou cargo", () => {
+    expect(canApproveExpenses(true)).toBe(true);
+    expect(canApproveExpenses(false)).toBe(false);
+    expect(canApproveExpenses(null)).toBe(false);
+  });
+
+  it("mantém Secretaria fora das rotas financeiras e permite apenas acompanhar a própria correção", () => {
+    expect(isPathAllowedForRoles("/financeiro", ["secretaria"])).toBe(false);
+    expect(isPathAllowedForRoles("/garagem/abc/despesa", ["secretaria"])).toBe(false);
+    expect(isPathAllowedForRoles("/confirmacao-despesas", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/fluxo-caminhao", ["secretaria"])).toBe(false);
   });
 });

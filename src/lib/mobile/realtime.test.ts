@@ -63,10 +63,27 @@ describe("realtime-map — todos os prefixes mobile de queries.ts são invalidá
       "customers",
       "notifications",
       "inventory_items",
+      "truck_flows",
+      "truck_flow_access",
+      "truck_flow_steps",
+      "truck_flow_evidence",
+      "truck_flow_events",
+      "expense_approval_requests",
+      "expense_approval_events",
+      "expense_approval_access",
     ] as const) {
       expect(TABLE_KEYS[t], `faltou TABLE_KEYS.${t}`).toBeDefined();
       expect(TABLE_KEYS[t].length).toBeGreaterThan(0);
     }
+  });
+
+  it("fluxo e aprovações invalidam os mesmos prefixos usados pelos hooks", () => {
+    expect(TABLE_KEYS.truck_flows).toContain("truck-flows");
+    expect(TABLE_KEYS.truck_flow_steps).toContain("truck-flow");
+    expect(TABLE_KEYS.expense_approval_requests).toContain("expense-approval-requests");
+    expect(TABLE_KEYS.expense_approval_events).toContain("expense-approval-requests");
+    expect(TABLE_KEYS.truck_flow_access).toContain("truck-flow-access");
+    expect(TABLE_KEYS.expense_approval_access).toContain("expense-approval-access");
   });
 
   it("inventory_movements invalida financeiro e estoque (venda/consumo de estoque do CRM)", () => {

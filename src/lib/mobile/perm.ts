@@ -60,6 +60,24 @@ export function isIndividualFinanceUser(userId?: string | null) {
   return Boolean(userId && FINANCE_INDIVIDUAL_USER_IDS.has(userId));
 }
 
+export type TruckFlowAccessLevel = "editor" | "viewer" | null | undefined;
+
+export function canAccessTruckFlow(accessLevel: TruckFlowAccessLevel): boolean {
+  return accessLevel === "editor" || accessLevel === "viewer";
+}
+
+export function canEditTruckFlow(accessLevel: TruckFlowAccessLevel): boolean {
+  return accessLevel === "editor";
+}
+
+export function canViewTruckFlow(accessLevel: TruckFlowAccessLevel): boolean {
+  return accessLevel === "viewer";
+}
+
+export function canApproveExpenses(hasApprovalAccess?: boolean | null): boolean {
+  return hasApprovalAccess === true;
+}
+
 /** Contas bancárias e movimentações: Executivo/Admin ou UUID individual autorizado. */
 export function canAccessBanking(roles: AppRole[], email?: string | null, userId?: string | null) {
   return isFinanceExecutive(roles, email) || isIndividualFinanceUser(userId);
@@ -132,6 +150,7 @@ const SECRETARIA_ALLOWED_PREFIXES = [
   "/perfil",
   "/assistente",
   "/vendidos",
+  "/confirmacao-despesas",
 ] as const;
 
 const SECRETARIA_BLOCKED_PREFIXES = [

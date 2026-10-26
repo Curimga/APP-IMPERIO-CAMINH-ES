@@ -18,9 +18,11 @@ import { Route as AppAgendaRouteImport } from './routes/_app/agenda'
 import { Route as AppAssistenteRouteImport } from './routes/_app/assistente'
 import { Route as AppBuscaRouteImport } from './routes/_app/busca'
 import { Route as AppClientesRouteImport } from './routes/_app/clientes'
+import { Route as AppConfirmacaoDespesasRouteImport } from './routes/_app/confirmacao-despesas'
 import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
 import { Route as AppEstoqueRouteImport } from './routes/_app/estoque'
 import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
+import { Route as AppFluxoCaminhaoRouteImport } from './routes/_app/fluxo-caminhao'
 import { Route as AppGaragemRouteImport } from './routes/_app/garagem'
 import { Route as AppMenuRouteImport } from './routes/_app/menu'
 import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
@@ -31,6 +33,7 @@ import { Route as AppVendidosRouteImport } from './routes/_app/vendidos'
 import { Route as AppAgendaNovoRouteImport } from './routes/_app/agenda.novo'
 import { Route as AppClientesNovoRouteImport } from './routes/_app/clientes.novo'
 import { Route as AppEstoqueNovoRouteImport } from './routes/_app/estoque.novo'
+import { Route as AppFluxoCaminhaoTruckIdRouteImport } from './routes/_app/fluxo-caminhao.$truckId'
 import { Route as AppGaragemTruckIdRouteImport } from './routes/_app/garagem.$truckId'
 import { Route as AppGaragemNovoRouteImport } from './routes/_app/garagem.novo'
 import { Route as AppGaragemSimularVendaRouteImport } from './routes/_app/garagem.simular-venda'
@@ -82,6 +85,11 @@ const AppClientesRoute = AppClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConfirmacaoDespesasRoute = AppConfirmacaoDespesasRouteImport.update({
+  id: '/confirmacao-despesas',
+  path: '/confirmacao-despesas',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDespesasRoute = AppDespesasRouteImport.update({
   id: '/despesas',
   path: '/despesas',
@@ -95,6 +103,11 @@ const AppEstoqueRoute = AppEstoqueRouteImport.update({
 const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFluxoCaminhaoRoute = AppFluxoCaminhaoRouteImport.update({
+  id: '/fluxo-caminhao',
+  path: '/fluxo-caminhao',
   getParentRoute: () => AppRoute,
 } as any)
 const AppGaragemRoute = AppGaragemRouteImport.update({
@@ -147,6 +160,11 @@ const AppEstoqueNovoRoute = AppEstoqueNovoRouteImport.update({
   path: '/novo',
   getParentRoute: () => AppEstoqueRoute,
 } as any)
+const AppFluxoCaminhaoTruckIdRoute = AppFluxoCaminhaoTruckIdRouteImport.update({
+  id: '/$truckId',
+  path: '/$truckId',
+  getParentRoute: () => AppFluxoCaminhaoRoute,
+} as any)
 const AppGaragemTruckIdRoute = AppGaragemTruckIdRouteImport.update({
   id: '/$truckId',
   path: '/$truckId',
@@ -188,9 +206,11 @@ export interface FileRoutesByFullPath {
   '/assistente': typeof AppAssistenteRoute
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
+  '/confirmacao-despesas': typeof AppConfirmacaoDespesasRoute
   '/despesas': typeof AppDespesasRoute
   '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
+  '/fluxo-caminhao': typeof AppFluxoCaminhaoRouteWithChildren
   '/garagem': typeof AppGaragemRouteWithChildren
   '/menu': typeof AppMenuRoute
   '/notificacoes': typeof AppNotificacoesRoute
@@ -201,6 +221,7 @@ export interface FileRoutesByFullPath {
   '/agenda/novo': typeof AppAgendaNovoRoute
   '/clientes/novo': typeof AppClientesNovoRoute
   '/estoque/novo': typeof AppEstoqueNovoRoute
+  '/fluxo-caminhao/$truckId': typeof AppFluxoCaminhaoTruckIdRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
   '/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
@@ -216,9 +237,11 @@ export interface FileRoutesByTo {
   '/assistente': typeof AppAssistenteRoute
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
+  '/confirmacao-despesas': typeof AppConfirmacaoDespesasRoute
   '/despesas': typeof AppDespesasRoute
   '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
+  '/fluxo-caminhao': typeof AppFluxoCaminhaoRouteWithChildren
   '/garagem': typeof AppGaragemRouteWithChildren
   '/menu': typeof AppMenuRoute
   '/notificacoes': typeof AppNotificacoesRoute
@@ -230,6 +253,7 @@ export interface FileRoutesByTo {
   '/agenda/novo': typeof AppAgendaNovoRoute
   '/clientes/novo': typeof AppClientesNovoRoute
   '/estoque/novo': typeof AppEstoqueNovoRoute
+  '/fluxo-caminhao/$truckId': typeof AppFluxoCaminhaoTruckIdRoute
   '/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/garagem/novo': typeof AppGaragemNovoRoute
   '/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
@@ -247,9 +271,11 @@ export interface FileRoutesById {
   '/_app/assistente': typeof AppAssistenteRoute
   '/_app/busca': typeof AppBuscaRoute
   '/_app/clientes': typeof AppClientesRouteWithChildren
+  '/_app/confirmacao-despesas': typeof AppConfirmacaoDespesasRoute
   '/_app/despesas': typeof AppDespesasRoute
   '/_app/estoque': typeof AppEstoqueRouteWithChildren
   '/_app/financeiro': typeof AppFinanceiroRoute
+  '/_app/fluxo-caminhao': typeof AppFluxoCaminhaoRouteWithChildren
   '/_app/garagem': typeof AppGaragemRouteWithChildren
   '/_app/menu': typeof AppMenuRoute
   '/_app/notificacoes': typeof AppNotificacoesRoute
@@ -261,6 +287,7 @@ export interface FileRoutesById {
   '/_app/agenda/novo': typeof AppAgendaNovoRoute
   '/_app/clientes/novo': typeof AppClientesNovoRoute
   '/_app/estoque/novo': typeof AppEstoqueNovoRoute
+  '/_app/fluxo-caminhao/$truckId': typeof AppFluxoCaminhaoTruckIdRoute
   '/_app/garagem/$truckId': typeof AppGaragemTruckIdRouteWithChildren
   '/_app/garagem/novo': typeof AppGaragemNovoRoute
   '/_app/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
@@ -279,9 +306,11 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/busca'
     | '/clientes'
+    | '/confirmacao-despesas'
     | '/despesas'
     | '/estoque'
     | '/financeiro'
+    | '/fluxo-caminhao'
     | '/garagem'
     | '/menu'
     | '/notificacoes'
@@ -292,6 +321,7 @@ export interface FileRouteTypes {
     | '/agenda/novo'
     | '/clientes/novo'
     | '/estoque/novo'
+    | '/fluxo-caminhao/$truckId'
     | '/garagem/$truckId'
     | '/garagem/novo'
     | '/garagem/simular-venda'
@@ -307,9 +337,11 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/busca'
     | '/clientes'
+    | '/confirmacao-despesas'
     | '/despesas'
     | '/estoque'
     | '/financeiro'
+    | '/fluxo-caminhao'
     | '/garagem'
     | '/menu'
     | '/notificacoes'
@@ -321,6 +353,7 @@ export interface FileRouteTypes {
     | '/agenda/novo'
     | '/clientes/novo'
     | '/estoque/novo'
+    | '/fluxo-caminhao/$truckId'
     | '/garagem/$truckId'
     | '/garagem/novo'
     | '/garagem/simular-venda'
@@ -337,9 +370,11 @@ export interface FileRouteTypes {
     | '/_app/assistente'
     | '/_app/busca'
     | '/_app/clientes'
+    | '/_app/confirmacao-despesas'
     | '/_app/despesas'
     | '/_app/estoque'
     | '/_app/financeiro'
+    | '/_app/fluxo-caminhao'
     | '/_app/garagem'
     | '/_app/menu'
     | '/_app/notificacoes'
@@ -351,6 +386,7 @@ export interface FileRouteTypes {
     | '/_app/agenda/novo'
     | '/_app/clientes/novo'
     | '/_app/estoque/novo'
+    | '/_app/fluxo-caminhao/$truckId'
     | '/_app/garagem/$truckId'
     | '/_app/garagem/novo'
     | '/_app/garagem/simular-venda'
@@ -431,6 +467,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppClientesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/confirmacao-despesas': {
+      id: '/_app/confirmacao-despesas'
+      path: '/confirmacao-despesas'
+      fullPath: '/confirmacao-despesas'
+      preLoaderRoute: typeof AppConfirmacaoDespesasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/despesas': {
       id: '/_app/despesas'
       path: '/despesas'
@@ -450,6 +493,13 @@ declare module '@tanstack/react-router' {
       path: '/financeiro'
       fullPath: '/financeiro'
       preLoaderRoute: typeof AppFinanceiroRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/fluxo-caminhao': {
+      id: '/_app/fluxo-caminhao'
+      path: '/fluxo-caminhao'
+      fullPath: '/fluxo-caminhao'
+      preLoaderRoute: typeof AppFluxoCaminhaoRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/garagem': {
@@ -521,6 +571,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/estoque/novo'
       preLoaderRoute: typeof AppEstoqueNovoRouteImport
       parentRoute: typeof AppEstoqueRoute
+    }
+    '/_app/fluxo-caminhao/$truckId': {
+      id: '/_app/fluxo-caminhao/$truckId'
+      path: '/$truckId'
+      fullPath: '/fluxo-caminhao/$truckId'
+      preLoaderRoute: typeof AppFluxoCaminhaoTruckIdRouteImport
+      parentRoute: typeof AppFluxoCaminhaoRoute
     }
     '/_app/garagem/$truckId': {
       id: '/_app/garagem/$truckId'
@@ -603,6 +660,17 @@ const AppEstoqueRouteWithChildren = AppEstoqueRoute._addFileChildren(
   AppEstoqueRouteChildren,
 )
 
+interface AppFluxoCaminhaoRouteChildren {
+  AppFluxoCaminhaoTruckIdRoute: typeof AppFluxoCaminhaoTruckIdRoute
+}
+
+const AppFluxoCaminhaoRouteChildren: AppFluxoCaminhaoRouteChildren = {
+  AppFluxoCaminhaoTruckIdRoute: AppFluxoCaminhaoTruckIdRoute,
+}
+
+const AppFluxoCaminhaoRouteWithChildren =
+  AppFluxoCaminhaoRoute._addFileChildren(AppFluxoCaminhaoRouteChildren)
+
 interface AppGaragemTruckIdRouteChildren {
   AppGaragemTruckIdDespesaRoute: typeof AppGaragemTruckIdDespesaRoute
 }
@@ -647,9 +715,11 @@ interface AppRouteChildren {
   AppAssistenteRoute: typeof AppAssistenteRoute
   AppBuscaRoute: typeof AppBuscaRoute
   AppClientesRoute: typeof AppClientesRouteWithChildren
+  AppConfirmacaoDespesasRoute: typeof AppConfirmacaoDespesasRoute
   AppDespesasRoute: typeof AppDespesasRoute
   AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
   AppFinanceiroRoute: typeof AppFinanceiroRoute
+  AppFluxoCaminhaoRoute: typeof AppFluxoCaminhaoRouteWithChildren
   AppGaragemRoute: typeof AppGaragemRouteWithChildren
   AppMenuRoute: typeof AppMenuRoute
   AppNotificacoesRoute: typeof AppNotificacoesRoute
@@ -666,9 +736,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppAssistenteRoute: AppAssistenteRoute,
   AppBuscaRoute: AppBuscaRoute,
   AppClientesRoute: AppClientesRouteWithChildren,
+  AppConfirmacaoDespesasRoute: AppConfirmacaoDespesasRoute,
   AppDespesasRoute: AppDespesasRoute,
   AppEstoqueRoute: AppEstoqueRouteWithChildren,
   AppFinanceiroRoute: AppFinanceiroRoute,
+  AppFluxoCaminhaoRoute: AppFluxoCaminhaoRouteWithChildren,
   AppGaragemRoute: AppGaragemRouteWithChildren,
   AppMenuRoute: AppMenuRoute,
   AppNotificacoesRoute: AppNotificacoesRoute,

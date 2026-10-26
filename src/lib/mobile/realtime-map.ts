@@ -41,6 +41,14 @@ export interface RealtimeKeyMap {
   general_expenses: string[];
   inventory_items: string[];
   inventory_movements: string[];
+  truck_flow_access: string[];
+  truck_flows: string[];
+  truck_flow_steps: string[];
+  truck_flow_evidence: string[];
+  truck_flow_events: string[];
+  expense_approval_requests: string[];
+  expense_approval_events: string[];
+  expense_approval_access: string[];
 }
 
 export const TABLE_KEYS: RealtimeKeyMap = {
@@ -201,6 +209,27 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "truck-expenses-sum",
     "capital-imobilizado",
   ],
+  truck_flow_access: ["truck-flow-access"],
+  truck_flows: [
+    "truck-flows",
+    "truck-flow",
+    "truck-flow-mobile",
+    "dashboard-snapshot",
+  ],
+  truck_flow_steps: ["truck-flows", "truck-flow", "truck-flow-mobile"],
+  truck_flow_evidence: ["truck-flows", "truck-flow", "truck-flow-mobile"],
+  truck_flow_events: ["truck-flows", "truck-flow", "truck-flow-mobile"],
+  expense_approval_requests: [
+    "expense-approval-requests",
+    "expense-approval",
+    "finance-mobile",
+    "dashboard-snapshot",
+    "notifications",
+    "notifications-bell",
+    "notifications-mobile",
+  ],
+  expense_approval_events: ["expense-approval-requests", "expense-approval"],
+  expense_approval_access: ["expense-approval-access"],
 };
 
 /** Todas as tabelas mutáveis (chaves de TABLE_KEYS) — ordem determinística. */

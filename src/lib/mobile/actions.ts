@@ -7,6 +7,7 @@ import {
   serviceCategoryToTruckStatus,
 } from "@/lib/mobile/service-truck";
 import type { Enums, Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { submitExpenseConfirmation } from "@/lib/mobile/expense-approval";
 
 /**
  * Mutações do aplicativo mobile. Todas escrevem nas mesmas tabelas do CRM —
@@ -92,28 +93,25 @@ export interface GeneralExpenseInput {
 }
 
 /**
- * Despesa no padrão do CRM: grava em `general_expenses` vinculada ao caminhão.
- * O CRM alimenta `trucks.expenses_total` a partir desta tabela (ver bug das
- * despesas) — por isso a mesma ação é usada no lançamento de despesa do caminhão.
+ * Despesa no padrão do CRM: cria uma solicitação de confirmação.
+ * A despesa só é lançada oficialmente após aprovação por um usuário autorizado.
  */
 export async function createGeneralExpense(input: GeneralExpenseInput): Promise<void> {
-  const { error } = await supabase.from("general_expenses").insert({
-    truck_id: input.truck_id ?? null,
-    category: input.category || undefined,
-    description: input.description?.trim() || input.category || "Despesa",
-    notes: input.notes?.trim() || null,
+  await submitExpenseConfirmation({
+    target_type: "general_expense",
+    origin: "manual",
+    proposed_category: input.category ?? "outros",
     amount: input.amount,
-    shared: false,
-    imperio_amount: input.amount,
-    payment_method: input.payment_method || null,
-    status: input.status || null,
-    supplier: input.supplier?.trim() || null,
+    description: input.description?.trim() || input.category || "Despesa",
+    truck_id: input.truck_id ?? null,
     occurred_at: input.occurred_at ?? new Date().toISOString(),
     due_date: input.due_date || null,
-    created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+    supplier: input.supplier?.trim() || null,
+    notes: input.notes?.trim() || null,
+    payment_method: input.payment_method || null,
+    proposed_status: input.status || null,
   });
-  if (error) throw new Error(error.message);
-  toast.success("Despesa registrada");
+  toast.success("Despesa enviada para confirmação");
 }
 
 export interface ServiceInput {
@@ -469,27 +467,25 @@ export interface PaymentInput {
  */
 export async function createPayment(input: PaymentInput): Promise<string> {
   const id = crypto.randomUUID();
-  const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const authUser = (await supabase.auth.getUser()).data.user;
   const occurredAt = input.occurred_at?.trim() || todayISO();
 
   if (input.kind === "pagar") {
-    const { error } = await supabase
-      .from("payables")
-      .insert({
-        id,
-        description: input.description.trim(),
-        amount: input.amount,
-        due_date: input.due_date,
-        supplier: input.supplier?.trim() || null,
-        truck_id: input.truck_id ?? null,
-        notes: input.notes?.trim() || null,
-        payment_method: input.payment_method ?? null,
-        status: "aberto",
-        occurred_at: occurredAt,
-        created_by: createdBy,
-      });
-    if (error) throw new Error(error.message);
-    return id;
+    const requestId = await submitExpenseConfirmation({
+      target_type: "payable",
+      origin: "manual",
+      proposed_category: "outros",
+      amount: input.amount,
+      description: input.description.trim(),
+      truck_id: input.truck_id ?? null,
+      occurred_at: occurredAt,
+      due_date: input.due_date,
+      supplier: input.supplier?.trim() || null,
+      notes: input.notes?.trim() || null,
+      payment_method: input.payment_method ?? null,
+    });
+    toast.success("Pagamento enviado para confirmação");
+    return requestId;
   }
 
   const { error } = await supabase
@@ -506,7 +502,7 @@ export async function createPayment(input: PaymentInput): Promise<string> {
       installment_total: input.installment_total ?? null,
       status: "aberto",
       occurred_at: occurredAt,
-      created_by: createdBy,
+      created_by: authUser?.id ?? null,
     });
   if (error) throw new Error(error.message);
   return id;

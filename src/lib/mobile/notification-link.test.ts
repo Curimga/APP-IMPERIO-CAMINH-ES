@@ -11,10 +11,15 @@ import { notificationLinkTarget } from "./notification-link";
  */
 describe("notificationLinkTarget", () => {
   it("aceita rotas de lista conhecidas (com e sem barra final)", () => {
-    for (const path of ["/garagem", "/servicos", "/agenda", "/clientes", "/financeiro", "/estoque", "/vendidos", "/notificacoes", "/menu", "/pendencias", "/busca", "/perfil"]) {
+    for (const path of ["/garagem", "/servicos", "/agenda", "/clientes", "/financeiro", "/estoque", "/vendidos", "/notificacoes", "/menu", "/pendencias", "/busca", "/perfil", "/fluxo-caminhao", "/confirmacao-despesas"]) {
       expect(notificationLinkTarget(path)).toBe(path);
     }
     expect(notificationLinkTarget("/garagem/")).toBe("/garagem");
+  });
+
+  it("aceita detalhes do fluxo somente no formato /fluxo-caminhao/<truckId>", () => {
+    expect(notificationLinkTarget("/fluxo-caminhao/truck-123")).toBe("/fluxo-caminhao/truck-123");
+    expect(notificationLinkTarget("/fluxo-caminhao/truck-123/outro")).toBeUndefined();
   });
 
   it("aceita a rota de detalhe de caminhão /garagem/<id>", () => {

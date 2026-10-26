@@ -930,6 +930,52 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_approval_access: {
+        Row: { can_approve: boolean; created_at: string; user_id: string }
+        Insert: { can_approve?: boolean; created_at?: string; user_id: string }
+        Update: { can_approve?: boolean; created_at?: string; user_id?: string }
+        Relationships: []
+      }
+      expense_approval_events: {
+        Row: { actor_id: string; created_at: string; event_type: string; id: string; note: string | null; request_id: string }
+        Insert: { actor_id: string; created_at?: string; event_type: string; id?: string; note?: string | null; request_id: string }
+        Update: { actor_id?: string; created_at?: string; event_type?: string; id?: string; note?: string | null; request_id?: string }
+        Relationships: [{ foreignKeyName: "expense_approval_events_request_id_fkey"; columns: ["request_id"]; isOneToOne: false; referencedRelation: "expense_approval_requests"; referencedColumns: ["id"] }]
+      }
+      expense_approval_requests: {
+        Row: {
+          amount: number; correction_note: string | null; created_at: string; created_by: string
+          description: string; due_date: string | null; final_category: string | null; id: string
+          notes: string | null; occurred_at: string | null; origin: string; payment_method: string | null
+          proposed_category: string | null; proposed_status: string | null; resulting_id: string | null
+          resulting_table: string | null; reviewed_at: string | null; reviewed_by: string | null
+          service_id: string | null; status: string; stock_movement_id: string | null; submitted_at: string
+          supplier: string | null; target_type: string; truck_id: string | null; updated_at: string
+        }
+        Insert: {
+          amount?: number; correction_note?: string | null; created_at?: string; created_by: string
+          description: string; due_date?: string | null; final_category?: string | null; id?: string
+          notes?: string | null; occurred_at?: string | null; origin: string; payment_method?: string | null
+          proposed_category?: string | null; proposed_status?: string | null; resulting_id?: string | null
+          resulting_table?: string | null; reviewed_at?: string | null; reviewed_by?: string | null
+          service_id?: string | null; status?: string; stock_movement_id?: string | null; submitted_at?: string
+          supplier?: string | null; target_type: string; truck_id?: string | null; updated_at?: string
+        }
+        Update: {
+          amount?: number; correction_note?: string | null; created_at?: string; created_by?: string
+          description?: string; due_date?: string | null; final_category?: string | null; id?: string
+          notes?: string | null; occurred_at?: string | null; origin?: string; payment_method?: string | null
+          proposed_category?: string | null; proposed_status?: string | null; resulting_id?: string | null
+          resulting_table?: string | null; reviewed_at?: string | null; reviewed_by?: string | null
+          service_id?: string | null; status?: string; stock_movement_id?: string | null; submitted_at?: string
+          supplier?: string | null; target_type?: string; truck_id?: string | null; updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "expense_approval_requests_service_id_fkey"; columns: ["service_id"]; isOneToOne: false; referencedRelation: "services"; referencedColumns: ["id"] },
+          { foreignKeyName: "expense_approval_requests_stock_movement_id_fkey"; columns: ["stock_movement_id"]; isOneToOne: false; referencedRelation: "inventory_movements"; referencedColumns: ["id"] },
+          { foreignKeyName: "expense_approval_requests_truck_id_fkey"; columns: ["truck_id"]; isOneToOne: false; referencedRelation: "trucks"; referencedColumns: ["id"] },
+        ]
+      }
       general_expenses: {
         Row: {
           amount: number
@@ -2448,6 +2494,39 @@ export type Database = {
           },
         ]
       }
+      truck_flow_access: {
+        Row: { access_level: string; created_at: string; user_id: string }
+        Insert: { access_level: string; created_at?: string; user_id: string }
+        Update: { access_level?: string; created_at?: string; user_id?: string }
+        Relationships: []
+      }
+      truck_flow_events: {
+        Row: { actor_id: string; created_at: string; event_type: string; flow_id: string; id: string; reason: string | null; step_id: string | null }
+        Insert: { actor_id: string; created_at?: string; event_type: string; flow_id: string; id?: string; reason?: string | null; step_id?: string | null }
+        Update: { actor_id?: string; created_at?: string; event_type?: string; flow_id?: string; id?: string; reason?: string | null; step_id?: string | null }
+        Relationships: [
+          { foreignKeyName: "truck_flow_events_flow_id_fkey"; columns: ["flow_id"]; isOneToOne: false; referencedRelation: "truck_flows"; referencedColumns: ["id"] },
+          { foreignKeyName: "truck_flow_events_step_id_fkey"; columns: ["step_id"]; isOneToOne: false; referencedRelation: "truck_flow_steps"; referencedColumns: ["id"] },
+        ]
+      }
+      truck_flow_evidence: {
+        Row: { created_at: string; file_name: string; flow_step_id: string; id: string; mime_type: string; size_bytes: number; storage_path: string; uploaded_by: string }
+        Insert: { created_at?: string; file_name: string; flow_step_id: string; id?: string; mime_type: string; size_bytes: number; storage_path: string; uploaded_by: string }
+        Update: { created_at?: string; file_name?: string; flow_step_id?: string; id?: string; mime_type?: string; size_bytes?: number; storage_path?: string; uploaded_by?: string }
+        Relationships: [{ foreignKeyName: "truck_flow_evidence_flow_step_id_fkey"; columns: ["flow_step_id"]; isOneToOne: false; referencedRelation: "truck_flow_steps"; referencedColumns: ["id"] }]
+      }
+      truck_flow_steps: {
+        Row: { completed_at: string | null; completed_by: string | null; display_order: number; flow_id: string; id: string; notes: string | null; status: string; step_key: string }
+        Insert: { completed_at?: string | null; completed_by?: string | null; display_order: number; flow_id: string; id?: string; notes?: string | null; status?: string; step_key: string }
+        Update: { completed_at?: string | null; completed_by?: string | null; display_order?: number; flow_id?: string; id?: string; notes?: string | null; status?: string; step_key?: string }
+        Relationships: [{ foreignKeyName: "truck_flow_steps_flow_id_fkey"; columns: ["flow_id"]; isOneToOne: false; referencedRelation: "truck_flows"; referencedColumns: ["id"] }]
+      }
+      truck_flows: {
+        Row: { completed_at: string | null; completed_by: string | null; id: string; started_at: string; started_by: string; status: string; truck_id: string; updated_at: string }
+        Insert: { completed_at?: string | null; completed_by?: string | null; id?: string; started_at?: string; started_by: string; status?: string; truck_id: string; updated_at?: string }
+        Update: { completed_at?: string | null; completed_by?: string | null; id?: string; started_at?: string; started_by?: string; status?: string; truck_id?: string; updated_at?: string }
+        Relationships: [{ foreignKeyName: "truck_flows_truck_id_fkey"; columns: ["truck_id"]; isOneToOne: true; referencedRelation: "trucks"; referencedColumns: ["id"] }]
+      }
       truck_expenses: {
         Row: {
           amount: number
@@ -3111,6 +3190,20 @@ export type Database = {
       }
     }
     Functions: {
+      add_truck_flow_evidence: {
+        Args: {
+          p_file_name: string
+          p_flow_step_id: string
+          p_mime_type: string
+          p_size_bytes: number
+          p_storage_path: string
+        }
+        Returns: string
+      }
+      approve_expense_approval: {
+        Args: { p_final_category: string; p_request_id: string }
+        Returns: string
+      }
       confirm_down_payment:
         | {
             Args: {
@@ -3130,6 +3223,11 @@ export type Database = {
             }
             Returns: undefined
           }
+      complete_truck_flow_step: {
+        Args: { p_flow_id: string; p_notes?: string | null; p_step_key: string }
+        Returns: undefined
+      }
+      create_truck_flow: { Args: { p_truck_id: string }; Returns: string }
       finalize_formalization: {
         Args: {
           p_formalization_id: string
@@ -3146,6 +3244,46 @@ export type Database = {
       }
       fn_generate_payable_alerts: { Args: never; Returns: number }
       fn_truck_expenses_total: { Args: { p_truck_id: string }; Returns: number }
+      resubmit_expense_approval: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_proposed_category: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      return_expense_approval: {
+        Args: { p_correction_note: string; p_request_id: string }
+        Returns: undefined
+      }
+      reopen_truck_flow_step: {
+        Args: { p_flow_id: string; p_reason: string; p_step_key: string }
+        Returns: undefined
+      }
+      remove_truck_flow_evidence: {
+        Args: { p_evidence_id: string }
+        Returns: string
+      }
+      submit_expense_approval: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_due_date?: string | null
+          p_notes?: string | null
+          p_occurred_at?: string | null
+          p_origin: string
+          p_payment_method?: string | null
+          p_proposed_category: string
+          p_proposed_status?: string | null
+          p_service_id?: string | null
+          p_stock_movement_id?: string | null
+          p_supplier?: string | null
+          p_target_type: string
+          p_truck_id?: string | null
+        }
+        Returns: string
+      }
       delete_calendar_event_operational: {
         Args: { p_id: string }
         Returns: undefined

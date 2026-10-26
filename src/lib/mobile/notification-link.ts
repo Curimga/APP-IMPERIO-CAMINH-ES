@@ -21,6 +21,8 @@ const LIST_ROUTES = new Set([
   "/pendencias",
   "/busca",
   "/perfil",
+  "/fluxo-caminhao",
+  "/confirmacao-despesas",
 ]);
 
 /**
@@ -53,5 +55,7 @@ export function notificationLinkTarget(
   if (FINANCE_SUBROUTES.has(path)) return "/financeiro";
   const truck = path.match(/^\/garagem\/([^/]+)$/);
   if (truck) return `/garagem/${truck[1]}`;
+  const flow = path.match(/^\/fluxo-caminhao(?:\/([^/]+))?$/);
+  if (flow) return flow[1] ? `/fluxo-caminhao/${flow[1]}` : "/fluxo-caminhao";
   return undefined;
 }
