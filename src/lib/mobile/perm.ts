@@ -12,6 +12,15 @@ export function isAdmin(roles: AppRole[]) {
   return roles.includes("admin");
 }
 
+export function isSecretaria(roles: AppRole[]) {
+  return roles.includes("secretaria");
+}
+
+/** Perfil exclusivamente operacional; papéis mais privilegiados prevalecem. */
+export function isSecretariaOnly(roles: AppRole[]) {
+  return isSecretaria(roles) && !roles.includes("admin") && !roles.includes("financeiro");
+}
+
 const FINANCE_BLOCKED_EMAILS = new Set(["josemar.essing@gmail.com"]);
 
 function isFinanceBlockedEmail(email?: string | null) {
@@ -85,6 +94,18 @@ export function canManageTrucks(roles: AppRole[]) {
   return roles.includes("admin") || roles.includes("financeiro") || roles.includes("secretaria");
 }
 
+export function canSeeServices(roles: AppRole[]) {
+  return roles.includes("admin") || roles.includes("financeiro") || roles.includes("secretaria");
+}
+
+export function canSeeTruckFinance(roles: AppRole[], email?: string | null) {
+  return isFinanceExecutive(roles, email);
+}
+
+export function canManageGeneralExpenses(roles: AppRole[]) {
+  return roles.some((role) => role === "admin" || role === "financeiro" || role === "secretaria");
+}
+
 export function canRegisterExpense(roles: AppRole[], email?: string | null) {
   return isFinanceExecutive(roles, email);
 }
@@ -94,6 +115,54 @@ export function roleLabel(roles: AppRole[]): string {
   if (roles.includes("financeiro")) return "Financeiro";
   if (roles.includes("secretaria")) return "Secretaria";
   return "Usuário";
+}
+
+const SECRETARIA_ALLOWED_PREFIXES = [
+  "/",
+  "/garagem",
+  "/agenda",
+  "/clientes",
+  "/estoque",
+  "/servicos",
+  "/despesas",
+  "/menu",
+  "/notificacoes",
+  "/pendencias",
+  "/busca",
+  "/perfil",
+  "/assistente",
+  "/vendidos",
+] as const;
+
+const SECRETARIA_BLOCKED_PREFIXES = [
+  "/financeiro",
+  "/pagamentos",
+  "/garagem/simular-venda",
+] as const;
+
+function matchesPathPrefix(path: string, prefix: string) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+export function isPathAllowedForRoles(path: string, roles: AppRole[]) {
+  if (!isSecretariaOnly(roles)) return true;
+
+  // A Secretaria lança pagamentos/recebimentos, mas não abre a lista financeira.
+  if (matchesPathPrefix(path, "/pagamentos/novo")) return true;
+
+  if (SECRETARIA_BLOCKED_PREFIXES.some((prefix) => matchesPathPrefix(path, prefix))) {
+    return false;
+  }
+  if (/^\/garagem\/[^/]+\/despesa(?:\/|$)/.test(path)) return false;
+
+  return SECRETARIA_ALLOWED_PREFIXES.some((prefix) =>
+    prefix === "/" ? path === "/" : matchesPathPrefix(path, prefix),
+  );
+}
+
+export function defaultRouteForRoles(roles: AppRole[]) {
+  if (isSecretariaOnly(roles)) return "/" as const;
+  return "/" as const;
 }
 
 /** Rotas internas do app visíveis por cargo (usadas no menu e home). */
@@ -129,7 +198,7 @@ export const MOBILE_MENU: {
     label: "Serviços",
     to: "/servicos",
     icon: "wrench",
-    allowed: () => true,
+    allowed: canSeeServices,
     description: "Serviços gerais",
   },
   {
@@ -152,6 +221,13 @@ export const MOBILE_MENU: {
     icon: "box",
     allowed: () => true,
     description: "Itens e materiais",
+  },
+  {
+    label: "Despesas gerais",
+    to: "/despesas",
+    icon: "receipt",
+    allowed: canManageGeneralExpenses,
+    description: "Despesas sem vínculo com caminhão",
   },
   {
     label: "Vendidos",

@@ -105,6 +105,9 @@ Deno.serve(async (req) => {
 
   const roles = ((rolesData ?? []) as { role: Role }[]).map((r) => r.role);
   const financeAllowed = canAccessFinance(roles, authData.user.email);
+  const servicesAllowed = true;
+  const availableModules = ["Garagem", "Agenda", "Clientes", "Estoque", "Despesas gerais", "Vendidos", "Pendências", "Busca", "Menu"];
+  if (servicesAllowed) availableModules.splice(1, 0, "Serviços");
 
   const context = {
     user: {
@@ -122,7 +125,7 @@ Deno.serve(async (req) => {
     appKnowledge: {
       name: "APP Império Caminhões",
       assistant: "Assistente V",
-      availableModules: ["Garagem", "Serviços", "Agenda", "Clientes", "Estoque", "Vendidos", "Pendências", "Busca", "Menu"],
+      availableModules,
       limitation: "Esta primeira versão é conversacional e não consulta dados reais do CRM, como agenda, frota, serviços ou clientes.",
     },
   };
@@ -136,7 +139,7 @@ Deno.serve(async (req) => {
     "Não solicite nem exponha chaves, CPF/CNPJ, documentos ou dados pessoais desnecessários.",
     "Não informe valores financeiros. Mesmo para admin, esta primeira versão da Assistente V não recebe dados financeiros nem dados do CRM.",
     "Retorne exclusivamente JSON válido no formato: {\"answer\":\"texto\",\"actions\":[{\"label\":\"...\",\"to\":\"/...\",\"search\":{},\"params\":{}}]}.",
-    "Ações permitidas: /garagem, /garagem/$truckId com params truckId, /servicos, /agenda, /clientes, /estoque, /vendidos, /pendencias, /busca, /menu.",
+    `Ações permitidas: /garagem, /garagem/$truckId com params truckId, ${servicesAllowed ? "/servicos, " : ""}/agenda, /clientes, /estoque, /despesas, /vendidos, /pendencias, /busca, /menu.`,
   ].join("\n");
 
   const history = (body.history ?? [])

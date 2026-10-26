@@ -43,7 +43,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { haptic } from "@/lib/mobile/haptic";
 import { useAuth } from "@/hooks/use-auth";
-import { isFinanceExecutive } from "@/lib/mobile/perm";
+import { isFinanceExecutive, isSecretariaOnly } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/agenda")({
   validateSearch: (s: Record<string, unknown>) => {
@@ -214,7 +214,7 @@ function Agenda() {
     .slice(0, 120);
 
   const del = useMutation({
-    mutationFn: () => deleteEvent(activeEvent!.id),
+    mutationFn: () => deleteEvent(activeEvent!.id, isSecretariaOnly(roles)),
     onSuccess: () => {
       invalidateMobile(["calendar_events"]);
       qc.invalidateQueries({ queryKey: ["agenda"] });

@@ -10,6 +10,8 @@ import { truckTitle } from "@/lib/truck-title";
 import { spaTodayISO } from "@/lib/mobile/dates";
 import { parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 import type { Enums } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_app/servicos/novo")({
@@ -40,6 +42,8 @@ const STATUS_OPTIONS: { v: Enums<"service_status">; label: string }[] = [
 function NewService() {
   const nav = useNavigate();
   const search = Route.useSearch();
+  const { roles, user } = useAuth();
+  const showValues = isFinanceExecutive(roles, user?.email);
   const invalidateMobile = useInvalidateMobile();
   const { data: trucks } = useTrucks();
   const { data: suppliers } = useSuppliers();
@@ -100,9 +104,13 @@ function NewService() {
         supplier_id: supplierId || null,
         notes: notes.trim() || null,
         expected_at: expectedAt ? `${expectedAt}T12:00:00` : null,
-        value: valueNum,
-        total_value: totalValueNum,
-        down_payment: downPaymentNum,
+        ...(showValues
+          ? {
+              value: valueNum,
+              total_value: totalValueNum,
+              down_payment: downPaymentNum,
+            }
+          : {}),
         status,
       });
       invalidateMobile(["services", "trucks"]);
@@ -224,35 +232,39 @@ function NewService() {
               onChange={(e) => setExpectedAt(e.target.value)}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Valor (R$)">
+          {showValues ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Valor (R$)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder="0,00"
+                />
+              </Field>
+              <Field label="Valor total (R$)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={totalValue}
+                  onChange={(e) => setTotalValue(e.target.value)}
+                  placeholder="0,00"
+                />
+              </Field>
+            </div>
+          ) : null}
+          {showValues ? (
+            <Field label="Entrada / Adiantamento (R$)">
               <input
                 className={inputClass}
                 inputMode="decimal"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
+                value={downPayment}
+                onChange={(e) => setDownPayment(e.target.value)}
                 placeholder="0,00"
               />
             </Field>
-            <Field label="Valor total (R$)">
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={totalValue}
-                onChange={(e) => setTotalValue(e.target.value)}
-                placeholder="0,00"
-              />
-            </Field>
-          </div>
-          <Field label="Entrada / Adiantamento (R$)">
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              value={downPayment}
-              onChange={(e) => setDownPayment(e.target.value)}
-              placeholder="0,00"
-            />
-          </Field>
+          ) : null}
         </MobileCard>
 
         {error && (

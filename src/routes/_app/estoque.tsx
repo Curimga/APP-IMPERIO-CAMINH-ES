@@ -10,6 +10,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { brl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
+import { isAdmin, isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/estoque")({
   component: EstoqueRoute,
@@ -20,11 +22,11 @@ function EstoqueRoute() {
   return pathname === "/estoque/novo" ? <Outlet /> : <Estoque />;
 }
 
-function ItemRow({ item }: { item: InventoryItem }) {
+function ItemRow({ item, showValue }: { item: InventoryItem; showValue: boolean }) {
   const qty = Number(item.quantity ?? 0);
   const min = Number(item.min_quantity ?? 0);
   const low = min > 0 && qty <= min;
-  const totalValue = qty * Number(item.unit_price ?? 0);
+  const totalValue = showValue ? qty * Number(item.unit_price ?? 0) : 0;
   return (
     <div className="flex items-center gap-3 px-3 py-3">
       <div
@@ -47,7 +49,7 @@ function ItemRow({ item }: { item: InventoryItem }) {
               {item.storage_location}
             </span>
           ) : null}
-          {item.unit_price != null ? (
+          {showValue && item.unit_price != null ? (
             <span className="font-semibold">{brl(item.unit_price)}</span>
           ) : null}
         </div>
@@ -67,7 +69,17 @@ function ItemRow({ item }: { item: InventoryItem }) {
   );
 }
 
-function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
+function ItemSheet({
+  item,
+  showValue,
+  canDelete,
+  onClose,
+}: {
+  item: InventoryItem;
+  showValue: boolean;
+  canDelete: boolean;
+  onClose: () => void;
+}) {
   const invalidateMobile = useInvalidateMobile();
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -95,7 +107,7 @@ function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void
           <SheetDescription>Entrada, saída e remoção do estoque.</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 px-5">
-          <div className="grid grid-cols-3 items-center gap-2 text-center">
+          <div className={cn("grid items-center gap-2 text-center", showValue ? "grid-cols-3" : "grid-cols-2")}>
             <div className="rounded-xl bg-muted p-3">
               <div className="text-[11px] text-muted-foreground">Quantidade</div>
               <div className="text-xl font-bold tabular-nums">
@@ -106,10 +118,12 @@ function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void
               <div className="text-[11px] text-muted-foreground">Mínimo</div>
               <div className="text-xl font-bold tabular-nums">{item.min_quantity ?? 0}</div>
             </div>
-            <div className="rounded-xl bg-muted p-3">
-              <div className="text-[11px] text-muted-foreground">Unitário</div>
-              <div className="text-xl font-bold tabular-nums">{brl(item.unit_price ?? 0)}</div>
-            </div>
+            {showValue ? (
+              <div className="rounded-xl bg-muted p-3">
+                <div className="text-[11px] text-muted-foreground">Unitário</div>
+                <div className="text-xl font-bold tabular-nums">{brl(item.unit_price ?? 0)}</div>
+              </div>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -131,7 +145,8 @@ function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void
             </button>
           </div>
 
-          <div className="border-t pt-4">
+          {canDelete ? (
+            <div className="border-t pt-4">
             {confirmDelete ? (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
@@ -171,7 +186,8 @@ function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void
                 <Trash2 className="h-4 w-4" /> Remover item
               </button>
             )}
-          </div>
+            </div>
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>
@@ -179,6 +195,9 @@ function ItemSheet({ item, onClose }: { item: InventoryItem; onClose: () => void
 }
 
 function Estoque() {
+  const { roles, user } = useAuth();
+  const showValue = isFinanceExecutive(roles, user?.email);
+  const canDelete = isAdmin(roles);
   const { data, isLoading, isError } = useInventory();
   const [active, setActive] = useState<InventoryItem | null>(null);
   const items = data ?? [];
@@ -222,7 +241,7 @@ function Estoque() {
                     className="flex w-full items-center text-left pressable active:scale-[0.99]"
                     onClick={() => setActive(i)}
                   >
-                    <ItemRow item={i} />
+                    <ItemRow item={i} showValue={showValue} />
                   </button>
                 ))}
               </MobileCard>
@@ -237,14 +256,14 @@ function Estoque() {
                 className="flex w-full items-center text-left pressable active:scale-[0.99]"
                 onClick={() => setActive(i)}
               >
-                <ItemRow item={i} />
+                <ItemRow item={i} showValue={showValue} />
               </button>
             ))}
           </MobileCard>
         </div>
       )}
 
-      {active ? <ItemSheet item={active} onClose={() => setActive(null)} /> : null}
+      {active ? <ItemSheet item={active} showValue={showValue} canDelete={canDelete} onClose={() => setActive(null)} /> : null}
     </>
   );
 }

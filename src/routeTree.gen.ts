@@ -18,6 +18,7 @@ import { Route as AppAgendaRouteImport } from './routes/_app/agenda'
 import { Route as AppAssistenteRouteImport } from './routes/_app/assistente'
 import { Route as AppBuscaRouteImport } from './routes/_app/busca'
 import { Route as AppClientesRouteImport } from './routes/_app/clientes'
+import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
 import { Route as AppEstoqueRouteImport } from './routes/_app/estoque'
 import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppGaragemRouteImport } from './routes/_app/garagem'
@@ -79,6 +80,11 @@ const AppBuscaRoute = AppBuscaRouteImport.update({
 const AppClientesRoute = AppClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDespesasRoute = AppDespesasRouteImport.update({
+  id: '/despesas',
+  path: '/despesas',
   getParentRoute: () => AppRoute,
 } as any)
 const AppEstoqueRoute = AppEstoqueRouteImport.update({
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/assistente': typeof AppAssistenteRoute
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
+  '/despesas': typeof AppDespesasRoute
   '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/garagem': typeof AppGaragemRouteWithChildren
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/assistente': typeof AppAssistenteRoute
   '/busca': typeof AppBuscaRoute
   '/clientes': typeof AppClientesRouteWithChildren
+  '/despesas': typeof AppDespesasRoute
   '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/garagem': typeof AppGaragemRouteWithChildren
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/_app/assistente': typeof AppAssistenteRoute
   '/_app/busca': typeof AppBuscaRoute
   '/_app/clientes': typeof AppClientesRouteWithChildren
+  '/_app/despesas': typeof AppDespesasRoute
   '/_app/estoque': typeof AppEstoqueRouteWithChildren
   '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/garagem': typeof AppGaragemRouteWithChildren
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/busca'
     | '/clientes'
+    | '/despesas'
     | '/estoque'
     | '/financeiro'
     | '/garagem'
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/assistente'
     | '/busca'
     | '/clientes'
+    | '/despesas'
     | '/estoque'
     | '/financeiro'
     | '/garagem'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/_app/assistente'
     | '/_app/busca'
     | '/_app/clientes'
+    | '/_app/despesas'
     | '/_app/estoque'
     | '/_app/financeiro'
     | '/_app/garagem'
@@ -417,6 +429,13 @@ declare module '@tanstack/react-router' {
       path: '/clientes'
       fullPath: '/clientes'
       preLoaderRoute: typeof AppClientesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/despesas': {
+      id: '/_app/despesas'
+      path: '/despesas'
+      fullPath: '/despesas'
+      preLoaderRoute: typeof AppDespesasRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/estoque': {
@@ -628,6 +647,7 @@ interface AppRouteChildren {
   AppAssistenteRoute: typeof AppAssistenteRoute
   AppBuscaRoute: typeof AppBuscaRoute
   AppClientesRoute: typeof AppClientesRouteWithChildren
+  AppDespesasRoute: typeof AppDespesasRoute
   AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
   AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppGaragemRoute: typeof AppGaragemRouteWithChildren
@@ -646,6 +666,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAssistenteRoute: AppAssistenteRoute,
   AppBuscaRoute: AppBuscaRoute,
   AppClientesRoute: AppClientesRouteWithChildren,
+  AppDespesasRoute: AppDespesasRoute,
   AppEstoqueRoute: AppEstoqueRouteWithChildren,
   AppFinanceiroRoute: AppFinanceiroRoute,
   AppGaragemRoute: AppGaragemRouteWithChildren,

@@ -25,7 +25,7 @@ import {
 } from "@/lib/mobile/recent";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { isFinanceExecutive } from "@/lib/mobile/perm";
+import { isFinanceExecutive, isSecretariaOnly } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/garagem")({
   component: Garagem,
@@ -245,6 +245,7 @@ function Garagem() {
   const location = useLocation();
   const { roles, user } = useAuth();
   const isExec = isFinanceExecutive(roles, user?.email);
+  const canSimulateSale = !isSecretariaOnly(roles);
   const { data, isLoading, isError } = useTrucks();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>(readSavedFilter);
@@ -367,13 +368,15 @@ function Garagem() {
               <Rows2 className="h-4 w-4" />
             </button>
           </div>
-          <Link
-            to="/garagem/simular-venda"
-            aria-label="Simular venda"
-            className="flex h-10 items-center gap-1.5 rounded-xl border bg-card px-2.5 text-xs font-bold text-gold-dark pressable active:scale-95 sm:px-3 sm:text-sm"
-          >
-            <Calculator className="h-4 w-4" /> Simular
-          </Link>
+          {canSimulateSale && (
+            <Link
+              to="/garagem/simular-venda"
+              aria-label="Simular venda"
+              className="flex h-10 items-center gap-1.5 rounded-xl border bg-card px-2.5 text-xs font-bold text-gold-dark pressable active:scale-95 sm:px-3 sm:text-sm"
+            >
+              <Calculator className="h-4 w-4" /> Simular
+            </Link>
+          )}
           <Link
             to="/garagem/novo"
             aria-label="Cadastrar caminhão"

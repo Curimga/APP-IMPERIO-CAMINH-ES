@@ -15,6 +15,8 @@ import {
 import { MobileCard } from "@/components/mobile/ui";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { canSeeServices, isPathAllowedForRoles } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/assistente")({
   component: AssistentePage,
@@ -50,16 +52,23 @@ function makeId() {
 }
 
 function AssistentePage() {
+  const { roles } = useAuth();
+  const showServices = canSeeServices(roles);
+  const suggestions = showServices
+    ? SUGGESTIONS
+    : SUGGESTIONS.filter((suggestion) => !suggestion.toLowerCase().includes("serviço"));
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      text: "Sou a Assistente V. Posso consultar garagem, serviços, previsões, agenda e localizar caminhões ou clientes sem expor dados financeiros.",
+      text: showServices
+        ? "Sou a Assistente V. Posso orientar sobre garagem, serviços, agenda e localizar caminhões ou clientes sem expor dados financeiros."
+        : "Sou a Assistente V. Posso orientar sobre garagem, agenda e localizar caminhões ou clientes sem expor dados financeiros.",
       actions: [
         { label: "Ver garagem", to: "/garagem" },
-        { label: "Ver serviços", to: "/servicos" },
+        ...(showServices ? [{ label: "Ver serviços", to: "/servicos" }] : []),
       ],
     },
   ]);
@@ -95,7 +104,7 @@ function AssistentePage() {
         id: makeId(),
         role: "assistant",
         text: data?.answer || "A Assistente V não retornou resposta.",
-        actions: data?.actions ?? [],
+        actions: (data?.actions ?? []).filter((action) => isPathAllowedForRoles(action.to, roles)),
       };
 
       setMessages((current) => [...current, answer]);
@@ -127,14 +136,14 @@ function AssistentePage() {
             </div>
             <h1 className="mt-1 text-2xl font-black tracking-tight">Central inteligente</h1>
             <p className="mt-1 text-[13px] leading-snug text-white/65">
-              Consulta operacional rápida, limpa e segura para frota, serviços e agenda.
+              Consulta operacional rápida, limpa e segura para frota e agenda.
             </p>
           </div>
         </div>
       </MobileCard>
 
       <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none]">
-        {SUGGESTIONS.map((s) => (
+        {suggestions.map((s) => (
           <button
             key={s}
             type="button"
@@ -200,7 +209,7 @@ function AssistentePage() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte sobre frota, serviços, agenda..."
+            placeholder={showServices ? "Pergunte sobre frota, serviços, agenda..." : "Pergunte sobre frota e agenda..."}
             className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
             enterKeyHint="send"
           />
@@ -215,9 +224,9 @@ function AssistentePage() {
         </div>
       </form>
 
-      <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-semibold text-muted-foreground">
+      <div className={cn("grid gap-2 text-center text-[11px] font-semibold text-muted-foreground", showServices ? "grid-cols-3" : "grid-cols-2")}>
         <div className="rounded-xl border bg-card p-2"><Truck className="mx-auto mb-1 h-4 w-4 text-gold" />Frota</div>
-        <div className="rounded-xl border bg-card p-2"><Wrench className="mx-auto mb-1 h-4 w-4 text-gold" />Serviços</div>
+        {showServices && <div className="rounded-xl border bg-card p-2"><Wrench className="mx-auto mb-1 h-4 w-4 text-gold" />Serviços</div>}
         <div className="rounded-xl border bg-card p-2"><CalendarDays className="mx-auto mb-1 h-4 w-4 text-gold" />Agenda</div>
       </div>
     </div>

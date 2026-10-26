@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/mobile/ui";
-import { createTruck, updateTruck } from "@/lib/mobile/actions";
+import { createTruck, updateTruck, updateTruckOperational, type TruckInput } from "@/lib/mobile/actions";
 import { useTruckDetail } from "@/lib/mobile/queries";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -134,7 +134,7 @@ function NewTruck() {
       setError("Informe ao menos a marca e o modelo.");
       return;
     }
-    const payload = {
+    const payload: TruckInput = {
       brand: form.brand.trim(),
       model: form.model.trim(),
       year: form.year ? toInt(form.year) : null,
@@ -149,22 +149,27 @@ function NewTruck() {
       supplier: form.supplier.trim() || null,
       consigned: form.consigned,
       purchase_date: form.purchase_date || null,
-      purchase_price: form.purchase_price ? toNumber(form.purchase_price) : null,
-      purchase_payment_method: form.purchase_payment_method || null,
-      purchase_installments_count: form.purchase_installments_count
-        ? toInt(form.purchase_installments_count)
-        : null,
-      purchase_total_paid: form.purchase_total_paid ? toNumber(form.purchase_total_paid) : null,
-      purchase_total_pending: form.purchase_total_pending
-        ? toNumber(form.purchase_total_pending)
-        : null,
-      expected_price: form.expected_price ? toNumber(form.expected_price) : null,
       description: form.description.trim() || null,
+      ...(isExec
+        ? {
+            purchase_price: form.purchase_price ? toNumber(form.purchase_price) : null,
+            purchase_payment_method: form.purchase_payment_method || null,
+            purchase_installments_count: form.purchase_installments_count
+              ? toInt(form.purchase_installments_count)
+              : null,
+            purchase_total_paid: form.purchase_total_paid ? toNumber(form.purchase_total_paid) : null,
+            purchase_total_pending: form.purchase_total_pending
+              ? toNumber(form.purchase_total_pending)
+              : null,
+            expected_price: form.expected_price ? toNumber(form.expected_price) : null,
+          }
+        : {}),
     };
     setSaving(true);
     try {
       if (isEdit && search.edit) {
-        await updateTruck(search.edit, payload);
+        if (isExec) await updateTruck(search.edit, payload);
+        else await updateTruckOperational(search.edit, payload);
         toast.success("Caminhão atualizado");
         nav({ to: "/garagem/$truckId", params: { truckId: search.edit } });
       } else {

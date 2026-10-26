@@ -6,6 +6,8 @@ import { useGlobalSearch } from "@/lib/mobile/queries";
 import { ListRow, EmptyState, SkeletonRows, MobileCard, PageHeader } from "@/components/mobile/ui";
 import { StatusBadge } from "@/components/mobile/ui";
 import { useDebouncedValue } from "@/lib/mobile/debounce";
+import { useAuth } from "@/hooks/use-auth";
+import { canSeeServices } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/busca")({
   component: BuscaPage,
@@ -13,6 +15,8 @@ export const Route = createFileRoute("/_app/busca")({
 
 function BuscaPage() {
   const navigate = useNavigate();
+  const { roles } = useAuth();
+  const showServices = canSeeServices(roles);
   const [q, setQ] = useState("");
   const debounced = useDebouncedValue(q, 250);
   const { data, isLoading, isFetching } = useGlobalSearch(debounced);
@@ -27,7 +31,10 @@ function BuscaPage() {
 
   return (
     <div className="space-y-3">
-      <PageHeader title="Buscar" subtitle="Caminhões, clientes e serviços" />
+      <PageHeader
+        title="Buscar"
+        subtitle={showServices ? "Caminhões, clientes e serviços" : "Caminhões e clientes"}
+      />
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/70" />
@@ -111,7 +118,7 @@ function BuscaPage() {
             </section>
           )}
 
-          {results.services.length > 0 && (
+          {showServices && results.services.length > 0 && (
             <section className="space-y-1">
               <h2 className="px-1 pb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                 Serviços ({results.services.length})

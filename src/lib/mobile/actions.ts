@@ -39,16 +39,14 @@ export interface TruckInput {
 }
 
 export async function createTruck(input: TruckInput): Promise<string> {
-  const { data, error } = await supabase
-    .from("trucks")
-    .insert({
-      ...input,
-      created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-    })
-    .select("id")
-    .single();
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("trucks").insert({
+    id,
+    ...input,
+    created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+  });
   if (error) throw new Error("Falha ao cadastrar caminhão: " + error.message);
-  return data.id;
+  return id;
 }
 
 export async function updateTruck(id: string, patch: Partial<TruckInput>): Promise<void> {
@@ -59,16 +57,23 @@ export async function updateTruck(id: string, patch: Partial<TruckInput>): Promi
   if (error) throw new Error(error.message);
 }
 
+export async function updateTruckOperational(id: string, patch: Partial<TruckInput>): Promise<void> {
+  const { error } = await supabase.rpc("update_truck_operational", {
+    p_id: id,
+    p_patch: patch as Json,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function setTruckStatus(id: string, status: TruckStatus): Promise<void> {
   const changedAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("trucks")
-    .update({
+  const { error } = await supabase.rpc("update_truck_operational", {
+    p_id: id,
+    p_patch: {
       status,
       status_started_at: changedAt,
-      updated_at: changedAt,
-    })
-    .eq("id", id);
+    },
+  });
   if (error) throw new Error(error.message);
   toast.success("Status atualizado");
 }
@@ -126,28 +131,26 @@ export interface ServiceInput {
 }
 
 export async function createService(input: ServiceInput): Promise<string> {
-  const { data, error } = await supabase
-    .from("services")
-    .insert({
-      ...input,
-      description: input.description?.trim() || null,
-      status: input.status ?? "em_andamento",
-      created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-    })
-    .select("id")
-    .single();
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("services").insert({
+    id,
+    ...input,
+    description: input.description?.trim() || null,
+    status: input.status ?? "em_andamento",
+    created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+  });
   if (error) throw new Error(error.message);
 
   // Mesmo efeito colateral do CRM: serviço ativo → caminhão reflete o serviço.
   await syncServiceTruckState({
-    serviceId: data.id,
+    serviceId: id,
     truckId: input.truck_id,
     category: input.category ?? null,
     previousTruckStatus: null,
     newStatus: input.status ?? "em_andamento",
   });
   toast.success("Serviço criado");
-  return data.id;
+  return id;
 }
 
 export interface ServiceTruckSyncInput {
@@ -172,10 +175,10 @@ export async function syncServiceTruckState(input: ServiceTruckSyncInput): Promi
 
   if (newStatus === "concluido") {
     const target = restoreStatusAfterService(previousTruckStatus);
-    const { error } = await supabase
-      .from("trucks")
-      .update({ status: target, updated_at: changedAt })
-      .eq("id", truckId);
+    const { error } = await supabase.rpc("update_truck_operational", {
+      p_id: truckId,
+      p_patch: { status: target, status_started_at: changedAt },
+    });
     if (error) throw new Error(error.message);
     return;
   }
@@ -184,7 +187,7 @@ export async function syncServiceTruckState(input: ServiceTruckSyncInput): Promi
   let previous = previousTruckStatus;
   if (!previous) {
     const { data, error } = await supabase
-      .from("trucks")
+      .from("trucks_operational")
       .select("status")
       .eq("id", truckId)
       .maybeSingle();
@@ -192,31 +195,34 @@ export async function syncServiceTruckState(input: ServiceTruckSyncInput): Promi
     const current = data?.status;
     if (current && current !== target) previous = current;
     if (previous) {
-      const { error: prevErr } = await supabase
-        .from("services")
-        .update({ truck_previous_status: previous })
-        .eq("id", serviceId);
+      const { error: prevErr } = await supabase.rpc("update_service_operational", {
+        p_id: serviceId,
+        p_patch: { truck_previous_status: previous },
+      });
       if (prevErr) throw new Error(prevErr.message);
     }
   }
-  const { error } = await supabase
-    .from("trucks")
-    .update({ status: target, updated_at: changedAt })
-    .eq("id", truckId);
+  const { error } = await supabase.rpc("update_truck_operational", {
+    p_id: truckId,
+    p_patch: { status: target, status_started_at: changedAt },
+  });
   if (error) throw new Error(error.message);
 }
 
 export async function setServiceStatus(id: string, status: Enums<"service_status">): Promise<void> {
   const { data: current, error: loadError } = await supabase
-    .from("services")
+    .from("services_operational")
     .select("id, truck_id, category, truck_previous_status, status")
     .eq("id", id)
     .maybeSingle();
   if (loadError) throw new Error(loadError.message);
 
-  const patch: TablesUpdate<"services"> = { status, updated_at: new Date().toISOString() };
+  const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
   if (status === "concluido") patch.completed_at = new Date().toISOString();
-  const { error } = await supabase.from("services").update(patch).eq("id", id);
+  const { error } = await supabase.rpc("update_service_operational", {
+    p_id: id,
+    p_patch: patch as Json,
+  });
   if (error) throw new Error(error.message);
 
   await syncServiceTruckState({
@@ -293,14 +299,25 @@ export async function createEvent(input: EventInput): Promise<void> {
   toast.success(rows.length > 1 ? `${rows.length} compromissos criados` : "Compromisso criado");
 }
 
-export async function updateEvent(id: string, patch: Partial<EventInput>): Promise<void> {
-  const { error } = await supabase.from("calendar_events").update(patch).eq("id", id);
+export async function updateEvent(
+  id: string,
+  patch: Partial<EventInput>,
+  operationalOnly = false,
+): Promise<void> {
+  const { error } = operationalOnly
+    ? await supabase.rpc("update_calendar_event_operational", {
+        p_id: id,
+        p_patch: patch as Json,
+      })
+    : await supabase.from("calendar_events").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
   toast.success("Compromisso atualizado");
 }
 
-export async function deleteEvent(id: string): Promise<void> {
-  const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+export async function deleteEvent(id: string, operationalOnly = false): Promise<void> {
+  const { error } = operationalOnly
+    ? await supabase.rpc("delete_calendar_event_operational", { p_id: id })
+    : await supabase.from("calendar_events").delete().eq("id", id);
   if (error)
     throw new Error(
       /permission|policy|row-level/i.test(error.message)
@@ -351,7 +368,9 @@ export interface InventoryItemInput {
 }
 
 export async function createInventoryItem(input: InventoryItemInput): Promise<string> {
+  const id = crypto.randomUUID();
   const payload: TablesInsert<"inventory_items"> = {
+    id,
     name: input.name,
     category: input.category ?? undefined,
     quantity: input.quantity ?? 0,
@@ -362,14 +381,10 @@ export async function createInventoryItem(input: InventoryItemInput): Promise<st
     supplier_name: input.supplier_name ?? null,
     created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
   };
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .insert(payload)
-    .select("id")
-    .single();
+  const { error } = await supabase.from("inventory_items").insert(payload);
   if (error) throw new Error(error.message);
   toast.success("Item adicionado ao estoque");
-  return data.id;
+  return id;
 }
 
 export interface SettleReceivableInput {
@@ -453,13 +468,15 @@ export interface PaymentInput {
  * lançamento aparece imediatamente após a confirmação do INSERT.
  */
 export async function createPayment(input: PaymentInput): Promise<string> {
+  const id = crypto.randomUUID();
   const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
   const occurredAt = input.occurred_at?.trim() || todayISO();
 
   if (input.kind === "pagar") {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("payables")
       .insert({
+        id,
         description: input.description.trim(),
         amount: input.amount,
         due_date: input.due_date,
@@ -470,16 +487,15 @@ export async function createPayment(input: PaymentInput): Promise<string> {
         status: "aberto",
         occurred_at: occurredAt,
         created_by: createdBy,
-      })
-      .select("id")
-      .single();
+      });
     if (error) throw new Error(error.message);
-    return data.id;
+    return id;
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("receivables")
     .insert({
+      id,
       description: input.description.trim(),
       amount: input.amount,
       due_date: input.due_date,
@@ -491,11 +507,9 @@ export async function createPayment(input: PaymentInput): Promise<string> {
       status: "aberto",
       occurred_at: occurredAt,
       created_by: createdBy,
-    })
-    .select("id")
-    .single();
+    });
   if (error) throw new Error(error.message);
-  return data.id;
+  return id;
 }
 
 export interface SetExpensePaidInput {
@@ -528,18 +542,12 @@ export async function setExpensePaid(input: SetExpensePaidInput): Promise<void> 
 
 export async function adjustInventoryQuantity(id: string, delta: number): Promise<number> {
   if (!Number.isFinite(delta) || delta === 0) throw new Error("Ajuste inválido.");
-  const { data: current, error: loadError } = await supabase
-    .from("inventory_items")
-    .select("quantity")
-    .eq("id", id)
-    .maybeSingle();
-  if (loadError) throw new Error(loadError.message);
-  const next = Math.max(0, Math.round(Number(current?.quantity ?? 0) + delta));
-  const { error } = await supabase
-    .from("inventory_items")
-    .update({ quantity: next, updated_at: new Date().toISOString() })
-    .eq("id", id);
+  const { data, error } = await supabase.rpc("adjust_inventory_quantity", {
+    p_id: id,
+    p_delta: delta,
+  });
   if (error) throw new Error(error.message);
+  const next = Number(data ?? 0);
   toast.success(delta > 0 ? "Entrada registrada no estoque" : "Saída registrada do estoque");
   return next;
 }
@@ -578,10 +586,10 @@ export async function updateServiceDeadline(
   id: string,
   expectedAt: string | null,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("services")
-    .update({ expected_at: expectedAt, updated_at: new Date().toISOString() })
-    .eq("id", id);
+  const { error } = await supabase.rpc("update_service_operational", {
+    p_id: id,
+    p_patch: { expected_at: expectedAt } as Json,
+  });
   if (error) throw new Error(error.message);
   toast.success("Prazo do serviço atualizado");
 }

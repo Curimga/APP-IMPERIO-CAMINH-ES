@@ -32,7 +32,12 @@ import { truckTitle } from "@/lib/truck-title";
 import { setTruckStatus, setExpensePaid } from "@/lib/mobile/actions";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { canRegisterExpense, canManageTrucks } from "@/lib/mobile/perm";
+import {
+  canManageTrucks,
+  canRegisterExpense,
+  canSeeServices,
+  isSecretariaOnly,
+} from "@/lib/mobile/perm";
 import {
   expenseKindLabel,
   maySeeCpfCnpj,
@@ -222,6 +227,8 @@ function TruckDetail() {
   const nav = useNavigate();
   const { roles, user } = useAuth();
   const isExec = maySeeTruckFinance(roles, user?.email);
+  const showServices = canSeeServices(roles);
+  const canSimulateSale = !isSecretariaOnly(roles);
   const canSeeDocNumber = maySeeCpfCnpj(roles, user?.email);
   const { data, isLoading, isError } = useTruckDetail(truckId ?? undefined);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -236,11 +243,11 @@ function TruckDetail() {
       { key: "ficha" as const, label: "Ficha" },
       ...(isExec ? [{ key: "financeiro" as const, label: "Financeiro" }, { key: "despesas" as const, label: "Despesas" }] : []),
       { key: "venda" as const, label: "Venda" },
-      { key: "servicos" as const, label: "Serviços" },
+      ...(showServices ? [{ key: "servicos" as const, label: "Serviços" }] : []),
       { key: "historico" as const, label: "Histórico" },
       { key: "documentos" as const, label: "Docs" },
     ],
-    [isExec],
+    [isExec, showServices],
   );
 
   useEffect(() => {
@@ -549,20 +556,24 @@ function TruckDetail() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-2">
-        <Link
-          to="/garagem/simular-venda"
-          search={{ truck_id: truck.id }}
-          className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
-        >
-          <Calculator className="h-4 w-4" />Simular venda
-        </Link>
-        <Link
-          to="/servicos/novo"
-          search={{ truck_id: truck.id }}
-          className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
-        >
-          <Wrench className="h-4 w-4" />Criar serviço
-        </Link>
+        {canSimulateSale && (
+          <Link
+            to="/garagem/simular-venda"
+            search={{ truck_id: truck.id }}
+            className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
+          >
+            <Calculator className="h-4 w-4" />Simular venda
+          </Link>
+        )}
+        {showServices && (
+          <Link
+            to="/servicos/novo"
+            search={{ truck_id: truck.id }}
+            className="flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"
+          >
+            <Wrench className="h-4 w-4" />Criar serviço
+          </Link>
+        )}
         <Link to="/agenda/novo" search={{ truck_id: truck.id, date: undefined, edit: undefined }} className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-xl border bg-background text-sm font-bold active:bg-muted/60"><CalendarDays className="h-4 w-4" />Compromisso</Link>
       </div>
 

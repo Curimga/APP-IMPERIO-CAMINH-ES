@@ -2791,7 +2791,9 @@ export type Database = {
           purchase_total_pending: number | null
           renavam: string | null
           sale_notes: string | null
+          sale_payment_method: string | null
           sale_type: string | null
+          site_description: string | null
           sold_at: string | null
           sold_customer_id: string | null
           sold_price: number | null
@@ -2838,7 +2840,9 @@ export type Database = {
           purchase_total_pending?: number | null
           renavam?: string | null
           sale_notes?: string | null
+          sale_payment_method?: string | null
           sale_type?: string | null
+          site_description?: string | null
           sold_at?: string | null
           sold_customer_id?: string | null
           sold_price?: number | null
@@ -2885,7 +2889,9 @@ export type Database = {
           purchase_total_pending?: number | null
           renavam?: string | null
           sale_notes?: string | null
+          sale_payment_method?: string | null
           sale_type?: string | null
+          site_description?: string | null
           sold_at?: string | null
           sold_customer_id?: string | null
           sold_price?: number | null
@@ -2988,6 +2994,61 @@ export type Database = {
       }
     }
     Views: {
+      calendar_events_operational: {
+        Row: {
+          all_day: boolean
+          created_at: string
+          description: string | null
+          ends_at: string | null
+          id: string
+          owner_id: string | null
+          priority: Database["public"]["Enums"]["deal_priority"]
+          recurrence: string | null
+          related_company_vehicle_id: string | null
+          related_truck_id: string | null
+          reminder_minutes: number | null
+          starts_at: string
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        Relationships: []
+      }
+      trucks_operational: {
+        Row: {
+          ai_description: string | null
+          brand: string
+          chassis: string | null
+          color: string | null
+          consigned: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fuel: string | null
+          id: string
+          mileage: number | null
+          model: string
+          origin: string | null
+          plate: string | null
+          purchase_date: string | null
+          renavam: string | null
+          site_description: string | null
+          sold_at: string | null
+          sold_customer_id: string | null
+          status: Database["public"]["Enums"]["truck_status"]
+          status_expected_end: string | null
+          status_notes: string | null
+          status_started_at: string | null
+          status_supplier_id: string | null
+          supplier: string | null
+          transmission: string | null
+          truck_photos: Json
+          updated_at: string
+          warranty_end: string | null
+          year: number | null
+        }
+        Relationships: []
+      }
       consolidated_truck_expenses: {
         Row: {
           amount: number | null
@@ -3002,6 +3063,49 @@ export type Database = {
           source: string | null
           supplier: string | null
           truck_id: string | null
+        }
+        Relationships: []
+      }
+      services_operational: {
+        Row: {
+          attachment_url: string | null
+          category: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expected_at: string | null
+          id: string
+          notes: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["service_status"]
+          supplier_id: string | null
+          title: string
+          truck_id: string | null
+          truck_previous_status: string | null
+          updated_at: string
+        }
+        Relationships: []
+      }
+      inventory_items_operational: {
+        Row: {
+          balance_reconciled_at: string | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          initial_quantity: number | null
+          internal_code: string | null
+          min_quantity: number
+          name: string
+          notes: string | null
+          quantity: number
+          storage_location: string | null
+          supplier_id: string | null
+          supplier_name: string | null
+          unit: string | null
+          updated_at: string
         }
         Relationships: []
       }
@@ -3042,6 +3146,26 @@ export type Database = {
       }
       fn_generate_payable_alerts: { Args: never; Returns: number }
       fn_truck_expenses_total: { Args: { p_truck_id: string }; Returns: number }
+      delete_calendar_event_operational: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      update_calendar_event_operational: {
+        Args: { p_id: string; p_patch: Json }
+        Returns: undefined
+      }
+      update_truck_operational: {
+        Args: { p_id: string; p_patch: Json }
+        Returns: undefined
+      }
+      update_service_operational: {
+        Args: { p_id: string; p_patch: Json }
+        Returns: undefined
+      }
+      adjust_inventory_quantity: {
+        Args: { p_delta: number; p_id: string }
+        Returns: number
+      }
     }
     Enums: {
       app_role: "admin" | "financeiro" | "secretaria"

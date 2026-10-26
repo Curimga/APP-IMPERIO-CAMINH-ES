@@ -12,10 +12,16 @@ import {
   Activity,
   Wallet,
   BrainCircuit,
+  ReceiptText,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { canEditInventory, isFinanceExecutive } from "@/lib/mobile/perm";
+import {
+  canEditInventory,
+  canManageGeneralExpenses,
+  canSeeServices,
+  isFinanceExecutive,
+} from "@/lib/mobile/perm";
 import { AppHeader } from "@/components/mobile/header";
 import { OfflineBanner } from "@/components/mobile/connection";
 import { haptic } from "@/lib/mobile/haptic";
@@ -61,8 +67,10 @@ const TABS = [
 
 export function MobileTabBar() {
   const location = useLocation();
+  const { roles } = useAuth();
   const { data: notif } = useNotifications();
   const { data: services } = useServices();
+  const tabs = TABS.filter((tab) => tab.to !== "/servicos" || canSeeServices(roles));
   const unread = notif?.unread ?? 0;
   const delayedCount = (services ?? []).filter(
     (s) =>
@@ -76,8 +84,11 @@ export function MobileTabBar() {
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="mx-auto grid max-w-2xl grid-cols-5">
-        {TABS.map((t) => {
+      <div
+        className="mx-auto grid max-w-2xl"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
+        {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = t.active(location.pathname);
           const badge =
@@ -218,18 +229,28 @@ function useFabActions() {
     icon: <User className="h-5 w-5" />,
     to: "/clientes/novo",
   });
-  actions.push({
-    label: "Criar serviço",
-    description: "Serviço para caminhão",
-    icon: <Wrench className="h-5 w-5" />,
-    to: "/servicos/novo",
-  });
+  if (canSeeServices(roles)) {
+    actions.push({
+      label: "Criar serviço",
+      description: "Serviço para caminhão",
+      icon: <Wrench className="h-5 w-5" />,
+      to: "/servicos/novo",
+    });
+  }
   if (canEditInventory(roles)) {
     actions.push({
       label: "Adicionar item ao estoque",
       description: "Item de material",
       icon: <Package className="h-5 w-5" />,
       to: "/estoque/novo",
+    });
+  }
+  if (canManageGeneralExpenses(roles)) {
+    actions.push({
+      label: "Despesa geral",
+      description: "Lançamento sem caminhão",
+      icon: <ReceiptText className="h-5 w-5" />,
+      to: "/despesas",
     });
   }
   if (isFinanceExecutive(roles, user?.email)) {
@@ -239,6 +260,13 @@ function useFabActions() {
       icon: <Activity className="h-5 w-5" />,
       to: "/financeiro",
     });
+    actions.push({
+      label: "Criar pagamento",
+      description: "Pagar ou receber",
+      icon: <Wallet className="h-5 w-5" />,
+      to: "/pagamentos/novo",
+    });
+  } else if (canSeeServices(roles)) {
     actions.push({
       label: "Criar pagamento",
       description: "Pagar ou receber",

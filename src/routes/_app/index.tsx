@@ -41,6 +41,7 @@ import { MobileCard, SectionTitle, SkeletonRows } from "@/components/mobile/ui";
 import { STATUS_LABEL } from "@/lib/truck-status";
 import { truckTitle } from "@/lib/truck-title";
 import { haptic } from "@/lib/mobile/haptic";
+import { canSeeServices } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/")({
   component: AppHome,
@@ -387,17 +388,20 @@ function Movements({
    Ações rápidas (sem Financeiro)
    ============================================================ */
 
-function QuickActions() {
+function QuickActions({ showServices }: { showServices: boolean }) {
   const items = [
     { label: "Caminhão", icon: Truck, to: "/garagem/novo" },
     { label: "Compromisso", icon: CalendarDays, to: "/agenda/novo" },
-    { label: "Serviço", icon: Wrench, to: "/servicos/novo" },
+    ...(showServices ? [{ label: "Serviço", icon: Wrench, to: "/servicos/novo" }] : []),
     { label: "Cliente", icon: User, to: "/clientes/novo" },
   ];
   return (
     <section>
       <SectionTitle>Ações rápidas</SectionTitle>
-      <div className="grid grid-cols-4 gap-2">
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+      >
         {items.map((it) => {
           const Icon = it.icon;
           return (
@@ -536,7 +540,8 @@ function ServiceForecast({ services }: { services: DashboardService[] }) {
    ============================================================ */
 
 function AppHome() {
-  const { profile, user } = useAuth();
+  const { profile, user, roles } = useAuth();
+  const showServices = canSeeServices(roles);
   const navigate = useNavigate();
   const today = new Date();
   const hour = today.getHours();
@@ -664,15 +669,15 @@ function AppHome() {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
+          <div className={cn("mt-3 grid gap-1.5", showServices ? "grid-cols-3" : "grid-cols-2")}>
             <HeroStat value={reservados} label="Reservados" />
             <HeroStat value={emServico} label="Em serviço" />
-            <HeroStat value={svcRunning} label="Serviços ativos" />
+            {showServices && <HeroStat value={svcRunning} label="Serviços ativos" />}
           </div>
         </div>
       </MobileCard>
 
-      {delayedServices.length > 0 && (
+      {showServices && delayedServices.length > 0 && (
         <Link
           to="/servicos"
           search={{ tab: "atrasados" }}
@@ -691,7 +696,7 @@ function AppHome() {
         <>
           <section>
             <SectionTitle>Operação em foco</SectionTitle>
-            <div className="grid grid-cols-4 gap-2">
+            <div className={cn("grid gap-2", showServices ? "grid-cols-4" : "grid-cols-3")}>
               <DashCard
                 icon={Truck}
                 value={emEstoque}
@@ -716,23 +721,25 @@ function AppHome() {
                 tone="warning"
                 onClick={() => openFilter("servico")}
               />
-              <DashCard
-                icon={AlarmClock}
-                value={delayedServices.length}
-                label="Atrasados"
-                ctx={delayedServices.length > 0 ? "atualize prazos" : "tudo em dia"}
-                tone="destructive"
-                to="/servicos"
-                search={{ tab: "atrasados" }}
-              />
+              {showServices && (
+                <DashCard
+                  icon={AlarmClock}
+                  value={delayedServices.length}
+                  label="Atrasados"
+                  ctx={delayedServices.length > 0 ? "atualize prazos" : "tudo em dia"}
+                  tone="destructive"
+                  to="/servicos"
+                  search={{ tab: "atrasados" }}
+                />
+              )}
             </div>
           </section>
 
           <AgendaTodayRow count={eventsCount} />
 
-          <ServiceForecast services={services} />
+          {showServices && <ServiceForecast services={services} />}
 
-          <QuickActions />
+          <QuickActions showServices={showServices} />
         </>
       ) : (
         <>
@@ -790,23 +797,27 @@ function AppHome() {
                 ctx={`${pct(statusCount("despachante"))}% da frota`}
                 onClick={() => openFilter("despachante")}
               />
-              <DashCard
-                icon={Hammer}
-                value={svcRunning}
-                label="Serviços ativos"
-                ctx="ver serviços"
-                tone="gold"
-                to="/servicos"
-              />
-              <DashCard
-                icon={AlarmClock}
-                value={delayedServices.length}
-                label="Serviços atrasados"
-                ctx={delayedServices.length > 0 ? "atualize prazos" : "tudo em dia"}
-                tone="destructive"
-                to="/servicos"
-                search={{ tab: "atrasados" }}
-              />
+              {showServices && (
+                <DashCard
+                  icon={Hammer}
+                  value={svcRunning}
+                  label="Serviços ativos"
+                  ctx="ver serviços"
+                  tone="gold"
+                  to="/servicos"
+                />
+              )}
+              {showServices && (
+                <DashCard
+                  icon={AlarmClock}
+                  value={delayedServices.length}
+                  label="Serviços atrasados"
+                  ctx={delayedServices.length > 0 ? "atualize prazos" : "tudo em dia"}
+                  tone="destructive"
+                  to="/servicos"
+                  search={{ tab: "atrasados" }}
+                />
+              )}
               <DashCard
                 icon={CalendarDays}
                 value={eventsCount}
@@ -817,7 +828,7 @@ function AppHome() {
             </div>
           </section>
 
-          <ServiceForecast services={services} />
+          {showServices && <ServiceForecast services={services} />}
 
           <Attention trucks={all} services={services} events={events} todayStr={todayStr} />
 
@@ -832,7 +843,7 @@ function AppHome() {
 
           <AgendaPreview events={events} />
           <Movements trucks={all} services={services} events={events} />
-          <QuickActions />
+          <QuickActions showServices={showServices} />
         </>
       )}
     </>

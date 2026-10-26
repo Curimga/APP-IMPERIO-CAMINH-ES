@@ -1,10 +1,11 @@
-import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeSync } from "@/components/dashboard/use-realtime-sync";
 import { AppShell } from "@/components/mobile/app-shell";
 import { PushNotificationsProvider } from "@/hooks/use-push-notifications";
+import { defaultRouteForRoles, isPathAllowedForRoles } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: async () => {
@@ -17,7 +18,8 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
-  const { loading, session, profile } = useAuth();
+  const { loading, session, profile, roles } = useAuth();
+  const location = useLocation();
   const nav = useNavigate();
 
   // Sincronização em tempo real — o mesmo hub do CRM, com invalidação seletiva
@@ -34,6 +36,13 @@ function AppLayout() {
       nav({ to: "/aguardando-aprovacao" });
     }
   }, [loading, session, profile, nav]);
+
+  useEffect(() => {
+    if (loading || !session || profile?.status !== "active") return;
+    if (!isPathAllowedForRoles(location.pathname, roles)) {
+      nav({ to: defaultRouteForRoles(roles), replace: true });
+    }
+  }, [loading, session, profile, roles, location.pathname, nav]);
 
   // Fallback do clique na notificação do Service Worker quando a navegação
   // direta do cliente não está disponível (ver public/sw.js).
@@ -61,6 +70,8 @@ function AppLayout() {
       </div>
     );
   }
+
+  if (!isPathAllowedForRoles(location.pathname, roles)) return null;
 
   return (
     <PushNotificationsProvider>

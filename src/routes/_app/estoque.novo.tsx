@@ -5,6 +5,8 @@ import { Field, inputClass, btnGold, btnGhost, MobileCard } from "@/components/m
 import { createInventoryItem } from "@/lib/mobile/actions";
 import { useInvalidateMobile } from "@/lib/mobile/invalidate";
 import { parseMoney } from "@/lib/format";
+import { useAuth } from "@/hooks/use-auth";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/estoque/novo")({
   component: NewInventoryItem,
@@ -39,6 +41,8 @@ const toNumber = (v: string) => {
 
 function NewInventoryItem() {
   const nav = useNavigate();
+  const { roles, user } = useAuth();
+  const showValue = isFinanceExecutive(roles, user?.email);
   const invalidateMobile = useInvalidateMobile();
   const [form, setForm] = useState<Form>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -60,7 +64,7 @@ function NewInventoryItem() {
         category: form.category.trim() || null,
         quantity: qty,
         min_quantity: toNumber(form.min_quantity),
-        unit_price: toNumber(form.unit_price),
+        unit_price: showValue ? toNumber(form.unit_price) : null,
         unit: form.unit.trim() || "un",
         storage_location: form.storage_location.trim() || null,
         supplier_name: form.supplier_name.trim() || null,
@@ -135,16 +139,18 @@ function NewInventoryItem() {
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Valor unitário (R$)">
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={form.unit_price}
-                onChange={set("unit_price")}
-                placeholder="0,00"
-              />
-            </Field>
+          <div className={showValue ? "grid grid-cols-2 gap-3" : "grid gap-3"}>
+            {showValue ? (
+              <Field label="Valor unitário (R$)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={form.unit_price}
+                  onChange={set("unit_price")}
+                  placeholder="0,00"
+                />
+              </Field>
+            ) : null}
             <Field label="Local">
               <input
                 className={inputClass}

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronDown, Trash2 } from "lucide-react";
 import { Field, inputClass, btnGold, MobileCard, FormSection } from "@/components/mobile/ui";
 import { useTrucks, useEvent } from "@/lib/mobile/queries";
-import { createEvent, updateEvent, deleteEvent } from "@/lib/mobile/actions";
+import { createEvent, updateEvent, deleteEvent, type EventInput } from "@/lib/mobile/actions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   AlertDialog,
@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import type { Enums } from "@/integrations/supabase/types";
 import { haptic, hapticSuccess, hapticError } from "@/lib/mobile/haptic";
 import { useInvalidateMobile } from "@/lib/mobile/invalidate";
+import { useAuth } from "@/hooks/use-auth";
+import { isSecretariaOnly } from "@/lib/mobile/perm";
 
 export const Route = createFileRoute("/_app/agenda/novo")({
   validateSearch: (s: Record<string, unknown>) => {
@@ -70,6 +72,9 @@ const REMINDERS: { v: number; label: string }[] = [
 
 function NewEvent() {
   const nav = useNavigate();
+  const { roles } = useAuth();
+  const operationalOnly = isSecretariaOnly(roles);
+  const canSeeAmount = !operationalOnly;
   const search = Route.useSearch();
   const editing = search.edit;
   const invalidateMobile = useInvalidateMobile();
@@ -122,20 +127,20 @@ function NewEvent() {
       return;
     }
     const value = parseMoney(amount);
-    const payload = {
+    const payload: EventInput = {
       title: title.trim(),
       description: description.trim() || null,
       starts_at: allDay ? `${date}T09:00:00` : `${date}T${time || "09:00"}:00`,
       type,
       related_truck_id: truckId,
-      amount: Number.isFinite(value) && value > 0 ? value : null,
       recurrence: recurrence || null,
       reminder_minutes: reminder > 0 ? reminder : null,
       all_day: allDay,
+      ...(canSeeAmount ? { amount: Number.isFinite(value) && value > 0 ? value : null } : {}),
     };
     setSaving(true);
     try {
-      if (editing) await updateEvent(editing, payload);
+      if (editing) await updateEvent(editing, payload, operationalOnly);
       else await createEvent(payload);
       invalidateMobile(["calendar_events"]);
       hapticSuccess();
@@ -151,7 +156,7 @@ function NewEvent() {
   const del = async () => {
     if (!editing) return;
     try {
-      await deleteEvent(editing);
+      await deleteEvent(editing, operationalOnly);
       invalidateMobile(["calendar_events"]);
       hapticSuccess();
       nav({ to: "/agenda" });
@@ -326,15 +331,17 @@ function NewEvent() {
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </button>
             </Field>
-            <Field label="Valor (R$)" hint="Opcional — aparece na agenda como compromisso monetário.">
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0,00"
-              />
-            </Field>
+            {canSeeAmount && (
+              <Field label="Valor (R$)" hint="Opcional — aparece na agenda como compromisso monetário.">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0,00"
+                />
+              </Field>
+            )}
           </MobileCard>
         </FormSection>
 

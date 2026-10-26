@@ -3,7 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchDashboardSnapshot, computeExecutiveKpis } from "@/lib/dashboard-data";
 import { spaTodayISO } from "@/lib/mobile/dates";
 import { useAuth } from "@/hooks/use-auth";
-import { canAccessBanking, isFinanceExecutive } from "@/lib/mobile/perm";
+import {
+  canAccessBanking,
+  canSeeServices,
+  isFinanceExecutive,
+  isSecretariaOnly,
+} from "@/lib/mobile/perm";
 import { parseMoney } from "@/lib/format";
 import type { Tables } from "@/integrations/supabase/types";
 import type { TruckCustomerRef, TruckDealRef } from "@/lib/mobile/truck-detail";
@@ -91,6 +96,9 @@ export type TruckWithPhotos = OperationalTruck &
 export const TRUCK_OPERATIONAL_SELECT =
   "id, brand, model, year, plate, color, status, status_started_at, status_expected_end, status_notes, status_supplier_id, supplier, origin, consigned, created_by, created_at, updated_at, purchase_date, sold_at, warranty_end, sold_customer_id, chassis, renavam, mileage, fuel, transmission, description, ai_description, truck_photos(id, url, is_cover, position, created_at)" as const;
 
+export const TRUCK_OPERATIONAL_VIEW_SELECT =
+  "id, brand, model, year, plate, color, status, status_started_at, status_expected_end, status_notes, status_supplier_id, supplier, origin, consigned, created_by, created_at, updated_at, purchase_date, sold_at, warranty_end, sold_customer_id, chassis, renavam, mileage, fuel, transmission, description, ai_description, site_description, truck_photos" as const;
+
 export interface TruckRef {
   id: string;
   brand: string;
@@ -105,6 +113,10 @@ export type ServiceTruckRef = TruckRef & {
 export type CalendarEventItem = Tables<"calendar_events"> & {
   related_truck: TruckRef | null;
 };
+
+function calendarEventsSource(roles: Parameters<typeof isSecretariaOnly>[0]) {
+  return (isSecretariaOnly(roles) ? "calendar_events_operational" : "calendar_events") as "calendar_events";
+}
 
 export type ServiceItem = Tables<"services"> & {
   truck: ServiceTruckRef | null;
@@ -155,6 +167,21 @@ export type InventoryItem = Pick<
   | "unit"
   | "storage_location"
   | "supplier_name"
+>;
+
+export type GeneralExpenseItem = Pick<
+  Tables<"general_expenses">,
+  | "id"
+  | "description"
+  | "category"
+  | "amount"
+  | "occurred_at"
+  | "due_date"
+  | "status"
+  | "supplier"
+  | "payment_method"
+  | "notes"
+  | "created_at"
 >;
 
 export type SoldTruck = Pick<
@@ -302,6 +329,153 @@ export const getTruckCover = (t: { truck_photos?: TruckPhoto[] } | null): string
 export const getTruckCoverPhoto = (t: { truck_photos?: TruckPhoto[] } | null): TruckPhoto | null =>
   sortTruckPhotos(t?.truck_photos ?? [])[0] ?? null;
 
+function isMissingOperationalView(error: { code?: string; message?: string }) {
+  return (
+    error.code === "PGRST205" ||
+    error.code === "42P01" ||
+    /trucks_operational.*(not find|does not exist|schema cache)/i.test(error.message ?? "")
+  );
+}
+
+function normalizeTruckPhotos(value: unknown): TruckPhoto[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (photo): photo is TruckPhoto =>
+      typeof photo === "object" &&
+      photo !== null &&
+      typeof (photo as TruckPhoto).id === "string" &&
+      typeof (photo as TruckPhoto).url === "string",
+  );
+}
+
+function normalizeOperationalTruck(row: Record<string, unknown>): TruckWithPhotos {
+  return {
+    ...row,
+    truck_photos: normalizeTruckPhotos(row.truck_photos),
+  } as TruckWithPhotos;
+}
+
+async function fetchOperationalTrucks(): Promise<TruckWithPhotos[]> {
+  const viewR = await supabase
+    .from("trucks_operational")
+    .select(TRUCK_OPERATIONAL_VIEW_SELECT)
+    .order("created_at", { ascending: false });
+  if (!viewR.error) return (viewR.data ?? []).map((row) => normalizeOperationalTruck(row));
+  if (!isMissingOperationalView(viewR.error)) throw viewR.error;
+
+  const baseR = await supabase
+    .from("trucks")
+    .select(TRUCK_OPERATIONAL_SELECT)
+    .order("created_at", { ascending: false });
+  if (baseR.error) throw baseR.error;
+  return (baseR.data ?? []).map((row) => normalizeOperationalTruck(row));
+}
+
+async function fetchOperationalTruck(id: string): Promise<TruckWithPhotos | null> {
+  const viewR = await supabase
+    .from("trucks_operational")
+    .select(TRUCK_OPERATIONAL_VIEW_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (!viewR.error) return viewR.data ? normalizeOperationalTruck(viewR.data) : null;
+  if (!isMissingOperationalView(viewR.error)) throw viewR.error;
+
+  const baseR = await supabase
+    .from("trucks")
+    .select(TRUCK_OPERATIONAL_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (baseR.error) throw baseR.error;
+  return baseR.data ? normalizeOperationalTruck(baseR.data) : null;
+}
+
+async function fetchDashboardTrucks(): Promise<DashboardTruck[]> {
+  const select =
+    "id, brand, model, year, plate, status, status_started_at, status_expected_end, purchase_date, sold_at, warranty_end, created_at, updated_at" as const;
+  const viewR = await supabase
+    .from("trucks_operational")
+    .select(select)
+    .order("created_at", { ascending: false });
+  if (!viewR.error) return (viewR.data ?? []) as DashboardTruck[];
+  if (!isMissingOperationalView(viewR.error)) throw viewR.error;
+
+  const baseR = await supabase.from("trucks").select(select).order("created_at", { ascending: false });
+  if (baseR.error) throw baseR.error;
+  return (baseR.data ?? []) as DashboardTruck[];
+}
+
+async function fetchOperationalSoldTrucks(): Promise<SoldTruck[]> {
+  const select = "id, brand, model, year, plate, sold_at, warranty_end, sold_customer_id, status" as const;
+  const viewR = await supabase
+    .from("trucks_operational")
+    .select(select)
+    .eq("status", "vendido")
+    .order("sold_at", { ascending: false })
+    .limit(200);
+  if (!viewR.error) return (viewR.data ?? []) as SoldTruck[];
+  if (!isMissingOperationalView(viewR.error)) throw viewR.error;
+
+  const baseR = await supabase
+    .from("trucks")
+    .select(select)
+    .eq("status", "vendido")
+    .order("sold_at", { ascending: false })
+    .limit(200);
+  if (baseR.error) throw baseR.error;
+  return (baseR.data ?? []) as SoldTruck[];
+}
+
+async function searchOperationalTrucks(term: string): Promise<GlobalSearchTruck[]> {
+  const select = "id, brand, model, plate, status" as const;
+  const filter = `brand.ilike.${term},model.ilike.${term},plate.ilike.${term}`;
+  const viewR = await supabase
+    .from("trucks_operational")
+    .select(select)
+    .or(filter)
+    .order("created_at", { ascending: false })
+    .limit(15);
+  if (!viewR.error) return (viewR.data ?? []) as GlobalSearchTruck[];
+  if (!isMissingOperationalView(viewR.error)) throw viewR.error;
+
+  const baseR = await supabase
+    .from("trucks")
+    .select(select)
+    .or(filter)
+    .order("created_at", { ascending: false })
+    .limit(15);
+  if (baseR.error) throw baseR.error;
+  return (baseR.data ?? []) as GlobalSearchTruck[];
+}
+
+async function fetchTruckRefs(ids: Array<string | null | undefined>): Promise<Map<string, TruckRef>> {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean) as string[]));
+  if (uniqueIds.length === 0) return new Map();
+
+  const viewR = await supabase
+    .from("trucks_operational")
+    .select("id, brand, model, plate, status")
+    .in("id", uniqueIds);
+  if (!viewR.error) {
+    return new Map((viewR.data ?? []).map((truck) => [truck.id, truck as TruckRef]));
+  }
+  if (!isMissingOperationalView(viewR.error)) throw viewR.error;
+
+  const baseR = await supabase
+    .from("trucks")
+    .select("id, brand, model, plate, status")
+    .in("id", uniqueIds);
+  if (baseR.error) throw baseR.error;
+  return new Map((baseR.data ?? []).map((truck) => [truck.id, truck as TruckRef]));
+}
+
+async function attachRelatedTrucks<T extends { related_truck_id: string | null }>(rows: T[]) {
+  const refs = await fetchTruckRefs(rows.map((row) => row.related_truck_id));
+  return rows.map((row) => ({
+    ...row,
+    related_truck: row.related_truck_id ? (refs.get(row.related_truck_id) ?? null) : null,
+  }));
+}
+
 /**
  * URL de exibição de uma foto com cache-busting seguro.
  *
@@ -334,17 +508,17 @@ export function useTrucks() {
     refetchOnMount: "always",
     refetchOnReconnect: "always",
     queryFn: async () => {
-      const { data, error } = await (isExec
-        ? supabase
-            .from("trucks")
-            .select("*, truck_photos(id, url, is_cover, position, created_at)")
-            .order("created_at", { ascending: false })
-        : supabase
-            .from("trucks")
-            .select(TRUCK_OPERATIONAL_SELECT)
-            .order("created_at", { ascending: false }));
-      if (error) throw error;
-      const trucks = (data ?? []) as TruckWithPhotos[];
+      let trucks: TruckWithPhotos[];
+      if (isExec) {
+        const { data, error } = await supabase
+          .from("trucks")
+          .select("*, truck_photos(id, url, is_cover, position, created_at)")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        trucks = (data ?? []).map((row) => normalizeOperationalTruck(row));
+      } else {
+        trucks = await fetchOperationalTrucks();
+      }
       if (import.meta.env.DEV) {
         const TEST_PLATES = ["SVL3G81", "BBY5H79", "AXD0C32", "BBZ1D29", "BCA7A57", "ITS0267"];
         const diagnostic = trucks
@@ -389,19 +563,18 @@ export function useTruck(id: string | undefined) {
     enabled: !!id,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await (isExec
-        ? supabase
-            .from("trucks")
-            .select("*, truck_photos(id, url, is_cover, position, created_at)")
-            .eq("id", id!)
-            .maybeSingle()
-        : supabase
-            .from("trucks")
-            .select(TRUCK_OPERATIONAL_SELECT)
-            .eq("id", id!)
-            .maybeSingle());
-      if (error) throw error;
-      const row = (data ?? null) as TruckDetail | null;
+      let row: TruckWithPhotos | null;
+      if (isExec) {
+        const { data, error } = await supabase
+          .from("trucks")
+          .select("*, truck_photos(id, url, is_cover, position, created_at)")
+          .eq("id", id!)
+          .maybeSingle();
+        if (error) throw error;
+        row = data ? normalizeOperationalTruck(data) : null;
+      } else {
+        row = await fetchOperationalTruck(id!);
+      }
       if (!row) return null;
 
       if (import.meta.env.DEV) {
@@ -451,20 +624,18 @@ export function useTruckDetail(id: string | undefined) {
     refetchOnMount: "always",
     refetchOnReconnect: "always",
     queryFn: async (): Promise<TruckDetailBundle> => {
-      const truckR = await (isExec
-        ? supabase
-            .from("trucks")
-            .select("*, truck_photos(id, url, is_cover, position, created_at)")
-            .eq("id", id!)
-            .maybeSingle()
-        : supabase
-            .from("trucks")
-            .select(TRUCK_OPERATIONAL_SELECT)
-            .eq("id", id!)
-            .maybeSingle());
-      if (truckR.error) throw truckR.error;
-
-      const truck = (truckR.data ?? null) as TruckWithPhotos | null;
+      let truck: TruckWithPhotos | null;
+      if (isExec) {
+        const truckR = await supabase
+          .from("trucks")
+          .select("*, truck_photos(id, url, is_cover, position, created_at)")
+          .eq("id", id!)
+          .maybeSingle();
+        if (truckR.error) throw truckR.error;
+        truck = truckR.data ? normalizeOperationalTruck(truckR.data) : null;
+      } else {
+        truck = await fetchOperationalTruck(id!);
+      }
       const empty: TruckDetailBundle = {
         truck: null,
         expenses: [],
@@ -491,14 +662,21 @@ export function useTruckDetail(id: string | undefined) {
       const dealSelect = isExec
         ? "id, truck_id, customer_id, stage, title, notes, value, priority, owner_id, occurred_at, created_at, updated_at"
         : "id, truck_id, customer_id, stage, title, notes, priority, owner_id, occurred_at, created_at, updated_at";
+      const restrictedSecretary = isSecretariaOnly(roles);
+      const serviceSelect =
+        "id, truck_id, title, description, notes, status, category, supplier_id, attachment_url, expected_at, completed_at, created_at, created_by, truck_previous_status" as const;
       const [servicesR, historyR, notesR, truckDocsR, dealsR, warrantyR] = await Promise.all([
-        supabase
-          .from("services")
-          .select(
-            "id, truck_id, title, description, notes, status, category, supplier_id, attachment_url, expected_at, completed_at, created_at, created_by, truck_previous_status",
-          )
-          .eq("truck_id", id!)
-          .order("created_at", { ascending: false }),
+        restrictedSecretary
+          ? supabase
+              .from("services_operational")
+              .select(serviceSelect)
+              .eq("truck_id", id!)
+              .order("created_at", { ascending: false })
+          : supabase
+              .from("services")
+              .select(serviceSelect)
+              .eq("truck_id", id!)
+              .order("created_at", { ascending: false }),
         supabase
           .from("truck_status_history")
           .select("*")
@@ -514,12 +692,14 @@ export function useTruckDetail(id: string | undefined) {
           .select("*")
           .eq("truck_id", id!)
           .order("created_at", { ascending: false }),
-        supabase
-          .from("deals")
-          .select(dealSelect)
-          .eq("truck_id", id!)
-          .order("updated_at", { ascending: false })
-          .limit(30),
+        restrictedSecretary
+          ? Promise.resolve({ data: [] as TruckDealRef[], error: null })
+          : supabase
+              .from("deals")
+              .select(dealSelect)
+              .eq("truck_id", id!)
+              .order("updated_at", { ascending: false })
+              .limit(30),
         supabase
           .from("truck_warranties")
           .select("*")
@@ -690,72 +870,77 @@ export function useTruckDetail(id: string | undefined) {
 
 /** Compromissos: hoje e próximos 30 dias. */
 export function useAgenda(days = 30) {
+  const { roles } = useAuth();
   const today = spaTodayISO();
   return useQuery({
-    queryKey: ["agenda-mobile", today],
+    queryKey: ["agenda-mobile", today, isSecretariaOnly(roles)],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*, related_truck:trucks(id, brand, model, plate)")
+        .from(calendarEventsSource(roles))
+        .select("*")
         .gte("starts_at", `${today}T00:00:00`)
         .order("starts_at", { ascending: true })
         .limit(Math.min(days, 500));
       if (error) throw error;
-      return (data ?? []) as CalendarEventItem[];
+      return (await attachRelatedTrucks(data ?? [])) as CalendarEventItem[];
     },
   });
 }
 
 /** Compromissos num intervalo [from, to] — usado pelo calendário mensal. */
 export function useAgendaRange(from: string, to: string) {
+  const { roles } = useAuth();
   return useQuery({
-    queryKey: ["agenda-range", from, to],
+    queryKey: ["agenda-range", from, to, isSecretariaOnly(roles)],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*, related_truck:trucks(id, brand, model, plate)")
+        .from(calendarEventsSource(roles))
+        .select("*")
         .gte("starts_at", `${from}T00:00:00`)
         .lt("starts_at", `${to}T23:59:59`)
         .order("starts_at", { ascending: true })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as CalendarEventItem[];
+      return (await attachRelatedTrucks(data ?? [])) as CalendarEventItem[];
     },
   });
 }
 
 /** Um único compromisso (para edição). */
 export function useEvent(id: string | undefined) {
+  const { roles } = useAuth();
   return useQuery({
-    queryKey: ["event-mobile", id],
+    queryKey: ["event-mobile", id, isSecretariaOnly(roles)],
     enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*, related_truck:trucks(id, brand, model, plate)")
+        .from(calendarEventsSource(roles))
+        .select("*")
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? null) as CalendarEventItem | null;
+      if (!data) return null;
+      return (await attachRelatedTrucks([data]))[0] as CalendarEventItem;
     },
   });
 }
 
 /** Compromissos de hoje apenas. */
 export function useTodaysEvents() {
+  const { roles } = useAuth();
   const today = spaTodayISO();
   return useQuery({
-    queryKey: ["agenda-mobile-today", today],
+    queryKey: ["agenda-mobile-today", today, isSecretariaOnly(roles)],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*, related_truck:trucks(id, brand, model, plate)")
+        .from(calendarEventsSource(roles))
+        .select("*")
         .gte("starts_at", `${today}T00:00:00`)
         .lt("starts_at", `${today}T23:59:59`)
         .order("starts_at", { ascending: true })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as CalendarEventItem[];
+      return (await attachRelatedTrucks(data ?? [])) as CalendarEventItem[];
     },
   });
 }
@@ -769,40 +954,50 @@ export function useTodaysEvents() {
  * o Realtime apenas complementa invalidando pelo prefixo `dashboard-mobile`.
  */
 export function useDashboardData() {
+  const { roles } = useAuth();
+  const showServices = canSeeServices(roles);
   return useQuery({
-    queryKey: ["dashboard-mobile", spaTodayISO()],
+    queryKey: ["dashboard-mobile", spaTodayISO(), showServices],
     queryFn: async () => {
       const today = spaTodayISO();
-      const [trucksR, servicesR, eventsR] = await Promise.all([
+      const [trucks, servicesR, eventsR] = await Promise.all([
+        fetchDashboardTrucks(),
+        showServices
+          ? supabase
+              .from("services_operational")
+              .select(
+                "id, truck_id, title, status, category, notes, expected_at, completed_at, created_at",
+              )
+              .in("status", ["em_andamento", "concluido"])
+              .order("created_at", { ascending: false })
+              .limit(200)
+          : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
         supabase
-          .from("trucks")
-          .select(
-            "id, brand, model, year, plate, status, status_started_at, status_expected_end, purchase_date, sold_at, warranty_end, created_at, updated_at",
-          )
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("services")
-          .select(
-            "id, truck_id, title, status, category, notes, expected_at, completed_at, created_at, truck:trucks(id, brand, model, plate)",
-          )
-          .in("status", ["em_andamento", "concluido"])
-          .order("created_at", { ascending: false })
-          .limit(200),
-        supabase
-          .from("calendar_events")
-          .select("id, title, starts_at, all_day, created_at, related_truck:trucks(id, brand, model, plate)")
+          .from(calendarEventsSource(roles))
+          .select("id, title, starts_at, all_day, created_at, related_truck_id")
           .gte("starts_at", `${today}T00:00:00`)
           .lt("starts_at", `${today}T23:59:59`)
           .order("starts_at", { ascending: true })
           .limit(50),
       ]);
-      if (trucksR.error) throw trucksR.error;
       if (servicesR.error) throw servicesR.error;
       if (eventsR.error) throw eventsR.error;
+      const events = await attachRelatedTrucks(eventsR.data ?? []);
+      const serviceRows = servicesR.data ?? [];
+      const serviceTrucks = await fetchTruckRefs(
+        serviceRows.map((service) => (service as { truck_id: string | null }).truck_id),
+      );
+      const services = serviceRows.map((service) => {
+        const row = service as { truck_id: string | null };
+        return {
+          ...service,
+          truck: row.truck_id ? (serviceTrucks.get(row.truck_id) ?? null) : null,
+        } as DashboardService;
+      });
       const result = {
-        trucks: (trucksR.data ?? []) as DashboardTruck[],
-        services: (servicesR.data ?? []) as DashboardService[],
-        events: (eventsR.data ?? []) as DashboardEvent[],
+        trucks,
+        services,
+        events: events as DashboardEvent[],
       };
       if (import.meta.env.DEV) {
         const TEST_PLATES = ["SVL3G81", "BBY5H79", "AXD0C32", "BBZ1D29", "BCA7A57", "ITS0267"];
@@ -822,16 +1017,26 @@ export function useDashboardData() {
 
 /** Serviços gerais (com o caminhão relacionado). */
 export function useServices() {
+  const { roles } = useAuth();
+  const enabled = canSeeServices(roles);
   return useQuery({
-    queryKey: ["services-mobile"],
+    queryKey: ["services-mobile", enabled],
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("services")
-        .select("*, truck:trucks(id, brand, model, plate, status)")
+        .from("services_operational")
+        .select(
+          "id, truck_id, supplier_id, title, description, sent_at, expected_at, completed_at, status, attachment_url, notes, created_by, created_at, updated_at, truck_previous_status, category",
+        )
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as ServiceItem[];
+      const rows = (data ?? []) as Array<Record<string, unknown> & { truck_id: string | null }>;
+      const trucks = await fetchTruckRefs(rows.map((row) => row.truck_id));
+      return rows.map((row) => ({
+        ...row,
+        truck: row.truck_id ? (trucks.get(row.truck_id) ?? null) : null,
+      })) as unknown as ServiceItem[];
     },
   });
 }
@@ -867,6 +1072,27 @@ export function useCustomers(q: string) {
       const { data, error } = await query.order("name", { ascending: true }).limit(200);
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+/** Despesas gerais sem qualquer vínculo financeiro com caminhão ou compra. */
+export function useGeneralExpenses() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["general-expenses", "mobile-operational", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("general_expenses")
+        .select(
+          "id, description, category, amount, occurred_at, due_date, status, supplier, payment_method, notes, created_at",
+        )
+        .is("truck_id", null)
+        .is("purchase_installment_id", null)
+        .order("occurred_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return (data ?? []) as GeneralExpenseItem[];
     },
   });
 }
@@ -1084,20 +1310,34 @@ export function useAdjustBankBalance() {
   });
 }
 
-/** Itens de estoque de materiais. */
+/** Itens de estoque de materiais (preço unitário apenas para o Executivo). */
 export function useInventory() {
+  const { roles, user } = useAuth();
+  const isExec = isFinanceExecutive(roles, user?.email);
   return useQuery({
-    queryKey: ["inventory-mobile"],
+    queryKey: ["inventory-mobile", isExec],
     queryFn: async () => {
+      if (isExec) {
+        const { data, error } = await supabase
+          .from("inventory_items")
+          .select(
+            "id, name, category, quantity, min_quantity, unit_price, unit, storage_location, supplier_name",
+          )
+          .order("name", { ascending: true })
+          .limit(300);
+        if (error) throw error;
+        return (data ?? []) as InventoryItem[];
+      }
+
       const { data, error } = await supabase
-        .from("inventory_items")
+        .from("inventory_items_operational")
         .select(
-          "id, name, category, quantity, min_quantity, unit_price, unit, storage_location, supplier_name",
+          "id, name, category, quantity, min_quantity, unit, storage_location, supplier_name",
         )
         .order("name", { ascending: true })
         .limit(300);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as InventoryItem[];
     },
   });
 }
@@ -1115,23 +1355,21 @@ export function useSoldTrucks() {
     queryKey: ["sold-trucks-mobile", isExec],
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await (isExec
-        ? supabase
-            .from("trucks")
-            .select(
-              "id, brand, model, year, plate, sold_at, warranty_end, sold_customer_id, status, sold_price",
-            )
-            .eq("status", "vendido")
-            .order("sold_at", { ascending: false })
-            .limit(200)
-        : supabase
-            .from("trucks")
-            .select("id, brand, model, year, plate, sold_at, warranty_end, sold_customer_id, status")
-            .eq("status", "vendido")
-            .order("sold_at", { ascending: false })
-            .limit(200));
-      if (error) throw error;
-      const sales = (data ?? []) as SoldTruck[];
+      let sales: SoldTruck[];
+      if (isExec) {
+        const { data, error } = await supabase
+          .from("trucks")
+          .select(
+            "id, brand, model, year, plate, sold_at, warranty_end, sold_customer_id, status, sold_price",
+          )
+          .eq("status", "vendido")
+          .order("sold_at", { ascending: false })
+          .limit(200);
+        if (error) throw error;
+        sales = (data ?? []) as SoldTruck[];
+      } else {
+        sales = await fetchOperationalSoldTrucks();
+      }
       const customers = await supabase
         .from("customers")
         .select("id, name")
@@ -1212,46 +1450,55 @@ export function useNotifications(opts?: { includeFinance?: boolean }) {
 /** Não responde a consultas muito curtas; retorna null quando deve ficar ocioso. */
 export async function globalSearch(
   q: string,
+  includeServices = true,
 ): Promise<GlobalSearchResults | null> {
   const term = q.trim().toLowerCase();
   if (term.length < 2) return { trucks: [], customers: [], services: [], hasQuery: true };
   const t = `%${term}%`;
   const [trucks, customers, servicesR] = await Promise.all([
-    supabase
-      .from("trucks")
-      .select("id, brand, model, plate, status")
-      .or(`brand.ilike.${t},model.ilike.${t},plate.ilike.${t}`)
-      .order("created_at", { ascending: false })
-      .limit(15),
+    searchOperationalTrucks(t),
     supabase
       .from("customers")
       .select("id, name, phone, email, city, status, created_at")
       .or(`name.ilike.${t},phone.ilike.${t},email.ilike.${t},city.ilike.${t}`)
       .order("name", { ascending: true })
       .limit(15),
-    supabase
-      .from("services")
-      .select("id, title, status, expected_at, truck:trucks(id, brand, model, plate)")
-      .or(`title.ilike.${t},description.ilike.${t}`)
-      .order("created_at", { ascending: false })
-      .limit(15),
+    includeServices
+      ? supabase
+          .from("services_operational")
+          .select("id, truck_id, title, status, expected_at")
+          .or(`title.ilike.${t},description.ilike.${t}`)
+          .order("created_at", { ascending: false })
+          .limit(15)
+      : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
   ]);
-  if (trucks.error) throw trucks.error;
   if (customers.error) throw customers.error;
   if (servicesR.error) throw servicesR.error;
+  const serviceRows = (servicesR.data ?? []) as Array<
+    { id: string; title: string; status: string; expected_at: string | null; truck_id: string | null }
+  >;
+  const serviceTrucks = await fetchTruckRefs(serviceRows.map((row) => row.truck_id));
   return {
-    trucks: trucks.data as GlobalSearchTruck[],
+    trucks,
     customers: customers.data as CustomerItem[],
-    services: servicesR.data as GlobalSearchService[],
+    services: serviceRows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      expected_at: row.expected_at,
+      truck: row.truck_id ? (serviceTrucks.get(row.truck_id) ?? null) : null,
+    })),
     hasQuery: true,
   };
 }
 
 /** Busca global com debounce interno (não dispara enquanto não digita). */
 export function useGlobalSearch(q: string) {
+  const { roles } = useAuth();
+  const includeServices = canSeeServices(roles);
   return useQuery({
-    queryKey: ["global-search", q],
-    queryFn: () => globalSearch(q),
+    queryKey: ["global-search", q, includeServices],
+    queryFn: () => globalSearch(q, includeServices),
     enabled: q.trim().length > 0,
   });
 }
