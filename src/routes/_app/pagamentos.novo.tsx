@@ -10,7 +10,7 @@ import { truckTitle } from "@/lib/truck-title";
 import { todayISO, parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { isFinanceExecutive, isSecretaria } from "@/lib/mobile/perm";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 import type { Enums } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_app/pagamentos/novo")({
@@ -54,13 +54,13 @@ function NewPayment() {
   const selectedTruck = truckOptions.find((t) => t.id === truckId);
   const selectedCustomer = (customers ?? []).find((c) => c.id === customerId);
 
-  const canCreate = isFinanceExecutive(roles, user?.email) || isSecretaria(roles);
+  const canCreate = isFinanceExecutive(roles, user?.email);
 
   if (!canCreate) {
     return (
       <EmptyState
         title="Você não possui permissão para esta ação"
-        hint="Criar lançamentos financeiros é exclusivo do Executivo e da Secretaria."
+        hint="A Secretaria pode apenas consultar situação e vencimento dos lançamentos."
         actionLabel="Voltar para o início"
         onAction={() => nav({ to: "/" })}
       />

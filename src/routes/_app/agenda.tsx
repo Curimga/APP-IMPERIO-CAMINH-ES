@@ -160,6 +160,7 @@ const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 function Agenda() {
   const { roles, user } = useAuth();
   const showAmount = isFinanceExecutive(roles, user?.email);
+  const showPayments = showAmount || isSecretariaOnly(roles);
   const search = Route.useSearch();
   const today = spaTodayISO();
   const nav = useNavigate();
@@ -167,7 +168,7 @@ function Agenda() {
   const invalidateMobile = useInvalidateMobile();
 
   const [view, setView] = useState<"calendario" | "lista" | "pagamentos">(
-    search.view === "pagamentos" && showAmount ? "pagamentos" : search.view === "lista" ? "lista" : "calendario",
+    search.view === "pagamentos" && showPayments ? "pagamentos" : search.view === "lista" ? "lista" : "calendario",
   );
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
@@ -247,7 +248,7 @@ function Agenda() {
           [
             "calendario",
             "lista",
-            ...(showAmount ? (["pagamentos"] as const) : ([] as const)),
+            ...(showPayments ? (["pagamentos"] as const) : ([] as const)),
           ] as const
         ).map((v) => (
           <button

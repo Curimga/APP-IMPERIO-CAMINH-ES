@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { CheckCheck, CircleAlert, Hourglass, Plus, Truck } from "lucide-react";
-import { useMobileFinance, useTrucks } from "@/lib/mobile/queries";
+import { useMobileFinance, useOperationalPaymentStatus, useTrucks } from "@/lib/mobile/queries";
+import { useAuth } from "@/hooks/use-auth";
+import { isFinanceExecutive } from "@/lib/mobile/perm";
 import { MobileCard, SectionTitle, SkeletonRows, EmptyState } from "@/components/mobile/ui";
 import { settleReceivable, settlePayable, reopenReceivable, reopenPayable } from "@/lib/mobile/actions";
 import { useInvalidateMobile } from "@/lib/mobile/invalidate";
@@ -64,7 +66,33 @@ interface FinanceSnap {
   }>;
 }
 
-function toPaymentRows(snap?: FinanceSnap | null): PaymentRow[] {
+function toPaymentRows(snap?: FinanceSnap | null, operational?: OperationalPaymentSnap | null): PaymentRow[] {
+  if (operational) {
+    return [
+      ...(operational.receivables ?? []).map((r) => ({
+        id: r.id,
+        kind: "receber" as const,
+        description: r.description || "Conta a receber",
+        amount: 0,
+        due_date: r.due_date ?? "",
+        paid: r.received_at != null || r.status !== "aberto",
+        received_at: r.received_at ?? null,
+        paid_at: null,
+        truck_id: null,
+      })),
+      ...(operational.payables ?? []).map((p) => ({
+        id: p.id,
+        kind: "pagar" as const,
+        description: p.description || "Conta a pagar",
+        amount: 0,
+        due_date: p.due_date ?? "",
+        paid: p.paid_at != null || p.status !== "aberto",
+        received_at: null,
+        paid_at: p.paid_at ?? null,
+        truck_id: null,
+      })),
+    ];
+  }
   if (!snap) return [];
   const fromReceivable = (snap.receivables ?? []).map((r) => ({
     id: r.id,
@@ -91,6 +119,23 @@ function toPaymentRows(snap?: FinanceSnap | null): PaymentRow[] {
   return [...fromReceivable, ...fromPayable];
 }
 
+interface OperationalPaymentSnap {
+  receivables?: Array<{
+    id: string;
+    description?: string | null;
+    due_date?: string | null;
+    status?: string | null;
+    received_at?: string | null;
+  }>;
+  payables?: Array<{
+    id: string;
+    description?: string | null;
+    due_date?: string | null;
+    status?: string | null;
+    paid_at?: string | null;
+  }>;
+}
+
 type Filter = "hoje" | "atrasados" | "proximos" | "pagos" | "todos";
 
 const FILTERS: { key: Filter; label: string }[] = [
@@ -102,14 +147,22 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export function PagamentosTab() {
-  const { data, isLoading, isError } = useMobileFinance();
+  const { roles, user } = useAuth();
+  const executive = isFinanceExecutive(roles, user?.email);
+  const { data, isLoading: financeLoading, isError: financeError } = useMobileFinance();
+  const { data: operationalData, isLoading: operationalLoading, isError: operationalError } = useOperationalPaymentStatus();
   const { data: trucks } = useTrucks();
   const invalidateMobile = useInvalidateMobile();
   const [filter, setFilter] = useState<Filter>("hoje");
   const [active, setActive] = useState<PaymentRow | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const rows = useMemo(() => toPaymentRows(data?.snap ?? null), [data?.snap]);
+  const rows = useMemo(
+    () => toPaymentRows(data?.snap ?? null, operationalData ?? null),
+    [data?.snap, operationalData],
+  );
+  const isLoading = executive ? financeLoading : operationalLoading;
+  const isError = executive ? financeError : operationalError;
 
   const truckById = useMemo(() => {
     const m = new Map<string, NonNullable<NonNullable<typeof trucks>[number]>>();
@@ -160,14 +213,16 @@ export function PagamentosTab() {
             </button>
           ))}
         </div>
-        <Link
-          to="/pagamentos/novo"
-          className="flex h-9 shrink-0 items-center gap-1 rounded-xl bg-gold px-3 text-[13px] font-bold text-gold-foreground active:opacity-80"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Novo lançamento</span>
-          <span className="sm:hidden">Novo</span>
-        </Link>
+        {executive ? (
+          <Link
+            to="/pagamentos/novo"
+            className="flex h-9 shrink-0 items-center gap-1 rounded-xl bg-gold px-3 text-[13px] font-bold text-gold-foreground active:opacity-80"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Novo lançamento</span>
+            <span className="sm:hidden">Novo</span>
+          </Link>
+        ) : null}
       </div>
 
       {isLoading ? (
@@ -218,7 +273,7 @@ export function PagamentosTab() {
                     </span>
                   </div>
                 </div>
-                <span className="shrink-0 text-[14px] font-bold tabular-nums">{brl(p.amount)}</span>
+                {executive ? <span className="shrink-0 text-[14px] font-bold tabular-nums">{brl(p.amount)}</span> : null}
               </button>
             );
           })}
@@ -241,10 +296,12 @@ export function PagamentosTab() {
                   <dt className="text-muted-foreground">Descrição</dt>
                   <dd className="max-w-[55%] truncate font-semibold">{active.description}</dd>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Valor</dt>
-                  <dd className="font-bold tabular-nums">{brl(active.amount)}</dd>
-                </div>
+                {executive ? (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Valor</dt>
+                    <dd className="font-bold tabular-nums">{brl(active.amount)}</dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Vencimento</dt>
                   <dd className="font-semibold tabular-nums">{active.due_date ? dateBR(active.due_date) : "—"}</dd>
@@ -267,7 +324,7 @@ export function PagamentosTab() {
                     <dd className="font-semibold tabular-nums">{dateBR(active.paid_at)}</dd>
                   </div>
                 ) : null}
-                {active.truck_id ? (
+                {executive && active.truck_id ? (
                   <div className="border-t pt-2">
                     <div className="flex items-center justify-between gap-2">
                       <dd className="flex min-w-0 items-center gap-2 text-muted-foreground">
@@ -288,7 +345,7 @@ export function PagamentosTab() {
                   </div>
                 ) : null}
               </dl>
-                <div className="mt-4 space-y-2">
+                {executive ? <div className="mt-4 space-y-2">
                 {!active.paid ? (
                   <button
                     type="button"
@@ -344,7 +401,7 @@ export function PagamentosTab() {
                     {saving ? "Processando..." : "Reabrir lançamento"}
                   </button>
                 )}
-              </div>
+                </div> : null}
               </>
             ) : null}
           </div>

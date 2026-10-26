@@ -3097,6 +3097,28 @@ export type Database = {
         }
         Relationships: []
       }
+      payables_operational: {
+        Row: {
+          created_at: string
+          description: string
+          due_date: string
+          id: string
+          paid_at: string | null
+          status: string
+        }
+        Relationships: []
+      }
+      receivables_operational: {
+        Row: {
+          created_at: string
+          description: string
+          due_date: string
+          id: string
+          received_at: string | null
+          status: string
+        }
+        Relationships: []
+      }
       trucks_operational: {
         Row: {
           ai_description: string | null

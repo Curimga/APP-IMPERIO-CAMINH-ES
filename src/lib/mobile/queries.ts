@@ -1492,6 +1492,35 @@ export async function globalSearch(
   };
 }
 
+/** Contas operacionais para a Secretaria: somente descrição, situação e vencimento. */
+export function useOperationalPaymentStatus() {
+  const { roles } = useAuth();
+  const enabled = isSecretariaOnly(roles);
+  return useQuery({
+    queryKey: ["payment-status-operational", enabled],
+    enabled,
+    queryFn: async () => {
+      const [payablesR, receivablesR] = await Promise.all([
+        supabase
+          .from("payables_operational")
+          .select("id,description,due_date,status,paid_at,created_at")
+          .order("due_date", { ascending: true }),
+        supabase
+          .from("receivables_operational")
+          .select("id,description,due_date,status,received_at,created_at")
+          .order("due_date", { ascending: true }),
+      ]);
+      if (payablesR.error) throw payablesR.error;
+      if (receivablesR.error) throw receivablesR.error;
+      return {
+        payables: payablesR.data ?? [],
+        receivables: receivablesR.data ?? [],
+      };
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Busca global com debounce interno (não dispara enquanto não digita). */
 export function useGlobalSearch(q: string) {
   const { roles } = useAuth();
