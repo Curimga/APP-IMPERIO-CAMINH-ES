@@ -88,6 +88,7 @@ function NewEvent() {
   const [allDay, setAllDay] = useState(false);
   const [type, setType] = useState<Enums<"event_type">>("compromisso");
   const [recurrence, setRecurrence] = useState<string>("");
+  const [recurrenceUntil, setRecurrenceUntil] = useState("");
   const [reminder, setReminder] = useState(0);
   const [truckId, setTruckId] = useState<string | null>(search?.truck_id ?? null);
   const [amount, setAmount] = useState("");
@@ -104,6 +105,7 @@ function NewEvent() {
     setAllDay(Boolean(existing.all_day));
     setType(existing.type ?? "compromisso");
     setRecurrence(existing.recurrence ?? "");
+    setRecurrenceUntil(existing.recurrence_until ?? "");
     setReminder(existing.reminder_minutes ?? 0);
     setTruckId(existing.related_truck_id ?? null);
     setAmount(existing.amount != null && existing.amount > 0 ? String(existing.amount) : "");
@@ -126,6 +128,11 @@ function NewEvent() {
       hapticError();
       return;
     }
+    if (recurrence && !recurrenceUntil) {
+      setError("Informe a data final da recorrência.");
+      hapticError();
+      return;
+    }
     const value = parseMoney(amount);
     const payload: EventInput = {
       title: title.trim(),
@@ -134,6 +141,7 @@ function NewEvent() {
       type,
       related_truck_id: truckId,
       recurrence: recurrence || null,
+      recurrence_until: recurrence ? recurrenceUntil || null : null,
       reminder_minutes: reminder > 0 ? reminder : null,
       all_day: allDay,
       ...(canSeeAmount ? { amount: Number.isFinite(value) && value > 0 ? value : null } : {}),
@@ -212,6 +220,17 @@ function NewEvent() {
                 placeholder="Detalhes do compromisso (opcional)"
               />
             </Field>
+            {recurrence ? (
+              <Field label="Repetir até *" hint="A última ocorrência será criada nesta data.">
+                <input
+                  className={inputClass}
+                  type="date"
+                  min={date}
+                  value={recurrenceUntil}
+                  onChange={(event) => setRecurrenceUntil(event.target.value)}
+                />
+              </Field>
+            ) : null}
           </MobileCard>
         </FormSection>
 

@@ -244,6 +244,7 @@ export interface EventInput {
   related_truck_id?: string | null;
   amount?: number | null;
   recurrence?: string | null;
+  recurrence_until?: string | null;
   reminder_minutes?: number | null;
 }
 
@@ -271,8 +272,13 @@ function recurrenceEvents(input: EventInput, ownerId: string | null): TablesInse
     return [{ ...input, type: input.type ?? "compromisso", priority: input.priority ?? "media", owner_id: ownerId }];
   }
 
-  const until = new Date(first);
-  until.setMonth(until.getMonth() + 3);
+  const until = input.recurrence_until
+    ? new Date(`${input.recurrence_until}T23:59:59`)
+    : new Date(first);
+  if (!input.recurrence_until) until.setMonth(until.getMonth() + 3);
+  if (Number.isNaN(until.getTime()) || until < first) {
+    throw new Error("O fim da recorrência deve ser igual ou posterior ao início.");
+  }
 
   const rows: TablesInsert<"calendar_events">[] = [];
   let cursor = new Date(first);
@@ -283,6 +289,7 @@ function recurrenceEvents(input: EventInput, ownerId: string | null): TablesInse
       type: input.type ?? "compromisso",
       priority: input.priority ?? "media",
       owner_id: ownerId,
+      recurrence_until: input.recurrence_until ?? null,
     });
     cursor = addRecurrenceStep(cursor, recurrence);
   }

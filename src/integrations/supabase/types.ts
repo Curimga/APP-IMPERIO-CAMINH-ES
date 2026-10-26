@@ -198,6 +198,7 @@ export type Database = {
           owner_id: string | null
           priority: Database["public"]["Enums"]["deal_priority"]
           recurrence: string | null
+          recurrence_until: string | null
           related_deal_id: string | null
           related_payable_id: string | null
           related_service_id: string | null
@@ -218,6 +219,7 @@ export type Database = {
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["deal_priority"]
           recurrence?: string | null
+          recurrence_until?: string | null
           related_deal_id?: string | null
           related_payable_id?: string | null
           related_service_id?: string | null
@@ -238,6 +240,7 @@ export type Database = {
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["deal_priority"]
           recurrence?: string | null
+          recurrence_until?: string | null
           related_deal_id?: string | null
           related_payable_id?: string | null
           related_service_id?: string | null
@@ -3083,6 +3086,7 @@ export type Database = {
           owner_id: string | null
           priority: Database["public"]["Enums"]["deal_priority"]
           recurrence: string | null
+          recurrence_until: string | null
           related_company_vehicle_id: string | null
           related_truck_id: string | null
           reminder_minutes: number | null
