@@ -14,6 +14,7 @@ import {
   TRUCK_FLOW_STEPS,
   completeTruckFlowStep,
   createTruckFlow,
+  isTruckFlowDetailPath,
   reopenTruckFlowStep,
 } from "./truck-flow";
 
@@ -29,6 +30,12 @@ describe("definição aprovada do fluxo de caminhão", () => {
     ]);
     expect(TRUCK_FLOW_STEPS[0].manualOnly).toBe(true);
     expect(TRUCK_FLOW_STEPS[2].descriptionRequired).toBe(true);
+  });
+
+  it("distingue a lista da rota de detalhe por trucks.id", () => {
+    expect(isTruckFlowDetailPath("/fluxo-caminhao/truck-1")).toBe(true);
+    expect(isTruckFlowDetailPath("/fluxo-caminhao")).toBe(false);
+    expect(isTruckFlowDetailPath("/fluxo-caminhao/truck-1/outro")).toBe(false);
   });
 });
 

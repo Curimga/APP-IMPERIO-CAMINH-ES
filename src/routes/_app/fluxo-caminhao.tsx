@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { CheckCircle2, ChevronRight, CircleDot, Plus, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { canAccessTruckFlow, canEditTruckFlow } from "@/lib/mobile/perm";
 import {
   createTruckFlow,
+  isTruckFlowDetailPath,
   useAvailableTrucksForFlow,
   useTruckFlowAccess,
   useTruckFlows,
@@ -23,10 +24,15 @@ import {
 } from "@/components/mobile/ui";
 
 export const Route = createFileRoute("/_app/fluxo-caminhao")({
-  component: TruckFlowPage,
+  component: TruckFlowRoute,
 });
 
 type Tab = "in_progress" | "completed";
+
+function TruckFlowRoute() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  return isTruckFlowDetailPath(pathname) ? <Outlet /> : <TruckFlowPage />;
+}
 
 function TruckFlowPage() {
   const navigate = useNavigate();

@@ -233,3 +233,7 @@ export async function getTruckFlowEvidenceUrl(storagePath: string): Promise<stri
 export function truckFlowStepDefinition(stepKey: string) {
   return TRUCK_FLOW_STEPS.find((step) => step.key === stepKey);
 }
+
+export function isTruckFlowDetailPath(pathname: string) {
+  return /^\/fluxo-caminhao\/[^/]+$/.test(pathname);
+}
