@@ -160,7 +160,9 @@ const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 function Agenda() {
   const { roles, user } = useAuth();
   const showAmount = isFinanceExecutive(roles, user?.email);
-  const showPayments = showAmount || isSecretariaOnly(roles);
+  // A agenda é operacional para a Secretaria, mas pagamentos expõe dados
+  // financeiros e fica exclusivo do Executivo.
+  const showPayments = showAmount;
   const search = Route.useSearch();
   const today = spaTodayISO();
   const nav = useNavigate();

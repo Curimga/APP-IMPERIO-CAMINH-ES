@@ -68,12 +68,17 @@ describe("permissões individuais carregadas do banco", () => {
     expect(canApproveExpenses(null)).toBe(false);
   });
 
-  it("mantém Secretaria fora das rotas financeiras e permite apenas acompanhar a própria correção", () => {
+  it("mantém Secretaria nas rotas operacionais e fora dos valores consolidados", () => {
     expect(isPathAllowedForRoles("/financeiro", ["secretaria"])).toBe(false);
     expect(isPathAllowedForRoles("/garagem/abc/despesa", ["secretaria"])).toBe(false);
-    expect(isPathAllowedForRoles("/confirmacao-despesas", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/despesas", ["secretaria"])).toBe(false);
+    expect(isPathAllowedForRoles("/confirmacao-despesas", ["secretaria"])).toBe(false);
+    expect(isPathAllowedForRoles("/agenda", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/servicos", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/estoque", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/clientes", ["secretaria"])).toBe(true);
     expect(isPathAllowedForRoles("/secretaria/lancamento-do-dia", ["secretaria"])).toBe(true);
-    expect(isPathAllowedForRoles("/secretaria/aprovacao-executivo", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/secretaria/aprovacao-executivo", ["secretaria"])).toBe(false);
     expect(isPathAllowedForRoles("/fluxo-caminhao", ["secretaria"])).toBe(false);
   });
 });

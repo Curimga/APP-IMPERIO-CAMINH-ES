@@ -15,7 +15,7 @@ import {
   ReceiptText,
   FileCheck2,
 } from "lucide-react";
-import { canAccessTruckFlow, canApproveExpenses, MOBILE_MENU } from "@/lib/mobile/perm";
+import { canAccessTruckFlow, canApproveExpenses, isSecretariaOnly, MOBILE_MENU } from "@/lib/mobile/perm";
 import { useAuth } from "@/hooks/use-auth";
 import { MobileCard, ListRow } from "@/components/mobile/ui";
 import { useNotifications } from "@/lib/mobile/queries";
@@ -55,7 +55,7 @@ function Menu() {
     ...(canAccessTruckFlow(flowAccess?.access_level)
       ? [{ label: "Fluxo de caminhão", to: "/fluxo-caminhao", icon: "truck", description: "Etapas do caminhão" }]
       : []),
-    ...(canApproveExpenses(approvalAccess) || hasReturnedRequest
+    ...(canApproveExpenses(approvalAccess) || (hasReturnedRequest && !isSecretariaOnly(roles))
       ? [{ label: "Confirmação de despesas", to: "/confirmacao-despesas", icon: "file-check", description: "Aprovar ou devolver lançamentos" }]
       : []),
     ...(canApproveExpenses(approvalAccess)

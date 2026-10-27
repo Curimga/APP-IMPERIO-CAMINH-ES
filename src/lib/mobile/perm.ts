@@ -121,7 +121,9 @@ export function canSeeTruckFinance(roles: AppRole[], email?: string | null) {
 }
 
 export function canManageGeneralExpenses(roles: AppRole[]) {
-  return roles.some((role) => role === "admin" || role === "financeiro" || role === "secretaria");
+  // A Secretaria registra somente pelo fluxo "Lançamento do dia". A lista
+  // consolidada de despesas contém valores e fica restrita ao Executivo.
+  return isAdmin(roles);
 }
 
 export function canRegisterExpense(roles: AppRole[], email?: string | null) {
@@ -142,7 +144,6 @@ const SECRETARIA_ALLOWED_PREFIXES = [
   "/clientes",
   "/estoque",
   "/servicos",
-  "/despesas",
   "/menu",
   "/notificacoes",
   "/pendencias",
@@ -150,9 +151,7 @@ const SECRETARIA_ALLOWED_PREFIXES = [
   "/perfil",
   "/assistente",
   "/vendidos",
-  "/confirmacao-despesas",
   "/secretaria/lancamento-do-dia",
-  "/secretaria/aprovacao-executivo",
 ] as const;
 
 const SECRETARIA_BLOCKED_PREFIXES = [
