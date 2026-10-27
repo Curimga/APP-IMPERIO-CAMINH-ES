@@ -17,6 +17,11 @@ import {
   isTruckFlowDetailPath,
   reopenTruckFlowStep,
 } from "./truck-flow";
+import {
+  TRUCK_FLOW_DISPATCHER_GROUP_URL,
+  notifyDispatcherOnWhatsApp,
+  truckFlowDispatcherMessage,
+} from "./truck-flow-whatsapp";
 
 describe("definição aprovada do fluxo de caminhão", () => {
   it("mantém exatamente as seis etapas e a ordem aprovada", () => {
@@ -69,5 +74,56 @@ describe("ações do fluxo", () => {
   it("propaga erros do servidor sem alterar estado local", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "Etapa já concluída." } });
     await expect(completeTruckFlowStep("flow-1", "vistoria_despachante")).rejects.toThrow("Etapa já concluída.");
+  });
+});
+
+describe("aviso do despachante no WhatsApp", () => {
+  it("monta a mensagem exata com a placa do caminhão atual e abre o grupo", async () => {
+    const order: string[] = [];
+    const openGroup = vi.fn(() => order.push("open"));
+    const copyMessage = vi.fn(async () => {
+      order.push("copy");
+    });
+
+    await expect(
+      notifyDispatcherOnWhatsApp({ plate: "ABC1D23", openGroup, copyMessage }),
+    ).resolves.toEqual({
+      message: "Conseguem marcar a vistoria do caminhão placa ABC1D23, isso é possível?",
+      copied: true,
+    });
+    expect(openGroup).toHaveBeenCalledWith(TRUCK_FLOW_DISPATCHER_GROUP_URL);
+    expect(copyMessage).toHaveBeenCalledWith(
+      "Conseguem marcar a vistoria do caminhão placa ABC1D23, isso é possível?",
+    );
+    expect(order).toEqual(["open", "copy"]);
+    expect(truckFlowDispatcherMessage("OUTRA")).toBe(
+      "Conseguem marcar a vistoria do caminhão placa OUTRA, isso é possível?",
+    );
+  });
+
+  it("abre o grupo mesmo quando a cópia falha", async () => {
+    const openGroup = vi.fn();
+    const copyMessage = vi.fn().mockRejectedValue(new Error("Clipboard bloqueado"));
+
+    await expect(
+      notifyDispatcherOnWhatsApp({ plate: "XYZ9A99", openGroup, copyMessage }),
+    ).resolves.toEqual({
+      message: "Conseguem marcar a vistoria do caminhão placa XYZ9A99, isso é possível?",
+      copied: false,
+    });
+    expect(openGroup).toHaveBeenCalledWith(TRUCK_FLOW_DISPATCHER_GROUP_URL);
+    expect(copyMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("não abre nem copia mensagem sem placa", async () => {
+    const openGroup = vi.fn();
+    const copyMessage = vi.fn();
+
+    await expect(notifyDispatcherOnWhatsApp({ plate: "  ", openGroup, copyMessage })).resolves.toEqual({
+      message: null,
+      copied: false,
+    });
+    expect(openGroup).not.toHaveBeenCalled();
+    expect(copyMessage).not.toHaveBeenCalled();
   });
 });

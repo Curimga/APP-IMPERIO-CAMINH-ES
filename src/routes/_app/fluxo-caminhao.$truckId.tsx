@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, Clock3, ExternalLink, FileUp, History, Paperclip, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, Clipboard, Clock3, ExternalLink, FileUp, History, MessageCircle, Paperclip, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { canAccessTruckFlow, canEditTruckFlow } from "@/lib/mobile/perm";
 import {
@@ -29,6 +29,7 @@ import {
   inputClass,
 } from "@/components/mobile/ui";
 import { cn } from "@/lib/utils";
+import { notifyDispatcherOnWhatsApp, truckFlowDispatcherMessage } from "@/lib/mobile/truck-flow-whatsapp";
 
 export const Route = createFileRoute("/_app/fluxo-caminhao/$truckId")({
   component: TruckFlowDetailPage,
@@ -93,7 +94,7 @@ function TruckFlowDetailPage() {
 
       <div className="space-y-3">
         {flow.steps.map((step) => (
-          <StepCard key={step.id} flowId={flow.id} step={step} isEditor={isEditor} onChanged={() => refetch()} />
+          <StepCard key={step.id} flowId={flow.id} step={step} plate={flow.truck?.plate} isEditor={isEditor} onChanged={() => refetch()} />
         ))}
       </div>
 
@@ -123,13 +124,49 @@ function TruckPlate({ plate }: { plate: string | null | undefined }) {
   );
 }
 
-function StepCard({ flowId, step, isEditor, onChanged }: { flowId: string; step: TruckFlowStep; isEditor: boolean; onChanged: () => Promise<unknown> }) {
+function StepCard({ flowId, step, plate, isEditor, onChanged }: { flowId: string; step: TruckFlowStep; plate: string | null | undefined; isEditor: boolean; onChanged: () => Promise<unknown> }) {
   const definition = truckFlowStepDefinition(step.step_key);
   const fileInput = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"complete" | "reopen" | null>(null);
   const [notes, setNotes] = useState(step.notes ?? "");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [clipboardMessage, setClipboardMessage] = useState<string | null>(null);
+
+  const copyMessage = async (message: string) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Área de transferência indisponível.");
+      await navigator.clipboard.writeText(message);
+      setClipboardMessage(null);
+      toast.success("Mensagem copiada. Cole no grupo e toque em enviar.");
+    } catch {
+      setClipboardMessage(message);
+      toast.error("Não foi possível copiar. Use o botão ‘Copiar mensagem’ abaixo.");
+    }
+  };
+
+  const notifyDispatcher = async () => {
+    const message = truckFlowDispatcherMessage(plate);
+    if (!message) {
+      toast.error("Preencha a placa do caminhão antes de avisar o despachante.");
+      return;
+    }
+
+    const result = await notifyDispatcherOnWhatsApp({
+      plate,
+      openGroup: (url) => window.open(url, "_blank", "noopener,noreferrer"),
+      copyMessage: async (value) => {
+        if (!navigator.clipboard?.writeText) throw new Error("Área de transferência indisponível.");
+        await navigator.clipboard.writeText(value);
+      },
+    });
+    if (result.copied) {
+      toast.success("Mensagem copiada. Cole no grupo e toque em enviar.");
+    } else {
+      setClipboardMessage(result.message);
+      toast.error("Não foi possível copiar. Use o botão ‘Copiar mensagem’ abaixo.");
+    }
+  };
 
   const run = async () => {
     setSaving(true);
@@ -184,6 +221,23 @@ function StepCard({ flowId, step, isEditor, onChanged }: { flowId: string; step:
         </div>
 
         {step.notes && <div className="rounded-xl bg-muted/40 px-3 py-2 text-[13px]">{step.notes}</div>}
+
+        {isEditor && step.step_key === "vistoria_despachante" && (
+          <div className="space-y-2">
+            <button type="button" className={btnGhost} onClick={notifyDispatcher}>
+              <MessageCircle className="h-4 w-4 text-[#25D366]" /> Avisar despachante no WhatsApp
+            </button>
+            {clipboardMessage && (
+              <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-3">
+                <div className="text-[12px] font-semibold text-warning">Mensagem não copiada. Copie abaixo e cole no grupo do WhatsApp:</div>
+                <div className="rounded-lg bg-background px-3 py-2 text-[13px]">{clipboardMessage}</div>
+                <button type="button" className={btnGold} onClick={() => copyMessage(clipboardMessage)}>
+                  <Clipboard className="h-4 w-4" /> Copiar mensagem
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {step.evidence.length > 0 && (
           <div className="space-y-1.5">

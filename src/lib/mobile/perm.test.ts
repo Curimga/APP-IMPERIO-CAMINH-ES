@@ -62,6 +62,12 @@ describe("permissões individuais carregadas do banco", () => {
     expect(canAccessTruckFlow(null)).toBe(false);
   });
 
+  it("restringe a ação do WhatsApp do despachante ao editor", () => {
+    expect(canEditTruckFlow("editor")).toBe(true);
+    expect(canEditTruckFlow("viewer")).toBe(false);
+    expect(canEditTruckFlow(null)).toBe(false);
+  });
+
   it("não deriva aprovação de nome, e-mail ou cargo", () => {
     expect(canApproveExpenses(true)).toBe(true);
     expect(canApproveExpenses(false)).toBe(false);
