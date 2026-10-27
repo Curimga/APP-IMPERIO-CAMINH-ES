@@ -95,15 +95,19 @@ describe("aviso do despachante no WhatsApp", () => {
     expect(copyMessage).toHaveBeenCalledWith(
       "Conseguem marcar a vistoria do caminhão placa ABC1D23, isso é possível?",
     );
-    expect(order).toEqual(["open", "copy"]);
+    expect(order).toEqual(["copy", "open"]);
     expect(truckFlowDispatcherMessage("OUTRA")).toBe(
       "Conseguem marcar a vistoria do caminhão placa OUTRA, isso é possível?",
     );
   });
 
   it("abre o grupo mesmo quando a cópia falha", async () => {
-    const openGroup = vi.fn();
-    const copyMessage = vi.fn().mockRejectedValue(new Error("Clipboard bloqueado"));
+    const order: string[] = [];
+    const openGroup = vi.fn(() => order.push("open"));
+    const copyMessage = vi.fn(async () => {
+      order.push("copy");
+      throw new Error("Clipboard bloqueado");
+    });
 
     await expect(
       notifyDispatcherOnWhatsApp({ plate: "XYZ9A99", openGroup, copyMessage }),
@@ -113,6 +117,7 @@ describe("aviso do despachante no WhatsApp", () => {
     });
     expect(openGroup).toHaveBeenCalledWith(TRUCK_FLOW_DISPATCHER_GROUP_URL);
     expect(copyMessage).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["copy", "open"]);
   });
 
   it("não abre nem copia mensagem sem placa", async () => {

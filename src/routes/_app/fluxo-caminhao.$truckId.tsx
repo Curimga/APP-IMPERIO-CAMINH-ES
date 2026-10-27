@@ -155,10 +155,9 @@ function StepCard({ flowId, step, plate, isEditor, onChanged }: { flowId: string
     const result = await notifyDispatcherOnWhatsApp({
       plate,
       openGroup: (url) => window.open(url, "_blank", "noopener,noreferrer"),
-      copyMessage: async (value) => {
-        if (!navigator.clipboard?.writeText) throw new Error("Área de transferência indisponível.");
-        await navigator.clipboard.writeText(value);
-      },
+      // Start clipboard permission from the original button gesture.
+      copyMessage: (value) =>
+        navigator.clipboard?.writeText(value) ?? Promise.reject(new Error("Área de transferência indisponível.")),
     });
     if (result.copied) {
       toast.success("Mensagem copiada. Cole no grupo e toque em enviar.");
@@ -230,7 +229,13 @@ function StepCard({ flowId, step, plate, isEditor, onChanged }: { flowId: string
             {clipboardMessage && (
               <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-3">
                 <div className="text-[12px] font-semibold text-warning">Mensagem não copiada. Copie abaixo e cole no grupo do WhatsApp:</div>
-                <div className="rounded-lg bg-background px-3 py-2 text-[13px]">{clipboardMessage}</div>
+                <textarea
+                  aria-label="Mensagem para o despachante"
+                  className="min-h-24 w-full resize-none rounded-lg bg-background px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
+                  readOnly
+                  value={clipboardMessage}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
                 <button type="button" className={btnGold} onClick={() => copyMessage(clipboardMessage)}>
                   <Clipboard className="h-4 w-4" /> Copiar mensagem
                 </button>

@@ -22,10 +22,18 @@ export async function notifyDispatcherOnWhatsApp({
   const message = truckFlowDispatcherMessage(plate);
   if (!message) return { message: null, copied: false };
 
-  // Keep this synchronous from the click handler so browsers allow the new tab.
+  // Start writeText in the click handler before opening WhatsApp or awaiting.
+  let copyPromise: Promise<void>;
+  try {
+    copyPromise = copyMessage(message);
+  } catch {
+    copyPromise = Promise.reject(new Error("Não foi possível copiar a mensagem."));
+  }
+
+  // Keep the group opening in the same click handler to avoid popup blocking.
   openGroup(TRUCK_FLOW_DISPATCHER_GROUP_URL);
   try {
-    await copyMessage(message);
+    await copyPromise;
     return { message, copied: true };
   } catch {
     return { message, copied: false };
