@@ -110,9 +110,12 @@ function TruckFlowPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[15px] font-bold">{flow.truck ? truckTitle(flow.truck) : "Caminhão"}</div>
+                    <div className="mt-1 inline-flex rounded-md border border-foreground/15 bg-foreground/5 px-2 py-0.5 text-[13px] font-black tracking-[0.14em] text-foreground">
+                      {flow.truck?.plate?.toUpperCase() ?? "SEM PLACA"}
+                    </div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
                       {flow.status === "completed" ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <CircleDot className="h-3.5 w-3.5 text-warning" />}
-                      {completedSteps} de 8 etapas · {progress}%
+                      {flow.status === "completed" ? "Concluído" : "Em andamento"} · {completedSteps} de 8 etapas · {progress}%
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div className="h-full rounded-full bg-gold" style={{ width: `${progress}%` }} />

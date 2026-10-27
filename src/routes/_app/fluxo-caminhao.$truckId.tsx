@@ -48,14 +48,33 @@ function TruckFlowDetailPage() {
   const completed = flow.steps.filter((step) => step.status === "completed").length;
   const progress = Math.round((completed / 8) * 100);
   const currentStep = flow.steps.find((step) => step.status === "pending");
+  const isCompleted = flow.status === "completed";
 
   return (
     <div className="space-y-4">
       <PageHeader
         title={flow.truck ? truckTitle(flow.truck) : "Fluxo do caminhão"}
-        subtitle={`${completed} de 8 etapas concluídas · ${progress}% do fluxo`}
+        subtitle={`Placa: ${flow.truck?.plate?.toUpperCase() ?? "Sem placa"} · ${completed} de 8 etapas concluídas · ${progress}% do fluxo`}
         backTo="/fluxo-caminhao"
       />
+
+      <MobileCard className="border-foreground/15 bg-card p-4">
+        <div className="flex items-center gap-3">
+          <TruckPlate plate={flow.truck?.plate} />
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Placa do caminhão</div>
+            <div className="truncate text-[15px] font-bold">{flow.truck ? truckTitle(flow.truck) : "Caminhão"}</div>
+          </div>
+        </div>
+      </MobileCard>
+
+      {isCompleted && (
+        <MobileCard className="border-success/40 bg-success/10 p-6 text-center">
+          <CheckCircle2 className="mx-auto h-16 w-16 text-success" strokeWidth={2.5} />
+          <div className="mt-3 text-2xl font-black uppercase tracking-tight text-success">Fluxo concluído</div>
+          <div className="mt-1 text-sm text-muted-foreground">Todas as etapas deste caminhão foram finalizadas.</div>
+        </MobileCard>
+      )}
 
       <MobileCard className="overflow-hidden border-gold/30 bg-gradient-to-br from-gold/10 via-card to-card">
         <div className="p-4">
@@ -92,6 +111,14 @@ function TruckFlowDetailPage() {
           ))}
         </MobileCard>
       </section>
+    </div>
+  );
+}
+
+function TruckPlate({ plate }: { plate: string | null | undefined }) {
+  return (
+    <div className="flex h-12 min-w-28 shrink-0 items-center justify-center rounded-lg border-2 border-foreground/25 bg-background px-3 text-[15px] font-black tracking-[0.16em] text-foreground shadow-sm">
+      {plate?.toUpperCase() ?? "SEM PLACA"}
     </div>
   );
 }
