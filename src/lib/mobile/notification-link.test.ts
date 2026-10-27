@@ -11,7 +11,7 @@ import { notificationLinkTarget } from "./notification-link";
  */
 describe("notificationLinkTarget", () => {
   it("aceita rotas de lista conhecidas (com e sem barra final)", () => {
-    for (const path of ["/garagem", "/servicos", "/agenda", "/clientes", "/financeiro", "/estoque", "/vendidos", "/notificacoes", "/menu", "/pendencias", "/busca", "/perfil", "/fluxo-caminhao", "/confirmacao-despesas"]) {
+    for (const path of ["/garagem", "/servicos", "/agenda", "/clientes", "/financeiro", "/estoque", "/vendidos", "/notificacoes", "/menu", "/pendencias", "/busca", "/perfil", "/fluxo-caminhao", "/confirmacao-despesas", "/secretaria/lancamento-do-dia", "/secretaria/aprovacao-executivo"]) {
       expect(notificationLinkTarget(path)).toBe(path);
     }
     expect(notificationLinkTarget("/garagem/")).toBe("/garagem");

@@ -58,6 +58,9 @@ function Menu() {
     ...(canApproveExpenses(approvalAccess) || hasReturnedRequest
       ? [{ label: "Confirmação de despesas", to: "/confirmacao-despesas", icon: "file-check", description: "Aprovar ou devolver lançamentos" }]
       : []),
+    ...(canApproveExpenses(approvalAccess)
+      ? [{ label: "Aprovação do executivo", to: "/secretaria/aprovacao-executivo", icon: "file-check", description: "Aprovar lançamentos diários" }]
+      : []),
   ];
   const unread = data?.unread ?? 0;
 

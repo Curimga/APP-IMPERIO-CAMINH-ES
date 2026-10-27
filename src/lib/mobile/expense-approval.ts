@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 export type ExpenseApprovalStatus = "pending" | "returned" | "approved";
 export type ExpenseApprovalTarget = "general_expense" | "truck_expense" | "payable";
-export type ExpenseApprovalOrigin = "manual" | "service" | "inventory";
+export type ExpenseApprovalOrigin = "manual" | "service" | "inventory" | "daily";
 
 export interface ExpenseApprovalRequest {
   id: string;

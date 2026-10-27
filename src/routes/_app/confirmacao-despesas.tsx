@@ -272,7 +272,7 @@ function targetLabel(value: string) {
 }
 
 function originLabel(value: string) {
-  return value === "service" ? "Serviço" : value === "inventory" ? "Estoque" : "Manual";
+  return value === "service" ? "Serviço" : value === "inventory" ? "Estoque" : value === "daily" ? "Lançamento do dia" : "Manual";
 }
 
 function statusLabel(value: string) {

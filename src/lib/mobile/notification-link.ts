@@ -23,6 +23,8 @@ const LIST_ROUTES = new Set([
   "/perfil",
   "/fluxo-caminhao",
   "/confirmacao-despesas",
+  "/secretaria/lancamento-do-dia",
+  "/secretaria/aprovacao-executivo",
 ]);
 
 /**

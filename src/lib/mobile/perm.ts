@@ -151,6 +151,8 @@ const SECRETARIA_ALLOWED_PREFIXES = [
   "/assistente",
   "/vendidos",
   "/confirmacao-despesas",
+  "/secretaria/lancamento-do-dia",
+  "/secretaria/aprovacao-executivo",
 ] as const;
 
 const SECRETARIA_BLOCKED_PREFIXES = [
@@ -247,6 +249,13 @@ export const MOBILE_MENU: {
     icon: "receipt",
     allowed: canManageGeneralExpenses,
     description: "Despesas sem vínculo com caminhão",
+  },
+  {
+    label: "Lançamento do dia",
+    to: "/secretaria/lancamento-do-dia",
+    icon: "receipt",
+    allowed: (roles) => isSecretaria(roles),
+    description: "Registrar despesas da operação",
   },
   {
     label: "Vendidos",

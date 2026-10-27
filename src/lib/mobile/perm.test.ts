@@ -72,6 +72,8 @@ describe("permissões individuais carregadas do banco", () => {
     expect(isPathAllowedForRoles("/financeiro", ["secretaria"])).toBe(false);
     expect(isPathAllowedForRoles("/garagem/abc/despesa", ["secretaria"])).toBe(false);
     expect(isPathAllowedForRoles("/confirmacao-despesas", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/secretaria/lancamento-do-dia", ["secretaria"])).toBe(true);
+    expect(isPathAllowedForRoles("/secretaria/aprovacao-executivo", ["secretaria"])).toBe(true);
     expect(isPathAllowedForRoles("/fluxo-caminhao", ["secretaria"])).toBe(false);
   });
 });

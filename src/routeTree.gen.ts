@@ -38,6 +38,8 @@ import { Route as AppGaragemTruckIdRouteImport } from './routes/_app/garagem.$tr
 import { Route as AppGaragemNovoRouteImport } from './routes/_app/garagem.novo'
 import { Route as AppGaragemSimularVendaRouteImport } from './routes/_app/garagem.simular-venda'
 import { Route as AppPagamentosNovoRouteImport } from './routes/_app/pagamentos.novo'
+import { Route as AppSecretariaAprovacaoExecutivoRouteImport } from './routes/_app/secretaria.aprovacao-executivo'
+import { Route as AppSecretariaLancamentoDoDiaRouteImport } from './routes/_app/secretaria.lancamento-do-dia'
 import { Route as AppServicosNovoRouteImport } from './routes/_app/servicos.novo'
 import { Route as AppGaragemTruckIdDespesaRouteImport } from './routes/_app/garagem.$truckId.despesa'
 
@@ -185,6 +187,18 @@ const AppPagamentosNovoRoute = AppPagamentosNovoRouteImport.update({
   path: '/pagamentos/novo',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSecretariaAprovacaoExecutivoRoute =
+  AppSecretariaAprovacaoExecutivoRouteImport.update({
+    id: '/secretaria/aprovacao-executivo',
+    path: '/secretaria/aprovacao-executivo',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppSecretariaLancamentoDoDiaRoute =
+  AppSecretariaLancamentoDoDiaRouteImport.update({
+    id: '/secretaria/lancamento-do-dia',
+    path: '/secretaria/lancamento-do-dia',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppServicosNovoRoute = AppServicosNovoRouteImport.update({
   id: '/novo',
   path: '/novo',
@@ -226,6 +240,8 @@ export interface FileRoutesByFullPath {
   '/garagem/novo': typeof AppGaragemNovoRoute
   '/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
   '/pagamentos/novo': typeof AppPagamentosNovoRoute
+  '/secretaria/aprovacao-executivo': typeof AppSecretariaAprovacaoExecutivoRoute
+  '/secretaria/lancamento-do-dia': typeof AppSecretariaLancamentoDoDiaRoute
   '/servicos/novo': typeof AppServicosNovoRoute
   '/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
 }
@@ -258,6 +274,8 @@ export interface FileRoutesByTo {
   '/garagem/novo': typeof AppGaragemNovoRoute
   '/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
   '/pagamentos/novo': typeof AppPagamentosNovoRoute
+  '/secretaria/aprovacao-executivo': typeof AppSecretariaAprovacaoExecutivoRoute
+  '/secretaria/lancamento-do-dia': typeof AppSecretariaLancamentoDoDiaRoute
   '/servicos/novo': typeof AppServicosNovoRoute
   '/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
 }
@@ -292,6 +310,8 @@ export interface FileRoutesById {
   '/_app/garagem/novo': typeof AppGaragemNovoRoute
   '/_app/garagem/simular-venda': typeof AppGaragemSimularVendaRoute
   '/_app/pagamentos/novo': typeof AppPagamentosNovoRoute
+  '/_app/secretaria/aprovacao-executivo': typeof AppSecretariaAprovacaoExecutivoRoute
+  '/_app/secretaria/lancamento-do-dia': typeof AppSecretariaLancamentoDoDiaRoute
   '/_app/servicos/novo': typeof AppServicosNovoRoute
   '/_app/garagem/$truckId/despesa': typeof AppGaragemTruckIdDespesaRoute
 }
@@ -326,6 +346,8 @@ export interface FileRouteTypes {
     | '/garagem/novo'
     | '/garagem/simular-venda'
     | '/pagamentos/novo'
+    | '/secretaria/aprovacao-executivo'
+    | '/secretaria/lancamento-do-dia'
     | '/servicos/novo'
     | '/garagem/$truckId/despesa'
   fileRoutesByTo: FileRoutesByTo
@@ -358,6 +380,8 @@ export interface FileRouteTypes {
     | '/garagem/novo'
     | '/garagem/simular-venda'
     | '/pagamentos/novo'
+    | '/secretaria/aprovacao-executivo'
+    | '/secretaria/lancamento-do-dia'
     | '/servicos/novo'
     | '/garagem/$truckId/despesa'
   id:
@@ -391,6 +415,8 @@ export interface FileRouteTypes {
     | '/_app/garagem/novo'
     | '/_app/garagem/simular-venda'
     | '/_app/pagamentos/novo'
+    | '/_app/secretaria/aprovacao-executivo'
+    | '/_app/secretaria/lancamento-do-dia'
     | '/_app/servicos/novo'
     | '/_app/garagem/$truckId/despesa'
   fileRoutesById: FileRoutesById
@@ -607,6 +633,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPagamentosNovoRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/secretaria/aprovacao-executivo': {
+      id: '/_app/secretaria/aprovacao-executivo'
+      path: '/secretaria/aprovacao-executivo'
+      fullPath: '/secretaria/aprovacao-executivo'
+      preLoaderRoute: typeof AppSecretariaAprovacaoExecutivoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/secretaria/lancamento-do-dia': {
+      id: '/_app/secretaria/lancamento-do-dia'
+      path: '/secretaria/lancamento-do-dia'
+      fullPath: '/secretaria/lancamento-do-dia'
+      preLoaderRoute: typeof AppSecretariaLancamentoDoDiaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/servicos/novo': {
       id: '/_app/servicos/novo'
       path: '/novo'
@@ -729,6 +769,8 @@ interface AppRouteChildren {
   AppVendidosRoute: typeof AppVendidosRoute
   AppIndexRoute: typeof AppIndexRoute
   AppPagamentosNovoRoute: typeof AppPagamentosNovoRoute
+  AppSecretariaAprovacaoExecutivoRoute: typeof AppSecretariaAprovacaoExecutivoRoute
+  AppSecretariaLancamentoDoDiaRoute: typeof AppSecretariaLancamentoDoDiaRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -750,6 +792,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppVendidosRoute: AppVendidosRoute,
   AppIndexRoute: AppIndexRoute,
   AppPagamentosNovoRoute: AppPagamentosNovoRoute,
+  AppSecretariaAprovacaoExecutivoRoute: AppSecretariaAprovacaoExecutivoRoute,
+  AppSecretariaLancamentoDoDiaRoute: AppSecretariaLancamentoDoDiaRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

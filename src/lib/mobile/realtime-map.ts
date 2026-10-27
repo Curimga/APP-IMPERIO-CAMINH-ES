@@ -222,6 +222,8 @@ export const TABLE_KEYS: RealtimeKeyMap = {
   expense_approval_requests: [
     "expense-approval-requests",
     "expense-approval",
+    "daily-expenses",
+    "daily-expenses-approval",
     "finance-mobile",
     "dashboard-snapshot",
     "notifications",
