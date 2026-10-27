@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   canAccessBanking,
   canSeeServices,
+  canSeeFinanceNotifications,
   isFinanceExecutive,
   isSecretariaOnly,
 } from "@/lib/mobile/perm";
@@ -1429,7 +1430,9 @@ export function isFinancialNotification(n: {
 /** Notificações do usuário (filtra avisos financeiros fora do Financeiro). */
 export function useNotifications(opts?: { includeFinance?: boolean }) {
   const { data: session } = useAuthSession();
-  const includeFinance = opts?.includeFinance ?? false;
+  const { roles, user } = useAuth();
+  const includeFinance =
+    opts?.includeFinance ?? canSeeFinanceNotifications(roles, user?.email, user?.id);
   return useQuery({
     queryKey: ["notifications-mobile", includeFinance],
     enabled: !!session?.user,

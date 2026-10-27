@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { isFinancialNotification } from "@/lib/mobile/queries";
 import { notificationLinkTarget } from "@/lib/mobile/notification-link";
 import { markNotificationsRead } from "@/lib/mobile/actions";
+import { canSeeFinanceNotifications } from "@/lib/mobile/perm";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,7 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 
 export function NotificationsBell() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const [items, setItems] = useState<Notif[]>([]);
   const unread = items.filter((i) => !i.read).length;
 
@@ -44,7 +45,11 @@ export function NotificationsBell() {
       .or(`user_id.eq.${user.id},user_id.is.null`)
       .order("created_at", { ascending: false })
       .limit(15);
-    setItems(((data as Notif[]) ?? []).filter((n) => !isFinancialNotification(n)));
+    setItems(
+      ((data as Notif[]) ?? []).filter(
+        (n) => canSeeFinanceNotifications(roles, user.email, user.id) || !isFinancialNotification(n),
+      ),
+    );
   };
 
   useEffect(() => {
@@ -56,7 +61,7 @@ export function NotificationsBell() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [roles, user?.id]);
 
   const markAllRead = async () => {
     if (!user) return;
