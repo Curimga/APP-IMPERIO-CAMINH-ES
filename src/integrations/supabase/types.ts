@@ -947,27 +947,27 @@ export type Database = {
       }
       expense_approval_requests: {
         Row: {
-          amount: number; correction_note: string | null; created_at: string; created_by: string
+           amount: number; bank: string | null; correction_note: string | null; created_at: string; created_by: string
           description: string; due_date: string | null; final_category: string | null; id: string
-          notes: string | null; occurred_at: string | null; origin: string; payment_method: string | null
+           notes: string | null; occurred_at: string | null; origin: string; payment_method: string | null; urgent: boolean
           proposed_category: string | null; proposed_status: string | null; resulting_id: string | null
           resulting_table: string | null; reviewed_at: string | null; reviewed_by: string | null
           service_id: string | null; status: string; stock_movement_id: string | null; submitted_at: string
           supplier: string | null; target_type: string; truck_id: string | null; updated_at: string
         }
         Insert: {
-          amount?: number; correction_note?: string | null; created_at?: string; created_by: string
+           amount?: number; bank?: string | null; correction_note?: string | null; created_at?: string; created_by: string
           description: string; due_date?: string | null; final_category?: string | null; id?: string
-          notes?: string | null; occurred_at?: string | null; origin: string; payment_method?: string | null
+           notes?: string | null; occurred_at?: string | null; origin: string; payment_method?: string | null; urgent?: boolean
           proposed_category?: string | null; proposed_status?: string | null; resulting_id?: string | null
           resulting_table?: string | null; reviewed_at?: string | null; reviewed_by?: string | null
           service_id?: string | null; status?: string; stock_movement_id?: string | null; submitted_at?: string
           supplier?: string | null; target_type: string; truck_id?: string | null; updated_at?: string
         }
         Update: {
-          amount?: number; correction_note?: string | null; created_at?: string; created_by?: string
+           amount?: number; bank?: string | null; correction_note?: string | null; created_at?: string; created_by?: string
           description?: string; due_date?: string | null; final_category?: string | null; id?: string
-          notes?: string | null; occurred_at?: string | null; origin?: string; payment_method?: string | null
+           notes?: string | null; occurred_at?: string | null; origin?: string; payment_method?: string | null; urgent?: boolean
           proposed_category?: string | null; proposed_status?: string | null; resulting_id?: string | null
           resulting_table?: string | null; reviewed_at?: string | null; reviewed_by?: string | null
           service_id?: string | null; status?: string; stock_movement_id?: string | null; submitted_at?: string
@@ -3307,6 +3307,19 @@ export type Database = {
           p_supplier?: string | null
           p_target_type: string
           p_truck_id?: string | null
+        }
+        Returns: string
+      }
+      submit_daily_expense: {
+        Args: {
+          p_amount: number
+          p_bank?: string | null
+          p_description: string
+          p_notes?: string | null
+          p_occurred_at?: string | null
+          p_payment_method: string
+          p_supplier: string
+          p_urgent?: boolean
         }
         Returns: string
       }

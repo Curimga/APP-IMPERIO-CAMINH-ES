@@ -26,6 +26,8 @@ export interface ExpenseApprovalRequest {
   occurred_at: string | null;
   due_date: string | null;
   supplier: string | null;
+  urgent: boolean;
+  bank: string | null;
   notes: string | null;
   payment_method: string | null;
   proposed_status: string | null;
@@ -63,6 +65,17 @@ export interface ExpenseApprovalInput {
   notes?: string | null;
   payment_method?: string | null;
   proposed_status?: string | null;
+}
+
+export interface DailyExpenseInput {
+  supplier: string;
+  amount: number;
+  payment_method: string;
+  description: string;
+  urgent: boolean;
+  bank?: string | null;
+  occurred_at?: string | null;
+  notes?: string | null;
 }
 
 export function useExpenseApprovalAccess() {
@@ -131,6 +144,21 @@ export async function submitExpenseConfirmation(input: ExpenseApprovalInput): Pr
     p_notes: input.notes ?? null,
     p_payment_method: input.payment_method ?? null,
     p_proposed_status: input.proposed_status ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function submitDailyExpense(input: DailyExpenseInput): Promise<string> {
+  const { data, error } = await supabase.rpc("submit_daily_expense", {
+    p_supplier: input.supplier,
+    p_amount: input.amount,
+    p_payment_method: input.payment_method,
+    p_description: input.description,
+    p_urgent: input.urgent,
+    p_bank: input.bank ?? null,
+    p_occurred_at: toDate(input.occurred_at),
+    p_notes: input.notes ?? null,
   });
   if (error) throw new Error(error.message);
   return data;
