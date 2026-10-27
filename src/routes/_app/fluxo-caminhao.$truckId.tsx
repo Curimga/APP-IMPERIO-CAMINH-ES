@@ -8,6 +8,7 @@ import {
   getTruckFlowEvidenceUrl,
   removeTruckFlowEvidence,
   reopenTruckFlowStep,
+  TRUCK_FLOW_STEPS,
   truckFlowStepDefinition,
   uploadTruckFlowEvidence,
   useTruckFlow,
@@ -30,6 +31,7 @@ import {
 } from "@/components/mobile/ui";
 import { cn } from "@/lib/utils";
 import { notifyDispatcherOnWhatsApp, truckFlowDispatcherMessage } from "@/lib/mobile/truck-flow-whatsapp";
+import { TruckFlowPainter } from "@/components/mobile/truck-flow-painter";
 
 export const Route = createFileRoute("/_app/fluxo-caminhao/$truckId")({
   component: TruckFlowDetailPage,
@@ -47,7 +49,8 @@ function TruckFlowDetailPage() {
 
   const isEditor = canEditTruckFlow(access?.access_level);
   const completed = flow.steps.filter((step) => step.status === "completed").length;
-  const progress = Math.round((completed / 8) * 100);
+  const totalSteps = Math.max(flow.steps.length, TRUCK_FLOW_STEPS.length);
+  const progress = totalSteps > 0 ? Math.round((completed / totalSteps) * 100) : 0;
   const currentStep = flow.steps.find((step) => step.status === "pending");
   const isCompleted = flow.status === "completed";
 
@@ -55,7 +58,7 @@ function TruckFlowDetailPage() {
     <div className="space-y-4">
       <PageHeader
         title={flow.truck ? truckTitle(flow.truck) : "Fluxo do caminhão"}
-        subtitle={`Placa: ${flow.truck?.plate?.toUpperCase() ?? "Sem placa"} · ${completed} de 8 etapas concluídas · ${progress}% do fluxo`}
+        subtitle={`Placa: ${flow.truck?.plate?.toUpperCase() ?? "Sem placa"} · ${completed} de ${totalSteps} etapas concluídas · ${progress}% do fluxo`}
         backTo="/fluxo-caminhao"
       />
 
@@ -220,6 +223,10 @@ function StepCard({ flowId, step, plate, isEditor, onChanged }: { flowId: string
         </div>
 
         {step.notes && <div className="rounded-xl bg-muted/40 px-3 py-2 text-[13px]">{step.notes}</div>}
+
+        {isEditor && step.step_key === "orcamento_estetica_externa" && (
+          <TruckFlowPainter step={step} onChanged={onChanged} />
+        )}
 
         {isEditor && step.step_key === "vistoria_despachante" && (
           <div className="space-y-2">

@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 export const TRUCK_FLOW_STEPS = [
   { key: "vistoria_despachante", label: "Vistoria despachante", order: 1, description: "Conferência inicial com o despachante.", descriptionRequired: false },
   { key: "vistoria_josemar", label: "Vistoria Josemar", order: 2, description: "Avaliação e validação do veículo.", descriptionRequired: false },
-  { key: "orcamento_estetica", label: "Orçamento de estética interna e externa", order: 3, description: "Levantar orçamento e prazos para aprovação.", descriptionRequired: true },
-  { key: "pecas_diana", label: "Solicitação de peças Diana", order: 4, description: "Registrar as peças necessárias para o veículo.", descriptionRequired: true },
-  { key: "virada_documento", label: "Virada de documento", order: 5, description: "Realizar a virada e conferência documental.", descriptionRequired: false },
-  { key: "nf_entrada", label: "Emissão de nota fiscal de entrada", order: 6, description: "Emitir e anexar a nota fiscal de entrada.", descriptionRequired: false },
-  { key: "lavagem_anuncio", label: "Lavagem para fotos e anúncio", order: 7, description: "Preparar o veículo para fotos e publicação.", descriptionRequired: false },
-  { key: "venda_nf_saida", label: "Venda e emissão de nota fiscal de saída", order: 8, description: "Concluir a venda e emitir a nota fiscal de saída.", descriptionRequired: false },
+  { key: "orcamento_estetica_interna", label: "Orçamento de estética interna", order: 3, description: "Levantar orçamento e prazo da estética interna.", descriptionRequired: true },
+  { key: "orcamento_estetica_externa", label: "Orçamento de estética externa", order: 4, description: "Levantar orçamento e prazo da estética externa.", descriptionRequired: true },
+  { key: "pecas_diana", label: "Solicitação de peças Diana", order: 5, description: "Registrar as peças necessárias para o veículo.", descriptionRequired: true },
+  { key: "virada_documento", label: "Virada de documento", order: 6, description: "Realizar a virada e conferência documental.", descriptionRequired: false },
+  { key: "nf_entrada", label: "Emissão de nota fiscal de entrada", order: 7, description: "Emitir e anexar a nota fiscal de entrada.", descriptionRequired: false },
+  { key: "lavagem_anuncio", label: "Lavagem para fotos e anúncio", order: 8, description: "Preparar o veículo para fotos e publicação.", descriptionRequired: false },
+  { key: "venda_nf_saida", label: "Venda e emissão de nota fiscal de saída", order: 9, description: "Concluir a venda e emitir a nota fiscal de saída.", descriptionRequired: false },
 ] as const;
 
 export type TruckFlowStepKey = (typeof TRUCK_FLOW_STEPS)[number]["key"];

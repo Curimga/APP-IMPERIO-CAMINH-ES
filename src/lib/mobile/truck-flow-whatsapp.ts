@@ -2,7 +2,7 @@ export const TRUCK_FLOW_DISPATCHER_GROUP_URL =
   "https://chat.whatsapp.com/JQN4ecdqcxq1zm42sVqXSc?s=cl&p=i&mlu=4&ilr=4&iam=0";
 
 export const TRUCK_FLOW_DISPATCHER_MESSAGE =
-  "Conseguem marcar a vistoria do caminhão placa {PLACA}, isso é possível?";
+  "Conseguem marcar a vistoria do caminhão placa {PLACA}?";
 
 export function truckFlowDispatcherMessage(plate: string | null | undefined): string | null {
   const cleanPlate = plate?.trim();

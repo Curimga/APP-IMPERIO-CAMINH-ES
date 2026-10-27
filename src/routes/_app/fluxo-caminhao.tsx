@@ -72,7 +72,7 @@ function TruckFlowPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Fluxo de caminhão" subtitle="Oito etapas para preparar, vender e documentar o veículo" backTo="/menu" />
+       <PageHeader title="Fluxo de caminhão" subtitle="Nove etapas para preparar, vender e documentar o veículo" backTo="/menu" />
 
       {isEditor && availableTrucks.length > 0 && (
         <MobileCard className="space-y-3 p-4">
@@ -101,7 +101,8 @@ function TruckFlowPage() {
         <MobileCard className="divide-y divide-border/60">
           {visible.map((flow) => {
             const completedSteps = flow.steps.filter((step) => step.status === "completed").length;
-            const progress = Math.round((completedSteps / 8) * 100);
+            const totalSteps = flow.steps.length;
+            const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
             return (
               <Link key={flow.id} to="/fluxo-caminhao/$truckId" params={{ truckId: flow.truck_id }} className="block px-3 py-3 active:bg-muted/50">
                 <div className="flex items-center gap-3">
@@ -115,7 +116,7 @@ function TruckFlowPage() {
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
                       {flow.status === "completed" ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <CircleDot className="h-3.5 w-3.5 text-warning" />}
-                      {flow.status === "completed" ? "Concluído" : "Em andamento"} · {completedSteps} de 8 etapas · {progress}%
+                      {flow.status === "completed" ? "Concluído" : "Em andamento"} · {completedSteps} de {totalSteps} etapas · {progress}%
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div className="h-full rounded-full bg-gold" style={{ width: `${progress}%` }} />

@@ -28,14 +28,16 @@ describe("definição aprovada do fluxo de caminhão", () => {
     expect(TRUCK_FLOW_STEPS.map(({ key, label, order }) => ({ key, label, order }))).toEqual([
       { key: "vistoria_despachante", label: "Vistoria despachante", order: 1 },
       { key: "vistoria_josemar", label: "Vistoria Josemar", order: 2 },
-      { key: "orcamento_estetica", label: "Orçamento de estética interna e externa", order: 3 },
-      { key: "pecas_diana", label: "Solicitação de peças Diana", order: 4 },
-      { key: "virada_documento", label: "Virada de documento", order: 5 },
-      { key: "nf_entrada", label: "Emissão de nota fiscal de entrada", order: 6 },
-      { key: "lavagem_anuncio", label: "Lavagem para fotos e anúncio", order: 7 },
-      { key: "venda_nf_saida", label: "Venda e emissão de nota fiscal de saída", order: 8 },
+      { key: "orcamento_estetica_interna", label: "Orçamento de estética interna", order: 3 },
+      { key: "orcamento_estetica_externa", label: "Orçamento de estética externa", order: 4 },
+      { key: "pecas_diana", label: "Solicitação de peças Diana", order: 5 },
+      { key: "virada_documento", label: "Virada de documento", order: 6 },
+      { key: "nf_entrada", label: "Emissão de nota fiscal de entrada", order: 7 },
+      { key: "lavagem_anuncio", label: "Lavagem para fotos e anúncio", order: 8 },
+      { key: "venda_nf_saida", label: "Venda e emissão de nota fiscal de saída", order: 9 },
     ]);
     expect(TRUCK_FLOW_STEPS[2].descriptionRequired).toBe(true);
+    expect(TRUCK_FLOW_STEPS[3].descriptionRequired).toBe(true);
   });
 
   it("distingue a lista da rota de detalhe por trucks.id", () => {
@@ -56,17 +58,17 @@ describe("ações do fluxo", () => {
 
   it("envia conclusão e reabertura às RPCs atômicas", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
-    await completeTruckFlowStep("flow-1", "orcamento_estetica", "Orçamento aprovado em 5 dias");
+    await completeTruckFlowStep("flow-1", "orcamento_estetica_interna", "Orçamento interno aprovado em 5 dias");
     expect(rpc).toHaveBeenCalledWith("complete_truck_flow_step", {
       p_flow_id: "flow-1",
-      p_step_key: "orcamento_estetica",
-      p_notes: "Orçamento aprovado em 5 dias",
+      p_step_key: "orcamento_estetica_interna",
+      p_notes: "Orçamento interno aprovado em 5 dias",
     });
 
-    await reopenTruckFlowStep("flow-1", "orcamento_estetica", "Prazo atualizado");
+    await reopenTruckFlowStep("flow-1", "orcamento_estetica_externa", "Prazo atualizado");
     expect(rpc).toHaveBeenCalledWith("reopen_truck_flow_step", {
       p_flow_id: "flow-1",
-      p_step_key: "orcamento_estetica",
+      p_step_key: "orcamento_estetica_externa",
       p_reason: "Prazo atualizado",
     });
   });
@@ -88,16 +90,16 @@ describe("aviso do despachante no WhatsApp", () => {
     await expect(
       notifyDispatcherOnWhatsApp({ plate: "ABC1D23", openGroup, copyMessage }),
     ).resolves.toEqual({
-      message: "Conseguem marcar a vistoria do caminhão placa ABC1D23, isso é possível?",
+      message: "Conseguem marcar a vistoria do caminhão placa ABC1D23?",
       copied: true,
     });
     expect(openGroup).toHaveBeenCalledWith(TRUCK_FLOW_DISPATCHER_GROUP_URL);
     expect(copyMessage).toHaveBeenCalledWith(
-      "Conseguem marcar a vistoria do caminhão placa ABC1D23, isso é possível?",
+      "Conseguem marcar a vistoria do caminhão placa ABC1D23?",
     );
     expect(order).toEqual(["copy", "open"]);
     expect(truckFlowDispatcherMessage("OUTRA")).toBe(
-      "Conseguem marcar a vistoria do caminhão placa OUTRA, isso é possível?",
+      "Conseguem marcar a vistoria do caminhão placa OUTRA?",
     );
   });
 
@@ -112,7 +114,7 @@ describe("aviso do despachante no WhatsApp", () => {
     await expect(
       notifyDispatcherOnWhatsApp({ plate: "XYZ9A99", openGroup, copyMessage }),
     ).resolves.toEqual({
-      message: "Conseguem marcar a vistoria do caminhão placa XYZ9A99, isso é possível?",
+      message: "Conseguem marcar a vistoria do caminhão placa XYZ9A99?",
       copied: false,
     });
     expect(openGroup).toHaveBeenCalledWith(TRUCK_FLOW_DISPATCHER_GROUP_URL);
