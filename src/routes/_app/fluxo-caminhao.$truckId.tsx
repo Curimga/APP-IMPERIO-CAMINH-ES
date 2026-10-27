@@ -46,14 +46,31 @@ function TruckFlowDetailPage() {
 
   const isEditor = canEditTruckFlow(access?.access_level);
   const completed = flow.steps.filter((step) => step.status === "completed").length;
+  const progress = Math.round((completed / 8) * 100);
+  const currentStep = flow.steps.find((step) => step.status === "pending");
 
   return (
     <div className="space-y-4">
       <PageHeader
         title={flow.truck ? truckTitle(flow.truck) : "Fluxo do caminhão"}
-        subtitle={`${completed} de 6 etapas concluídas`}
+        subtitle={`${completed} de 8 etapas concluídas · ${progress}% do fluxo`}
         backTo="/fluxo-caminhao"
       />
+
+      <MobileCard className="overflow-hidden border-gold/30 bg-gradient-to-br from-gold/10 via-card to-card">
+        <div className="p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-gold-dark">Próxima etapa</div>
+              <div className="mt-1 text-[17px] font-bold">{currentStep ? truckFlowStepDefinition(currentStep.step_key)?.label : "Fluxo concluído"}</div>
+            </div>
+            <div className="text-right text-[13px] font-bold text-gold-dark">{progress}%</div>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-gold/15">
+            <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </MobileCard>
 
       <div className="space-y-3">
         {flow.steps.map((step) => (
@@ -131,6 +148,7 @@ function StepCard({ flowId, step, isEditor, onChanged }: { flowId: string; step:
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-bold">{definition?.label ?? step.step_key}</div>
+            {definition?.description && <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{definition.description}</div>}
             <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
               <Clock3 className="h-3 w-3" />
               {step.completed_at ? `Concluída em ${dateBR(step.completed_at)}` : "Pendente"}

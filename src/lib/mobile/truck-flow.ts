@@ -3,12 +3,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const TRUCK_FLOW_STEPS = [
-  { key: "crm_add", label: "Adição ao CRM", order: 1, manualOnly: true, descriptionRequired: false },
-  { key: "vistoria_marcelo", label: "Vistoria Marcelo", order: 2, manualOnly: false, descriptionRequired: false },
-  { key: "necessidades", label: "O que precisa ser feito no caminhão", order: 3, manualOnly: false, descriptionRequired: true },
-  { key: "retorno_servico", label: "Volta do caminhão do serviço", order: 4, manualOnly: false, descriptionRequired: false },
-  { key: "vistoria_banco", label: "Vistoria banco", order: 5, manualOnly: false, descriptionRequired: false },
-  { key: "documentacao", label: "Documentação", order: 6, manualOnly: false, descriptionRequired: false },
+  { key: "vistoria_despachante", label: "Vistoria despachante", order: 1, description: "Conferência inicial com o despachante.", descriptionRequired: false },
+  { key: "vistoria_josemar", label: "Vistoria Josemar", order: 2, description: "Avaliação e validação do veículo.", descriptionRequired: false },
+  { key: "orcamento_estetica", label: "Orçamento de estética interna e externa", order: 3, description: "Levantar orçamento e prazos para aprovação.", descriptionRequired: true },
+  { key: "pecas_diana", label: "Solicitação de peças Diana", order: 4, description: "Registrar as peças necessárias para o veículo.", descriptionRequired: true },
+  { key: "virada_documento", label: "Virada de documento", order: 5, description: "Realizar a virada e conferência documental.", descriptionRequired: false },
+  { key: "nf_entrada", label: "Emissão de nota fiscal de entrada", order: 6, description: "Emitir e anexar a nota fiscal de entrada.", descriptionRequired: false },
+  { key: "lavagem_anuncio", label: "Lavagem para fotos e anúncio", order: 7, description: "Preparar o veículo para fotos e publicação.", descriptionRequired: false },
+  { key: "venda_nf_saida", label: "Venda e emissão de nota fiscal de saída", order: 8, description: "Concluir a venda e emitir a nota fiscal de saída.", descriptionRequired: false },
 ] as const;
 
 export type TruckFlowStepKey = (typeof TRUCK_FLOW_STEPS)[number]["key"];

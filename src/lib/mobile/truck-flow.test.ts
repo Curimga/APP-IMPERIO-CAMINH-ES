@@ -21,14 +21,15 @@ import {
 describe("definição aprovada do fluxo de caminhão", () => {
   it("mantém exatamente as seis etapas e a ordem aprovada", () => {
     expect(TRUCK_FLOW_STEPS.map(({ key, label, order }) => ({ key, label, order }))).toEqual([
-      { key: "crm_add", label: "Adição ao CRM", order: 1 },
-      { key: "vistoria_marcelo", label: "Vistoria Marcelo", order: 2 },
-      { key: "necessidades", label: "O que precisa ser feito no caminhão", order: 3 },
-      { key: "retorno_servico", label: "Volta do caminhão do serviço", order: 4 },
-      { key: "vistoria_banco", label: "Vistoria banco", order: 5 },
-      { key: "documentacao", label: "Documentação", order: 6 },
+      { key: "vistoria_despachante", label: "Vistoria despachante", order: 1 },
+      { key: "vistoria_josemar", label: "Vistoria Josemar", order: 2 },
+      { key: "orcamento_estetica", label: "Orçamento de estética interna e externa", order: 3 },
+      { key: "pecas_diana", label: "Solicitação de peças Diana", order: 4 },
+      { key: "virada_documento", label: "Virada de documento", order: 5 },
+      { key: "nf_entrada", label: "Emissão de nota fiscal de entrada", order: 6 },
+      { key: "lavagem_anuncio", label: "Lavagem para fotos e anúncio", order: 7 },
+      { key: "venda_nf_saida", label: "Venda e emissão de nota fiscal de saída", order: 8 },
     ]);
-    expect(TRUCK_FLOW_STEPS[0].manualOnly).toBe(true);
     expect(TRUCK_FLOW_STEPS[2].descriptionRequired).toBe(true);
   });
 
@@ -50,23 +51,23 @@ describe("ações do fluxo", () => {
 
   it("envia conclusão e reabertura às RPCs atômicas", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
-    await completeTruckFlowStep("flow-1", "necessidades", "Trocar pneus");
+    await completeTruckFlowStep("flow-1", "orcamento_estetica", "Orçamento aprovado em 5 dias");
     expect(rpc).toHaveBeenCalledWith("complete_truck_flow_step", {
       p_flow_id: "flow-1",
-      p_step_key: "necessidades",
-      p_notes: "Trocar pneus",
+      p_step_key: "orcamento_estetica",
+      p_notes: "Orçamento aprovado em 5 dias",
     });
 
-    await reopenTruckFlowStep("flow-1", "necessidades", "Serviço incompleto");
+    await reopenTruckFlowStep("flow-1", "orcamento_estetica", "Prazo atualizado");
     expect(rpc).toHaveBeenCalledWith("reopen_truck_flow_step", {
       p_flow_id: "flow-1",
-      p_step_key: "necessidades",
-      p_reason: "Serviço incompleto",
+      p_step_key: "orcamento_estetica",
+      p_reason: "Prazo atualizado",
     });
   });
 
   it("propaga erros do servidor sem alterar estado local", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "Etapa já concluída." } });
-    await expect(completeTruckFlowStep("flow-1", "crm_add")).rejects.toThrow("Etapa já concluída.");
+    await expect(completeTruckFlowStep("flow-1", "vistoria_despachante")).rejects.toThrow("Etapa já concluída.");
   });
 });
