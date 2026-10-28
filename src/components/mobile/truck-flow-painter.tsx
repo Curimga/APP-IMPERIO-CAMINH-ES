@@ -8,13 +8,15 @@ import { floodFill } from "@/lib/mobile/truck-flow-painter";
 
 const PALETTE = ["#111827", "#ffffff", "#dc2626", "#f97316", "#facc15", "#16a34a", "#2563eb", "#7c3aed", "#ec4899", "#a16207"];
 const PAINTING_PREFIX = "pintura-colorida-";
+// Imagem padrão do aplicativo, compartilhada por todos os fluxos.
+const DEFAULT_TRUCK_PAINTING_STORAGE_PATH = "7774953a-3eb2-4160-becb-8c126a193123/e3fe6e6f-2a0a-4389-830f-fdfc47c59268.png";
 
 export function TruckFlowPainter({ step, onChanged }: { step: TruckFlowStep; onChanged: () => Promise<unknown> }) {
-  const [original, setOriginal] = useState<TruckFlowEvidence | null>(() => findOriginal(step.evidence));
+  const [original, setOriginal] = useState<ImageSource | null>(() => findOriginal());
   const [savedPainting, setSavedPainting] = useState<TruckFlowEvidence | null>(() => findSavedPainting(step.evidence));
 
   useEffect(() => {
-    setOriginal(findOriginal(step.evidence));
+    setOriginal(findOriginal());
     setSavedPainting(findSavedPainting(step.evidence));
   }, [step.evidence]);
 
@@ -33,7 +35,9 @@ export function TruckFlowPainter({ step, onChanged }: { step: TruckFlowStep; onC
   );
 }
 
-function PainterCanvas({ original, savedPainting, step, onChanged }: { original: TruckFlowEvidence; savedPainting: TruckFlowEvidence | null; step: TruckFlowStep; onChanged: () => Promise<unknown> }) {
+type ImageSource = { url: string; fileName: string; storagePath?: string; evidence?: TruckFlowEvidence };
+
+function PainterCanvas({ original, savedPainting, step, onChanged }: { original: ImageSource; savedPainting: TruckFlowEvidence | null; step: TruckFlowStep; onChanged: () => Promise<unknown> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
   const undoRef = useRef<ImageData[]>([]);
@@ -52,12 +56,19 @@ function PainterCanvas({ original, savedPainting, step, onChanged }: { original:
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      const originalUrlPromise = original.evidence
+        ? getTruckFlowEvidenceUrl(original.evidence.storage_path)
+        : original.storagePath
+          ? getTruckFlowEvidenceUrl(original.storagePath)
+          : Promise.resolve(original.url);
       const [currentUrl, originalUrl] = await Promise.all([
-        getTruckFlowEvidenceUrl((savedPainting ?? original).storage_path),
-        getTruckFlowEvidenceUrl(original.storage_path),
+        savedPainting ? getTruckFlowEvidenceUrl(savedPainting.storage_path) : originalUrlPromise,
+        originalUrlPromise,
       ]);
       const image = new Image();
       const baseImage = new Image();
+      image.crossOrigin = "anonymous";
+      baseImage.crossOrigin = "anonymous";
       image.onload = () => {
         if (cancelled || !canvasRef.current) return;
         const canvas = canvasRef.current;
@@ -211,8 +222,12 @@ function PainterCanvas({ original, savedPainting, step, onChanged }: { original:
   );
 }
 
-function findOriginal(evidence: TruckFlowEvidence[]) {
-  return evidence.find((item) => item.mime_type === "image/png" && !item.file_name.startsWith(PAINTING_PREFIX)) ?? null;
+function findOriginal(): ImageSource {
+  return {
+    url: "",
+    fileName: "volvo-fh-para-colorir.png",
+    storagePath: DEFAULT_TRUCK_PAINTING_STORAGE_PATH,
+  };
 }
 
 function findSavedPainting(evidence: TruckFlowEvidence[]) {
