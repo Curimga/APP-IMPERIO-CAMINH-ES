@@ -136,16 +136,36 @@ export function useTruckFlow(truckId: string | undefined) {
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
-      const { data: truck, error: truckError } = await supabase
-        .from("trucks_operational")
-        .select("id, brand, model, plate, year, color, status")
-        .eq("id", truckId!)
-        .maybeSingle();
+      const [{ data: truck, error: truckError }, { data: template, error: templateError }] = await Promise.all([
+        supabase
+          .from("trucks_operational")
+          .select("id, brand, model, plate, year, color, status")
+          .eq("id", truckId!)
+          .maybeSingle(),
+        supabase
+          .from("truck_flow_evidence")
+          .select("*")
+          .eq("file_name", "volvo-fh-para-colorir.png")
+          .eq("mime_type", "image/png")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+      ]);
       if (truckError) throw truckError;
+      if (templateError) throw templateError;
+      const steps = [...data.steps]
+        .sort((a, b) => a.display_order - b.display_order)
+        .map((step) => {
+          if (step.step_key !== "orcamento_estetica_externa" || step.evidence.length > 0 || !template) return step;
+          return {
+            ...step,
+            evidence: [{ ...template, id: `default-painting-${step.id}`, flow_step_id: step.id }],
+          };
+        });
       return {
         ...data,
         truck: truck as TruckSummary | null,
-        steps: [...data.steps].sort((a, b) => a.display_order - b.display_order),
+        steps,
         events: [...data.events].sort((a, b) => b.created_at.localeCompare(a.created_at)),
       } as TruckFlow;
     },

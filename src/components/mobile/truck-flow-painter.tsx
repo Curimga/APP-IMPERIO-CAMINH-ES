@@ -22,7 +22,7 @@ export function TruckFlowPainter({ step, onChanged }: { step: TruckFlowStep; onC
     <MobileCard className="space-y-4 border-gold/30 bg-gradient-to-br from-gold/10 via-card to-card p-4">
       <div>
         <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-gold-dark">Pintura do caminhão</div>
-        <div className="mt-1 text-[13px] text-muted-foreground">Toque nas áreas fechadas para testar as cores do caminhão.</div>
+        <div className="mt-1 text-[13px] text-muted-foreground">Imagem padrão do sistema. Toque nas áreas fechadas para testar as cores do caminhão.</div>
       </div>
       {!original ? (
         <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">A imagem original ainda não está disponível neste fluxo.</div>

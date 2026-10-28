@@ -5,9 +5,6 @@ import {
   authorizeRequest,
   buildPayload,
   extractRecord,
-  isFinancialNotification,
-  isFinancialRecipientAllowed,
-  parseUserIdList,
   type NotificationRecord,
 } from "./logic.ts";
 
@@ -18,9 +15,7 @@ import {
  * (ver docs/PUSH-NOTIFICACOES.md). Preserva a regra do app:
  *   - notificação com user_id  -> só o dono;
  *   - notificação sem user_id  -> todos os dispositivos inscritos;
- *   - notificação financeira   -> Executivo (admin fora da lista de bloqueio)
- *     OU UUIDs individuais autorizados via PUSH_FINANCE_INDIVIDUAL_USER_IDS
- *     (usuário autorizado entra por UUID, sem receber cargo de admin).
+ *   - notificações de compromissos e pagamentos -> todos os usuários inscritos.
  *
  * Autenticação: o webhook não traz JWT de usuário; a função exige o cabeçalho
  * `x-webhook-secret` (comparação constante) ANTES de qualquer trabalho. Por
@@ -58,58 +53,12 @@ const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY");
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY");
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:contato@imperiocaminhoes.com.br";
 const WEBHOOK_SECRET = Deno.env.get("PUSH_WEBHOOK_SECRET");
-const FINANCE_INDIVIDUAL_USER_IDS = parseUserIdList(
-  Deno.env.get("PUSH_FINANCE_INDIVIDUAL_USER_IDS"),
-);
 
 const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function financeAllowedUserIds(userIds: string[]): Promise<Set<string>> {
-  const allowed = new Set<string>();
-  if (!userIds.length) return allowed;
-
-  const { data: adminRows } = await service
-    .from("user_roles")
-    .select("user_id")
-    .in("user_id", userIds)
-    .eq("role", "admin");
-  const adminIds = new Set((adminRows ?? []).map((row) => (row as { user_id: string }).user_id));
-
-  await Promise.all(
-    userIds.map(async (id) => {
-      const isAdmin = adminIds.has(id);
-      if (!isAdmin && !FINANCE_INDIVIDUAL_USER_IDS.has(id)) return;
-
-      let email: string | null = null;
-      if (isAdmin) {
-        try {
-          const { data: info } = await service.auth.admin.getUserById(id);
-          email = info?.user?.email ?? null;
-        } catch {
-          /* sem e-mail confirmado: a regra abaixo já nega */
-        }
-      }
-
-      if (
-        isFinancialRecipientAllowed({
-          isAdmin,
-          email,
-          userId: id,
-          individualUserIds: FINANCE_INDIVIDUAL_USER_IDS,
-        })
-      ) {
-        allowed.add(id);
-      }
-    }),
-  );
-  return allowed;
-}
-
 async function deliver(record: NotificationRecord) {
-  const financial = isFinancialNotification(record);
-
   let query = service
     .from("push_subscriptions")
     .select("id, user_id, endpoint, p256dh, auth");
@@ -117,13 +66,7 @@ async function deliver(record: NotificationRecord) {
   const { data: subscriptionsData, error: subsError } = await query;
   if (subsError) return { error: subsError.message };
 
-  let subscriptions = (subscriptionsData ?? []) as SubscriptionRow[];
-  if (financial && subscriptions.length) {
-    const allowed = await financeAllowedUserIds(
-      Array.from(new Set(subscriptions.map((s) => s.user_id))),
-    );
-    subscriptions = subscriptions.filter((s) => allowed.has(s.user_id));
-  }
+  const subscriptions = (subscriptionsData ?? []) as SubscriptionRow[];
 
   const payload = JSON.stringify(buildPayload(record));
   let sent = 0;
@@ -163,7 +106,7 @@ async function deliver(record: NotificationRecord) {
     }
   }
 
-  return { financial, total: subscriptions.length, sent, skipped, expired, failed };
+  return { total: subscriptions.length, sent, skipped, expired, failed };
 }
 
 Deno.serve(async (req) => {

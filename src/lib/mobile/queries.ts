@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   canAccessBanking,
   canSeeServices,
-  canSeeFinanceNotifications,
   isFinanceExecutive,
   isSecretariaOnly,
 } from "@/lib/mobile/perm";
@@ -1427,12 +1426,12 @@ export function isFinancialNotification(n: {
   );
 }
 
-/** Notificações do usuário (filtra avisos financeiros fora do Financeiro). */
+/** Notificações do usuário. Compromissos e pagamentos são globais. */
 export function useNotifications(opts?: { includeFinance?: boolean }) {
   const { data: session } = useAuthSession();
-  const { roles, user } = useAuth();
-  const includeFinance =
-    opts?.includeFinance ?? canSeeFinanceNotifications(roles, user?.email, user?.id);
+  // Mantém a opção por compatibilidade com as chamadas existentes, mas todos
+  // os usuários devem visualizar avisos de compromissos e pagamentos.
+  const includeFinance = opts?.includeFinance ?? true;
   return useQuery({
     queryKey: ["notifications-mobile", includeFinance],
     enabled: !!session?.user,

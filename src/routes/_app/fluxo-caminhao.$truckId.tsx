@@ -254,7 +254,12 @@ function StepCard({ flowId, step, plate, isEditor, onChanged }: { flowId: string
         {step.evidence.length > 0 && (
           <div className="space-y-1.5">
             {step.evidence.map((evidence) => (
-              <EvidenceRow key={evidence.id} evidence={evidence} canRemove={isEditor} onChanged={onChanged} />
+              <EvidenceRow
+                key={evidence.id}
+                evidence={evidence}
+                canRemove={isEditor && evidence.file_name !== "volvo-fh-para-colorir.png"}
+                onChanged={onChanged}
+              />
             ))}
           </div>
         )}
