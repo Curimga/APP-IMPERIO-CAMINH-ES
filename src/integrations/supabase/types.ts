@@ -934,9 +934,9 @@ export type Database = {
         Relationships: []
       }
       expense_approval_access: {
-        Row: { can_approve: boolean; created_at: string; user_id: string }
-        Insert: { can_approve?: boolean; created_at?: string; user_id: string }
-        Update: { can_approve?: boolean; created_at?: string; user_id?: string }
+         Row: { can_approve: boolean; can_approve_own: boolean; created_at: string; user_id: string }
+         Insert: { can_approve?: boolean; can_approve_own?: boolean; created_at?: string; user_id: string }
+         Update: { can_approve?: boolean; can_approve_own?: boolean; created_at?: string; user_id?: string }
         Relationships: []
       }
       expense_approval_events: {
@@ -948,12 +948,12 @@ export type Database = {
       expense_approval_requests: {
         Row: {
            amount: number; bank: string | null; correction_note: string | null; created_at: string; created_by: string
-          description: string; due_date: string | null; final_category: string | null; id: string
+           company_vehicle_id: string | null; description: string; due_date: string | null; employee_id: string | null; final_category: string | null; id: string
            notes: string | null; occurred_at: string | null; origin: string; payment_method: string | null; urgent: boolean
           proposed_category: string | null; proposed_status: string | null; resulting_id: string | null
           resulting_table: string | null; reviewed_at: string | null; reviewed_by: string | null
-          service_id: string | null; status: string; stock_movement_id: string | null; submitted_at: string
-          supplier: string | null; target_type: string; truck_id: string | null; updated_at: string
+           inventory_item_id: string | null; service_id: string | null; shared: boolean; status: string; stock_movement_id: string | null; submitted_at: string
+           supplier: string | null; target_type: string; truck_id: string | null; updated_at: string; warranty_id: string | null; bank_account_id: string | null
         }
         Insert: {
            amount?: number; bank?: string | null; correction_note?: string | null; created_at?: string; created_by: string
