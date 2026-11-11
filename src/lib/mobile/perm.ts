@@ -151,6 +151,7 @@ const SECRETARIA_ALLOWED_PREFIXES = [
   "/perfil",
   "/assistente",
   "/vendidos",
+  "/fluxo-caminhao",
   "/secretaria/lancamento-do-dia",
 ] as const;
 

@@ -80,19 +80,11 @@ export interface TruckFlow {
 }
 
 export function useTruckFlowAccess() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   return useQuery({
     queryKey: ["truck-flow-access", user?.id],
     enabled: Boolean(user),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("truck_flow_access")
-        .select("user_id, access_level")
-        .eq("user_id", user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data as TruckFlowAccess | null;
-    },
+    queryFn: async () => (profile?.status === "active" ? { user_id: user!.id, access_level: "editor" as const } : null),
   });
 }
 

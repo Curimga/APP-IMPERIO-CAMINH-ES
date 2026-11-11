@@ -85,6 +85,6 @@ describe("permissões individuais carregadas do banco", () => {
     expect(isPathAllowedForRoles("/clientes", ["secretaria"])).toBe(true);
     expect(isPathAllowedForRoles("/secretaria/lancamento-do-dia", ["secretaria"])).toBe(true);
     expect(isPathAllowedForRoles("/secretaria/aprovacao-executivo", ["secretaria"])).toBe(false);
-    expect(isPathAllowedForRoles("/fluxo-caminhao", ["secretaria"])).toBe(false);
+    expect(isPathAllowedForRoles("/fluxo-caminhao", ["secretaria"])).toBe(true);
   });
 });
