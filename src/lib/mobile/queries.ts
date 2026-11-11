@@ -5,6 +5,7 @@ import { spaTodayISO } from "@/lib/mobile/dates";
 import { useAuth } from "@/hooks/use-auth";
 import {
   canAccessBanking,
+  canSeeFinanceNotifications,
   canSeeServices,
   isFinanceExecutive,
   isSecretariaOnly,
@@ -1429,11 +1430,12 @@ export function isFinancialNotification(n: {
 /** Notificações do usuário. Compromissos e pagamentos são globais. */
 export function useNotifications(opts?: { includeFinance?: boolean }) {
   const { data: session } = useAuthSession();
-  // Mantém a opção por compatibilidade com as chamadas existentes, mas todos
-  // os usuários devem visualizar avisos de compromissos e pagamentos.
-  const includeFinance = opts?.includeFinance ?? true;
+  const { roles, user } = useAuth();
+  const includeFinance =
+    (opts?.includeFinance ?? true) &&
+    canSeeFinanceNotifications(roles, user?.email, user?.id);
   return useQuery({
-    queryKey: ["notifications-mobile", includeFinance],
+    queryKey: ["notifications-mobile", includeFinance, user?.id],
     enabled: !!session?.user,
     queryFn: async () => {
       if (!session?.user) return { items: [], unread: 0 };

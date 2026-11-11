@@ -5,6 +5,9 @@ import {
   authorizeRequest,
   buildPayload,
   extractRecord,
+  isFinancialNotification,
+  isFinancialRecipientAllowed,
+  parseUserIdList,
   type NotificationRecord,
 } from "./logic.ts";
 
@@ -53,12 +56,33 @@ const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY");
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY");
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:contato@imperiocaminhoes.com.br";
 const WEBHOOK_SECRET = Deno.env.get("PUSH_WEBHOOK_SECRET");
+const INDIVIDUAL_FINANCE_USER_IDS = parseUserIdList(
+  Deno.env.get("PUSH_FINANCE_INDIVIDUAL_USER_IDS"),
+);
 
 const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
 async function deliver(record: NotificationRecord) {
+  if (isFinancialNotification(record)) {
+    if (!record.user_id) return { skipped: "financial_notification_without_recipient" };
+
+    const [{ data: authUser }, { data: roleRows }] = await Promise.all([
+      service.auth.admin.getUserById(record.user_id),
+      service.from("user_roles").select("role").eq("user_id", record.user_id),
+    ]);
+    const isAdmin = (roleRows ?? []).some((row) => row.role === "admin");
+    if (!isFinancialRecipientAllowed({
+      isAdmin,
+      email: authUser.user?.email,
+      userId: record.user_id,
+      individualUserIds: INDIVIDUAL_FINANCE_USER_IDS,
+    })) {
+      return { skipped: "financial_recipient_not_allowed" };
+    }
+  }
+
   let query = service
     .from("push_subscriptions")
     .select("id, user_id, endpoint, p256dh, auth");

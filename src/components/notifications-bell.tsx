@@ -3,6 +3,8 @@ import { Bell, Check } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { isFinancialNotification } from "@/lib/mobile/queries";
+import { canSeeFinanceNotifications } from "@/lib/mobile/perm";
 import { notificationLinkTarget } from "@/lib/mobile/notification-link";
 import { markNotificationsRead } from "@/lib/mobile/actions";
 import { Button } from "@/components/ui/button";
@@ -31,7 +33,7 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 
 export function NotificationsBell() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const [items, setItems] = useState<Notif[]>([]);
   const unread = items.filter((i) => !i.read).length;
 
@@ -43,7 +45,12 @@ export function NotificationsBell() {
       .or(`user_id.eq.${user.id},user_id.is.null`)
       .order("created_at", { ascending: false })
       .limit(15);
-    setItems((data as Notif[]) ?? []);
+    const canSeeFinance = canSeeFinanceNotifications(roles, user.email, user.id);
+    setItems(
+      ((data as Notif[]) ?? []).filter(
+        (item) => canSeeFinance || !isFinancialNotification(item),
+      ),
+    );
   };
 
   useEffect(() => {
@@ -55,7 +62,7 @@ export function NotificationsBell() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, roles, user?.email]);
 
   const markAllRead = async () => {
     if (!user) return;
