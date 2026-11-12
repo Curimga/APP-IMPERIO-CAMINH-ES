@@ -193,10 +193,20 @@ export function useRealtimeSync(extraKeys: string[] = []) {
       if (event === "SIGNED_OUT") teardownChannel();
     });
 
+    // Eventos Realtime podem ser perdidos durante suspensão do navegador ou
+    // troca de rede. A leitura no retorno reconcilia o cache com o banco.
+    const reconcile = () => {
+      if (!disposed && (document.visibilityState === "visible" || navigator.onLine)) invalidateAll();
+    };
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+
     return () => {
       disposed = true;
       clearInterval(alertsTimer);
       authListener.subscription.unsubscribe();
+      window.removeEventListener("online", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
       teardownChannel();
     };
   }, [qc, signature]);

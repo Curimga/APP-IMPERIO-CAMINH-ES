@@ -3216,6 +3216,17 @@ export type Database = {
       }
     }
     Functions: {
+      create_bank_transfer: {
+        Args: {
+          p_amount: number
+          p_created_by?: string | null
+          p_description?: string | null
+          p_from_account_id: string
+          p_occurred_at?: string
+          p_to_account_id: string
+        }
+        Returns: undefined
+      }
       add_truck_flow_evidence: {
         Args: {
           p_file_name: string

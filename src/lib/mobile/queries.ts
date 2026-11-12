@@ -1244,32 +1244,15 @@ export function useCreateBankTransfer() {
       if (!input.fromAccountId || !input.toAccountId) throw new Error("Escolha as duas contas.");
       if (input.fromAccountId === input.toAccountId) throw new Error("Escolha contas diferentes.");
       if (amount <= 0) throw new Error("Informe um valor maior que zero.");
-      const occurredAt = new Date().toISOString();
       const description = input.description?.trim() || "Transferência entre contas";
-
-      const { error: outError } = await supabase.from("bank_transactions").insert({
-        type: "saida",
-        amount,
-        bank_account_id: input.fromAccountId,
-        transfer_account_id: input.toAccountId,
-        source: "transferencia",
-        description: `Transferência - saída - ${description}`,
-        occurred_at: occurredAt,
-        created_by: user?.id ?? null,
+      const { error } = await supabase.rpc("create_bank_transfer", {
+        p_from_account_id: input.fromAccountId,
+        p_to_account_id: input.toAccountId,
+        p_amount: amount,
+        p_description: description,
+        p_created_by: user?.id ?? null,
       });
-      if (outError) throw outError;
-
-      const { error: inError } = await supabase.from("bank_transactions").insert({
-        type: "entrada",
-        amount,
-        bank_account_id: input.toAccountId,
-        transfer_account_id: input.fromAccountId,
-        source: "transferencia",
-        description: `Transferência - entrada - ${description}`,
-        occurred_at: occurredAt,
-        created_by: user?.id ?? null,
-      });
-      if (inError) throw inError;
+      if (error) throw error;
     },
     onSuccess: () => {
       ["banking-mobile", "finance-mobile", "bank_transactions", "bank_accounts", "dashboard-snapshot"].forEach((key) =>
