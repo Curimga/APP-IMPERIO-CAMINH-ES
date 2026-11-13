@@ -25,6 +25,7 @@ import {
   needsIosInstallHint,
   pruneSeenIds,
   releaseSubscription,
+  restorePushSubscription,
   saveSeenIds,
   selectNewNotifications,
   syncSubscription,
@@ -68,8 +69,13 @@ export function usePushEngine(): PushNotificationsValue {
     setPermission(getNotificationPermission());
     setIosNeedsInstall(needsIosInstallHint());
     const sub = await getCurrentSubscription();
-    setSubscribed(Boolean(sub));
-    if (sub && userId) await syncSubscription(userId);
+    if (sub && userId) {
+      await syncSubscription(userId);
+      setSubscribed(true);
+      return;
+    }
+    const restored = userId ? await restorePushSubscription(userId) : false;
+    setSubscribed(restored);
   }, []);
 
   useEffect(() => {

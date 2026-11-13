@@ -7,6 +7,7 @@ import {
   pushEnableMessage,
   selectNewNotifications,
   pruneSeenIds,
+  PUSH_OPT_IN_STORAGE_KEY,
 } from "./push";
 import { isFinancialNotification } from "./queries";
 
@@ -97,5 +98,11 @@ describe("deduplicação — selects de novas notificações", () => {
     const visibleToNonExec = all.filter((n) => !isFinancialNotification(n));
     expect(selectNewNotifications(visibleToNonExec, []).map((i) => i.id)).toEqual(["o"]);
     expect(selectNewNotifications(all, []).length).toBe(2);
+  });
+});
+
+describe("persistência da ativação", () => {
+  it("expõe uma chave estável para recuperar inscrições perdidas", () => {
+    expect(PUSH_OPT_IN_STORAGE_KEY).toBe("imperio:push-opt-in");
   });
 });

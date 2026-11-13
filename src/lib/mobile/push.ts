@@ -19,6 +19,7 @@ import { notificationLinkTarget } from "./notification-link";
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
 export const SEEN_IDS_STORAGE_KEY = "imperio:notified-ids";
+export const PUSH_OPT_IN_STORAGE_KEY = "imperio:push-opt-in";
 const SEEN_IDS_LIMIT = 60;
 
 export function isPushConfigured(): boolean {
@@ -143,6 +144,25 @@ export function getNotificationPermission(): NotificationPermission | "unsupport
   return Notification.permission;
 }
 
+function setPushOptIn(enabled: boolean): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    if (enabled) localStorage.setItem(PUSH_OPT_IN_STORAGE_KEY, "1");
+    else localStorage.removeItem(PUSH_OPT_IN_STORAGE_KEY);
+  } catch {
+    /* armazenamento indisponível */
+  }
+}
+
+function hasPushOptIn(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    return localStorage.getItem(PUSH_OPT_IN_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function needsIosInstallHint(): boolean {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
@@ -260,6 +280,7 @@ export async function enablePush(userId: string): Promise<PushEnableResult> {
       }));
 
     await saveSubscription(userId, subscription);
+    setPushOptIn(true);
     return { ok: true, background: true };
   } catch {
     return { ok: false, reason: "error", message: pushEnableMessage("error") };
@@ -268,6 +289,7 @@ export async function enablePush(userId: string): Promise<PushEnableResult> {
 
 /** Desativa no aparelho: remove a linha do banco e cancela a subscription. */
 export async function disablePush(userId: string): Promise<void> {
+  setPushOptIn(false);
   const subscription = await getCurrentSubscription();
   if (!subscription) return;
   try {
@@ -288,18 +310,41 @@ export async function syncSubscription(userId: string): Promise<boolean> {
   if (!subscription) return false;
   try {
     await saveSubscription(userId, subscription);
+    setPushOptIn(true);
     return true;
   } catch {
     return false;
   }
 }
 
-/** Remove do banco a subscription do usuário que saiu (aparelho compartilhado). */
+/** Recria uma inscrição perdida sem pedir nova confirmação ao usuário. */
+export async function restorePushSubscription(userId: string): Promise<boolean> {
+  if (!userId || !hasPushOptIn() || getNotificationPermission() !== "granted") return false;
+  const vapidKey = getVapidPublicKey();
+  if (!vapidKey || !isPushSupported() || isInsecureContext()) return false;
+  try {
+    const registration = await getRegistration();
+    if (!registration) return false;
+    const existing = await registration.pushManager.getSubscription();
+    const subscription =
+      existing ??
+      (await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      }));
+    await saveSubscription(userId, subscription);
+    setPushOptIn(true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Desvincula a subscription do usuário que saiu sem desativá-la no aparelho. */
 export async function releaseSubscription(userId: string): Promise<void> {
   const subscription = await getCurrentSubscription();
   if (!subscription) return;
   await removeSubscription(userId, subscription.endpoint).catch(() => undefined);
-  await subscription.unsubscribe().catch(() => undefined);
 }
 
 function readSeenIds(): string[] {
