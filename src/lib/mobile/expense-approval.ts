@@ -76,6 +76,14 @@ export interface DailyExpenseInput {
   bank?: string | null;
   occurred_at?: string | null;
   notes?: string | null;
+  registration_type?: string | null;
+  category?: string | null;
+  supplier_id?: string | null;
+  bank_account_id?: string | null;
+  employee_id?: string | null;
+  inventory_item_id?: string | null;
+  truck_id?: string | null;
+  shared?: boolean;
 }
 
 export function useExpenseApprovalAccess() {
@@ -159,6 +167,14 @@ export async function submitDailyExpense(input: DailyExpenseInput): Promise<stri
     p_bank: input.bank ?? null,
     p_occurred_at: toDate(input.occurred_at),
     p_notes: input.notes ?? null,
+    p_registration_type: input.registration_type ?? null,
+    p_category: input.category ?? null,
+    p_supplier_id: input.supplier_id ?? null,
+    p_bank_account_id: input.bank_account_id ?? null,
+    p_employee_id: input.employee_id ?? null,
+    p_inventory_item_id: input.inventory_item_id ?? null,
+    p_truck_id: input.truck_id ?? null,
+    p_shared: input.shared ?? false,
   });
   if (error) throw new Error(error.message);
   return data;

@@ -3321,16 +3321,24 @@ export type Database = {
         }
         Returns: string
       }
-      submit_daily_expense: {
-        Args: {
-          p_amount: number
-          p_bank?: string | null
-          p_description: string
-          p_notes?: string | null
-          p_occurred_at?: string | null
-          p_payment_method: string
-          p_supplier: string
-          p_urgent?: boolean
+        submit_daily_expense: {
+          Args: {
+            p_amount: number
+            p_bank?: string | null
+            p_bank_account_id?: string | null
+            p_category?: string | null
+            p_description: string
+            p_employee_id?: string | null
+            p_inventory_item_id?: string | null
+            p_notes?: string | null
+            p_occurred_at?: string | null
+            p_payment_method: string
+            p_registration_type?: string | null
+            p_shared?: boolean
+            p_supplier: string
+            p_supplier_id?: string | null
+            p_truck_id?: string | null
+            p_urgent?: boolean
         }
         Returns: string
       }

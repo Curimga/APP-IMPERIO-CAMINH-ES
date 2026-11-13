@@ -9,16 +9,51 @@ import { submitDailyExpense, type ExpenseApprovalRequest } from "@/lib/mobile/ex
 import { brl, dateBR, parseMoney, todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { EmptyState, Field, MobileCard, PageHeader, SkeletonRows, btnGold, btnGhost, inputClass } from "@/components/mobile/ui";
+import { useInventory, useSuppliers, useTrucks } from "@/lib/mobile/queries";
+import { truckTitle } from "@/lib/truck-title";
 
 export const Route = createFileRoute("/_app/secretaria/lancamento-do-dia")({ component: DailyExpensePage });
 
 const PAYMENT_METHODS = ["PIX", "Dinheiro", "Cartão", "Transferência", "Boleto", "Cheque"];
+const REGISTRATION_TYPES = [
+  ["fornecedor", "Fornecedor"],
+  ["banco", "Banco"],
+  ["compartilhada", "Despesa compartilhada"],
+  ["caminhao", "Caminhão"],
+  ["colaborador", "Colaborador"],
+  ["estoque", "Estoque"],
+] as const;
+const CATEGORIES = [
+  ["outros", "Outros"], ["manutencao", "Manutenção"], ["combustivel", "Combustível"],
+  ["documentacao", "Documentação"], ["transporte", "Transporte"], ["impostos", "Impostos"],
+  ["pecas_caminhao", "Peças de caminhão"], ["refeicao", "Refeição"], ["limpeza", "Limpeza"],
+  ["colaborador", "Colaborador"], ["caminhao", "Caminhão"],
+] as const;
 
 function DailyExpensePage() {
   const { roles } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ supplier: "", amount: "", paymentMethod: "", description: "", urgent: false, bank: "", occurredAt: todayISO(), notes: "" });
+  const [form, setForm] = useState({ supplier: "", supplierId: "", amount: "", paymentMethod: "", description: "", urgent: false, bank: "", bankAccountId: "", occurredAt: todayISO(), notes: "", registrationType: "fornecedor", category: "outros", truckId: "", employeeId: "", inventoryItemId: "", shared: false });
+  const { data: suppliers = [] } = useSuppliers();
+  const { data: trucks = [] } = useTrucks();
+  const { data: inventory = [] } = useInventory();
+  const { data: banks = [] } = useQuery({
+    queryKey: ["daily-expense-bank-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("bank_accounts").select("id, name, bank").eq("active", true).order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: employees = [] } = useQuery({
+    queryKey: ["daily-expense-employee-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("employees").select("id, full_name").eq("status", "ativo").order("full_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["daily-expenses"],
     enabled: roles.includes("secretaria"),
@@ -34,8 +69,11 @@ function DailyExpensePage() {
       if (!form.supplier.trim()) throw new Error("Informe o fornecedor.");
       if (amount <= 0) throw new Error("Informe um valor válido.");
       if (!form.paymentMethod) throw new Error("Informe a forma de pagamento.");
-      if (!form.description.trim()) throw new Error("Informe a que se refere o lançamento.");
-      return submitDailyExpense({
+       if (!form.description.trim()) throw new Error("Informe a que se refere o lançamento.");
+       if (form.category === "caminhao" && !form.truckId) throw new Error("Selecione o caminhão da despesa.");
+       if (form.registrationType === "colaborador" && !form.employeeId) throw new Error("Selecione o colaborador.");
+       if (form.registrationType === "estoque" && !form.inventoryItemId) throw new Error("Selecione o item de estoque.");
+       return submitDailyExpense({
         supplier: form.supplier.trim(),
         amount,
         payment_method: form.paymentMethod,
@@ -43,12 +81,20 @@ function DailyExpensePage() {
         urgent: form.urgent,
         bank: form.bank.trim() || null,
         occurred_at: form.occurredAt,
-        notes: form.notes.trim() || null,
+         notes: form.notes.trim() || null,
+         registration_type: form.registrationType,
+         category: form.category,
+         supplier_id: form.supplierId || null,
+         bank_account_id: form.bankAccountId || null,
+         employee_id: form.employeeId || null,
+         inventory_item_id: form.inventoryItemId || null,
+         truck_id: form.truckId || null,
+         shared: form.registrationType === "compartilhada" || form.shared,
       });
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["daily-expenses"] });
-      setForm({ supplier: "", amount: "", paymentMethod: "", description: "", urgent: false, bank: "", occurredAt: todayISO(), notes: "" });
+       setForm({ supplier: "", supplierId: "", amount: "", paymentMethod: "", description: "", urgent: false, bank: "", bankAccountId: "", occurredAt: todayISO(), notes: "", registrationType: "fornecedor", category: "outros", truckId: "", employeeId: "", inventoryItemId: "", shared: false });
       setOpen(false);
       toast.success("Lançamento enviado para aprovação do executivo.");
     },
@@ -66,14 +112,20 @@ function DailyExpensePage() {
     <div className="space-y-4">
       <PageHeader title="Lançamento do dia" subtitle="Registre as despesas da operação para confirmação do Executivo." backTo="/menu" right={<button type="button" className={btnGold} onClick={() => setOpen((value) => !value)}>{open ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {open ? "Fechar" : "Novo lançamento"}</button>} />
       {open && <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
-        <MobileCard className="grid gap-3 p-4 sm:grid-cols-2">
-          <Field label="Fornecedor *"><input className={inputClass} value={form.supplier} onChange={(event) => setForm({ ...form, supplier: event.target.value })} placeholder="Nome do fornecedor" /></Field>
+         <MobileCard className="grid gap-3 p-4 sm:grid-cols-2">
+           <Field label="Cadastro *"><select className={inputClass} value={form.registrationType} onChange={(event) => setForm({ ...form, registrationType: event.target.value })}>{REGISTRATION_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+           <Field label="Categoria *"><select className={inputClass} value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+           <Field label="Fornecedor *"><select className={inputClass} value={form.supplierId} onChange={(event) => { const item = suppliers.find((supplier) => supplier.id === event.target.value); setForm({ ...form, supplierId: event.target.value, supplier: item?.name ?? "" }); }}><option value="">Selecione o fornecedor</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></Field>
           <Field label="Valor *"><input className={inputClass} inputMode="decimal" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="0,00" /></Field>
           <Field label="Forma de pagamento *"><select className={inputClass} value={form.paymentMethod} onChange={(event) => setForm({ ...form, paymentMethod: event.target.value })}><option value="">Selecione</option>{PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}</select></Field>
           <Field label="Referente a *"><input className={inputClass} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descrição do lançamento" /></Field>
-          <Field label="Banco"><input className={inputClass} value={form.bank} onChange={(event) => setForm({ ...form, bank: event.target.value })} placeholder="Nome do banco, se aplicável" /></Field>
+           <Field label="Banco"><select className={inputClass} value={form.bankAccountId} onChange={(event) => { const item = banks.find((bank) => bank.id === event.target.value); setForm({ ...form, bankAccountId: event.target.value, bank: item ? `${item.name}${item.bank ? ` · ${item.bank}` : ""}` : "" }); }}><option value="">Selecione o banco</option>{banks.map((bank) => <option key={bank.id} value={bank.id}>{bank.name}{bank.bank ? ` · ${bank.bank}` : ""}</option>)}</select></Field>
+           {form.category === "caminhao" && <Field label="Caminhão *"><select className={inputClass} value={form.truckId} onChange={(event) => setForm({ ...form, truckId: event.target.value })}><option value="">Selecione o caminhão</option>{trucks.map((truck) => <option key={truck.id} value={truck.id}>{truckTitle(truck)}{truck.plate ? ` · ${truck.plate}` : ""}</option>)}</select></Field>}
+           {form.registrationType === "colaborador" && <Field label="Colaborador *"><select className={inputClass} value={form.employeeId} onChange={(event) => setForm({ ...form, employeeId: event.target.value })}><option value="">Selecione o colaborador</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></Field>}
+           {form.registrationType === "estoque" && <Field label="Item de estoque *"><select className={inputClass} value={form.inventoryItemId} onChange={(event) => setForm({ ...form, inventoryItemId: event.target.value })}><option value="">Selecione o item</option>{inventory.map((item) => <option key={item.id} value={item.id}>{item.name}{item.category ? ` · ${item.category}` : ""}</option>)}</select></Field>}
           <Field label="Data do lançamento"><input className={inputClass} type="date" value={form.occurredAt} onChange={(event) => setForm({ ...form, occurredAt: event.target.value })} /></Field>
-          <label className="flex min-h-11 items-center gap-2 rounded-xl border bg-card px-3.5 text-sm font-semibold"><input type="checkbox" checked={form.urgent} onChange={(event) => setForm({ ...form, urgent: event.target.checked })} className="h-4 w-4 accent-gold" /> Urgente</label>
+           <label className="flex min-h-11 items-center gap-2 rounded-xl border bg-card px-3.5 text-sm font-semibold"><input type="checkbox" checked={form.shared} onChange={(event) => setForm({ ...form, shared: event.target.checked })} className="h-4 w-4 accent-gold" /> Despesa compartilhada</label>
+           <label className="flex min-h-11 items-center gap-2 rounded-xl border bg-card px-3.5 text-sm font-semibold"><input type="checkbox" checked={form.urgent} onChange={(event) => setForm({ ...form, urgent: event.target.checked })} className="h-4 w-4 accent-gold" /> Urgente</label>
           <Field label="Observações"><textarea className={cn(inputClass, "min-h-20 py-2 sm:col-span-2")} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
           <div className="flex gap-2 sm:col-span-2"><button type="submit" disabled={create.isPending} className={btnGold}>{create.isPending ? "Enviando..." : "Enviar para aprovação"}</button><button type="button" className={btnGhost} onClick={() => setOpen(false)}>Cancelar</button></div>
         </MobileCard>
