@@ -299,7 +299,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const actions = useFabActions();
   const qc = useQueryClient();
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-background px-4 pb-28 text-foreground lg:max-w-2xl">
+    <div className="mx-auto min-h-dvh w-full min-w-0 max-w-md overflow-x-clip bg-background px-4 pb-28 text-foreground lg:max-w-2xl">
       <RefreshSurface
         onRefresh={() => {
           haptic(10);
@@ -308,7 +308,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <AppHeader />
         <OfflineBanner />
-        <main className="space-y-3">{children}</main>
+        <main className="w-full min-w-0 space-y-3">{children}</main>
         <MobileTabBar />
         <FabSheet actions={actions} />
       </RefreshSurface>
