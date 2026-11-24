@@ -252,7 +252,7 @@ export const SUPABASE_REALTIME_TABLES = [
   "suppliers", "truck_documents", "truck_expenses", "truck_flow_access",
   "truck_flow_events", "truck_flow_evidence", "truck_flow_steps", "truck_flows",
   "truck_notes", "truck_photos", "truck_purchase_installments",
-  "truck_status_history", "truck_warranties", "trucks", "ai_conversations", "ai_messages", "ai_usage", "company_vehicle_documents", "company_vehicle_photos", "company_vehicle_status_history", "financial_event_kinds", "inventory_truck_usage", "push_preferences", "push_reminder_plans", "push_subscriptions", "receivable_bank_splits", "recurrences", "stock_purchases", "user_roles",
+  "truck_status_history", "truck_warranties", "trucks", "user_roles",
 ] as const;
 
 /** Une a publicação atual às tabelas cobertas por hooks do APP. */
