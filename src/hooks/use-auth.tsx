@@ -49,7 +49,11 @@ function clearAppStorage(storage: Storage | undefined) {
   if (!storage) return;
   for (let i = storage.length - 1; i >= 0; i -= 1) {
     const key = storage.key(i);
-    if (key && isAppStorageKey(key)) storage.removeItem(key);
+    // O opt-in de push pertence ao aparelho e precisa sobreviver ao logout.
+    // A subscription é desvinculada da conta e recriada no próximo login.
+    if (key && isAppStorageKey(key) && key !== "imperio:push-opt-in") {
+      storage.removeItem(key);
+    }
   }
 }
 

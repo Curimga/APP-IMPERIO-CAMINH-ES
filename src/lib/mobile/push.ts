@@ -134,6 +134,15 @@ type PushDatabase = {
  */
 const pushDb = supabase as unknown as SupabaseClient<PushDatabase>;
 
+async function hasStoredSubscription(userId: string): Promise<boolean> {
+  const { data, error } = await pushDb
+    .from("push_subscriptions")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1);
+  return !error && Boolean(data?.length);
+}
+
 export function isPushSupported(): boolean {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -319,7 +328,10 @@ export async function syncSubscription(userId: string): Promise<boolean> {
 
 /** Recria uma inscrição perdida sem pedir nova confirmação ao usuário. */
 export async function restorePushSubscription(userId: string): Promise<boolean> {
-  if (!userId || !hasPushOptIn() || getNotificationPermission() !== "granted") return false;
+  if (!userId || getNotificationPermission() !== "granted") return false;
+  // O banco também é uma fonte de memória: a inscrição pode ter sobrevivido
+  // a uma limpeza do localStorage ou a uma atualização do app.
+  if (!hasPushOptIn() && !(await hasStoredSubscription(userId))) return false;
   const vapidKey = getVapidPublicKey();
   if (!vapidKey || !isPushSupported() || isInsecureContext()) return false;
   try {
