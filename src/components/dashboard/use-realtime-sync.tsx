@@ -4,34 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PostgrestError, RealtimeChannel } from "@supabase/supabase-js";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
 import { canAccessBanking, isFinanceExecutive } from "@/lib/mobile/perm";
-import {
-  ALL_QUERY_KEYS,
-  ALL_TABLE_KEYS,
-  invalidateKeysFor,
-} from "@/lib/mobile/realtime-map";
-import type { RealtimeKeyMap } from "@/lib/mobile/realtime-map";
+import { ALL_REALTIME_TABLES } from "@/lib/mobile/realtime-map";
 
-/**
- * Sincronização em tempo real (PWA Império Caminhões).
- *
- * Invalidação SELETIVA: cada tabela mapeada aqui para os queryKeys (prefixos)
- * dos quais o app depende. Um INSERT/UPDATE/DELETE dispara apenas as chaves da
- * tabela correspondente — nunca uma invalidação global.
- * `invalidateQueries` faz match por prefixo de elementos, então listar a raiz
- * cobre as variantes (`["agenda-mobile"]` cobre `["agenda-mobile-today"]`).
- *
- * Perfis: as tabelas financeiras (contas a pagar/receber, bancos, comissões,
- * categorias financeiras, despesas gerais) são assinadas SOMENTE pelo Executivo
- * (admin). Financeiro e Secretaria não recebem/não assinam esses eventos —
- * mesmas regras de `perm.ts` e dos SELECTs de `queries.ts`.
- *
- * Resiliência de conexão: trata SUBSCRIBED (reconexão → invalida tudo uma vez
- * para reconciliar eventos perdidos), CHANNEL_ERROR e TIMED_OUT (remove o canal
- * e tenta reassinar após pequeno backoff). Em logout, libera canal e timers.
- */
-
-/** Tabelas com dados financeiros/dinheiro — assinatura exclusiva do Executivo. */
-export const FINANCIAL_TABLES: readonly (keyof RealtimeKeyMap)[] = [
+export const FINANCIAL_TABLES: readonly string[] = [
   "payables",
   "receivables",
   "bank_accounts",
@@ -40,39 +15,44 @@ export const FINANCIAL_TABLES: readonly (keyof RealtimeKeyMap)[] = [
   "financial_categories",
   "general_expenses",
   "inventory_movements",
+  "financial_attachments",
+  "general_expense_closings",
+  "inventory_expenses",
+  "truck_purchase_installments",
+  "sale_formalizations",
+  "sale_formalization_events",
+  "sale_formalization_logs",
+  "sale_signatures",
+  "company_vehicles",
+  "company_vehicle_maintenances",
 ];
 
-const BANKING_TABLES: readonly (keyof RealtimeKeyMap)[] = [
-  "bank_accounts",
-  "bank_transactions",
-  "financial_categories",
-];
+const BANKING_TABLES = ["bank_accounts", "bank_transactions", "financial_categories"] as const;
 
-/** Função pura: quais tabelas assinar para um perfil. Financeiras só p/ Executivo autorizado. */
-export function realtimeTablesForRoles(roles: AppRole[], email?: string | null, userId?: string | null): (keyof RealtimeKeyMap)[] {
+/** Tabelas que cada perfil pode observar; a leitura continua sob RLS no Supabase. */
+export function realtimeTablesForRoles(roles: AppRole[], email?: string | null, userId?: string | null): string[] {
   const canAccessFinance = isFinanceExecutive(roles, email);
   const canAccessBankTables = canAccessBanking(roles, email, userId);
-  return ALL_TABLE_KEYS.filter(
-    (t) => canAccessFinance || !FINANCIAL_TABLES.includes(t) || (canAccessBankTables && BANKING_TABLES.includes(t)),
+  return ALL_REALTIME_TABLES.filter(
+    (table) =>
+      canAccessFinance ||
+      !FINANCIAL_TABLES.includes(table) ||
+      (canAccessBankTables && BANKING_TABLES.includes(table as (typeof BANKING_TABLES)[number])),
   );
 }
 
-const RECONNECT_MS = 5_000;
-const THROTTLE_MS = 250;
+const INITIAL_RETRY_MS = 2_000;
+const MAX_RETRY_MS = 30_000;
+const INVALIDATE_DEBOUNCE_MS = 250;
 
-/** O RPC de geração de alertas não está nos tipos gerados; assinatura mínima tipada. */
 type GeneratePayableAlertsRpc = (
   fn: "fn_generate_payable_alerts",
 ) => Promise<{ error: PostgrestError | null }>;
 
 /**
- * Sincronização global em tempo real. Monte UMA vez no layout autenticado.
- *
- * - Multiplexa um único canal Realtime para as tabelas permitidas ao perfil.
- * - Throttle por tabela (250ms) evita storms de invalidação em imports em massa.
- * - Reassina em CHANNEL_ERROR/TIMED_OUT e invalida tudo ao reconectar.
- * - Roda o gerador de alertas financeiros a cada 5min (só Executivo).
- * - Em logout, remove o canal e cancela os timers pendentes.
+ * Um canal global cobre as tabelas publicadas do mesmo Supabase usado pelo CRM.
+ * O callback não usa o conteúdo do evento: apenas invalida consultas; toda leitura
+ * posterior continua autenticada e protegida pelas políticas RLS do banco.
  */
 export function useRealtimeSync(extraKeys: string[] = []) {
   const qc = useQueryClient();
@@ -83,123 +63,110 @@ export function useRealtimeSync(extraKeys: string[] = []) {
   rolesRef.current = roles;
   emailRef.current = user?.email ?? null;
   userIdRef.current = user?.id ?? null;
-  const extraKeysRef = useRef(extraKeys);
-  extraKeysRef.current = extraKeys;
 
-  // Re-assina quando o perfil muda (ex.: roles carregam após o login).
-  const signature = `${realtimeTablesForRoles(roles, user?.email, user?.id).join("|")}|${extraKeys.join("|")}`;
+  const tables = realtimeTablesForRoles(roles, user?.email, user?.id);
+  const tablesRef = useRef(tables);
+  tablesRef.current = tables;
+  const signature = `${tables.join("|")}|${extraKeys.join("|")}`;
 
   useEffect(() => {
     let disposed = false;
+    let channel: RealtimeChannel | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const tables = realtimeTablesForRoles(rolesRef.current, emailRef.current, userIdRef.current);
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryDelay = INITIAL_RETRY_MS;
 
     const invalidateAll = () => {
-      ALL_QUERY_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-    };
-    const invalidateTable = (table: string) => {
-      invalidateKeysFor(table as keyof RealtimeKeyMap).forEach((k) =>
-        qc.invalidateQueries({ queryKey: [k] }),
-      );
-      extraKeysRef.current.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      if (disposed) return;
+      void qc.invalidateQueries({ refetchType: "active" });
     };
 
-    // throttle por tabela: agrupa eventos próximos em uma única invalidação
-    const pending = new Map<string, ReturnType<typeof setTimeout>>();
-    const flush = (table: string) => {
-      pending.delete(table);
-      invalidateTable(table);
-    };
-    const schedule = (table: string) => {
-      const existing = pending.get(table);
-      if (existing) clearTimeout(existing);
-      pending.set(table, setTimeout(() => flush(table), THROTTLE_MS));
+    const scheduleInvalidate = () => {
+      if (invalidateTimer || disposed) return;
+      invalidateTimer = setTimeout(() => {
+        invalidateTimer = null;
+        invalidateAll();
+      }, INVALIDATE_DEBOUNCE_MS);
     };
 
-    let channel: RealtimeChannel | null = null;
-    let everSubscribed = false;
+    const clearTimers = () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      retryTimer = null;
+      invalidateTimer = null;
+    };
 
     const teardownChannel = () => {
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-      pending.forEach((t) => clearTimeout(t));
-      pending.clear();
+      clearTimers();
       if (channel) {
-        supabase.removeChannel(channel);
+        const current = channel;
         channel = null;
+        void supabase.removeChannel(current);
       }
+    };
+
+    const scheduleRetry = () => {
+      if (disposed || retryTimer) return;
+      const delay = retryDelay;
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        setupChannel();
+      }, delay);
     };
 
     const setupChannel = () => {
-      if (disposed) return;
-      const channelName = `global-realtime-sync-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const ch = supabase.channel(channelName);
-      channel = ch;
+      if (disposed || channel) return;
+      const name = `global-realtime-sync-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const next = supabase.channel(name);
+      channel = next;
 
-      tables.forEach((table) => {
-        ch.on("postgres_changes", { event: "*", schema: "public", table }, () =>
-          schedule(table),
-        );
+      tablesRef.current.forEach((table) => {
+        next.on("postgres_changes", { event: "*", schema: "public", table }, scheduleInvalidate);
       });
 
-      ch.subscribe((status) => {
+      next.subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          // Reconexão (não o primeiro join): invalida tudo para reconciliar
-          // eventos perdidos enquanto esteve fora.
-          if (everSubscribed) invalidateAll();
-          everSubscribed = true;
-          return;
-        }
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn(
-            `[realtime] canal "${channelName}" em "${status}" — reassinando em ${RECONNECT_MS}ms`,
-          );
-          teardownChannel();
-          if (!disposed) {
-            retryTimer = setTimeout(() => {
-              retryTimer = null;
-              setupChannel();
-            }, RECONNECT_MS);
+          retryDelay = INITIAL_RETRY_MS;
+          invalidateAll(); // reconcilia também a janela entre login e inscrição
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (channel === next) {
+            channel = null;
+            void supabase.removeChannel(next);
+            scheduleRetry();
           }
-          return;
         }
-        // CLOSED (removeChannel/limpeza) ou outros: sem ação.
       });
     };
+
     setupChannel();
 
-    // Gera alertas financeiros (vencimentos ≤3 dias / atrasos) periodicamente.
-    // Exclusivo do Executivo: financeiro/secretaria não devem receber avisos financeiros.
+    const reconcile = () => {
+      if (!disposed && navigator.onLine && document.visibilityState === "visible") invalidateAll();
+    };
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") teardownChannel();
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") setupChannel();
+    });
+
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+
+    // Vencimentos seguem o gerador existente do CRM, somente para Executivo.
     const runAlerts = async () => {
       if (!isFinanceExecutive(rolesRef.current, emailRef.current)) return;
       try {
         const generatePayableAlerts = supabase.rpc as unknown as GeneratePayableAlertsRpc;
         await generatePayableAlerts("fn_generate_payable_alerts");
-        ["notifications", "notifications-bell", "notifications-mobile"].forEach((k) =>
-          qc.invalidateQueries({ queryKey: [k] }),
-        );
+        void qc.invalidateQueries({ queryKey: ["notifications"] });
+        void qc.invalidateQueries({ queryKey: ["notifications-bell"] });
+        void qc.invalidateQueries({ queryKey: ["notifications-mobile"] });
       } catch {
-        /* ignore — função pode não existir em ambientes antigos */
+        /* A função pode não existir em ambientes antigos. */
       }
     };
-    runAlerts();
-    const alertsTimer = setInterval(runAlerts, 5 * 60 * 1000);
-
-    // Logout: libera o canal e timers imediatamente
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") teardownChannel();
-    });
-
-    // Eventos Realtime podem ser perdidos durante suspensão do navegador ou
-    // troca de rede. A leitura no retorno reconcilia o cache com o banco.
-    const reconcile = () => {
-      if (!disposed && (document.visibilityState === "visible" || navigator.onLine)) invalidateAll();
-    };
-    window.addEventListener("online", reconcile);
-    document.addEventListener("visibilitychange", reconcile);
+    void runAlerts();
+    const alertsTimer = setInterval(() => void runAlerts(), 5 * 60 * 1000);
 
     return () => {
       disposed = true;

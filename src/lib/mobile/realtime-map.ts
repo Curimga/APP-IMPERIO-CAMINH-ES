@@ -238,6 +238,28 @@ export const TABLE_KEYS: RealtimeKeyMap = {
 /** Todas as tabelas mutáveis (chaves de TABLE_KEYS) — ordem determinística. */
 export const ALL_TABLE_KEYS = Object.keys(TABLE_KEYS) as (keyof RealtimeKeyMap)[];
 
+/** Tabelas presentes na publicação supabase_realtime do projeto compartilhado. */
+export const SUPABASE_REALTIME_TABLES = [
+  "bank_accounts", "bank_transactions", "calendar_events", "commissions",
+  "company_vehicle_maintenances", "company_vehicles", "conversations",
+  "customer_notes", "customers", "deal_events", "deals", "documents",
+  "employees", "expense_approval_access", "expense_approval_events",
+  "expense_approval_requests", "financial_attachments", "financial_categories",
+  "general_expense_closings", "general_expenses", "goals", "inventory_expenses",
+  "inventory_items", "inventory_movements", "leads", "messages", "notifications",
+  "payables", "positions", "profiles", "receivables", "sale_formalization_events",
+  "sale_formalization_logs", "sale_formalizations", "sale_signatures", "services",
+  "suppliers", "truck_documents", "truck_expenses", "truck_flow_access",
+  "truck_flow_events", "truck_flow_evidence", "truck_flow_steps", "truck_flows",
+  "truck_notes", "truck_photos", "truck_purchase_installments",
+  "truck_status_history", "truck_warranties", "trucks", "user_roles",
+] as const;
+
+/** Une a publicação atual às tabelas cobertas por hooks do APP. */
+export const ALL_REALTIME_TABLES: string[] = Array.from(
+  new Set([...SUPABASE_REALTIME_TABLES, ...Object.keys(TABLE_KEYS)]),
+);
+
 /** Todas as queryKeys únicas (sem vazias, ordem de aparição). */
 export const ALL_QUERY_KEYS: string[] = Array.from(
   new Set(Object.values(TABLE_KEYS).flat().filter(Boolean)),

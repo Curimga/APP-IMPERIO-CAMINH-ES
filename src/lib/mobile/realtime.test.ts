@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ALL_QUERY_KEYS, TABLE_KEYS } from "./realtime-map";
+import { ALL_QUERY_KEYS, ALL_REALTIME_TABLES, SUPABASE_REALTIME_TABLES, TABLE_KEYS } from "./realtime-map";
 import { FINANCIAL_TABLES, realtimeTablesForRoles } from "@/components/dashboard/use-realtime-sync";
 import { restoreStatusAfterService, serviceCategoryToTruckStatus } from "./service-truck";
 
@@ -97,6 +97,8 @@ describe("realtime-map — todos os prefixes mobile de queries.ts são invalidá
 describe("realtime hub — assinatura por perfil (financeiro/secretária não assinam finanças)", () => {
   it("admin assina TODAS as tabelas (inclusive financeiras)", () => {
     const tables = realtimeTablesForRoles(["admin"]);
+    expect(tables).toEqual(expect.arrayContaining([...SUPABASE_REALTIME_TABLES]));
+    expect(ALL_REALTIME_TABLES).toEqual(expect.arrayContaining([...SUPABASE_REALTIME_TABLES]));
     for (const fin of FINANCIAL_TABLES) {
       expect(tables, `admin deveria assinar ${fin}`).toContain(fin);
     }
