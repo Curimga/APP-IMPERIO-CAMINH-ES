@@ -42,7 +42,7 @@ function resolveAppRoute(link) {
   const path = link.split(/[?#]/)[0];
   const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path || "/";
   if (APP_ROUTES.has(normalized)) return normalized;
-  const match = normalized.match(/^\/garagem\/([^/]+)$/);
+  const match = normalized.match(/^\/garagem\/(.+)$/);
   if (match) return `/garagem/${match[1]}`;
   const flowMatch = normalized.match(/^\/fluxo-caminhao(?:\/([^/]+))?$/);
   if (flowMatch) return flowMatch[1] ? `/fluxo-caminhao/${flowMatch[1]}` : "/fluxo-caminhao";
