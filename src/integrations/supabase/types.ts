@@ -1022,6 +1022,9 @@ export type Database = {
           supplier: string | null
           truck_id: string | null
           updated_at: string
+          company_vehicle_id: string | null
+          inventory_item_id: string | null
+          warranty_id: string | null
         }
         Insert: {
           amount?: number
@@ -1064,6 +1067,9 @@ export type Database = {
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
+          company_vehicle_id?: string | null
+          inventory_item_id?: string | null
+          warranty_id?: string | null
         }
         Update: {
           amount?: number
@@ -1106,6 +1112,9 @@ export type Database = {
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
+          company_vehicle_id?: string | null
+          inventory_item_id?: string | null
+          warranty_id?: string | null
         }
         Relationships: [
           {
@@ -1603,6 +1612,7 @@ export type Database = {
           supplier: string | null
           truck_id: string | null
           updated_at: string
+          company_vehicle_id: string | null
         }
         Insert: {
           amount: number
@@ -1636,6 +1646,7 @@ export type Database = {
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
+          company_vehicle_id?: string | null
         }
         Update: {
           amount?: number
@@ -1669,6 +1680,7 @@ export type Database = {
           supplier?: string | null
           truck_id?: string | null
           updated_at?: string
+          company_vehicle_id?: string | null
         }
         Relationships: [
           {
@@ -2548,6 +2560,10 @@ export type Database = {
           supplier: string | null
           truck_id: string
           warranty_id: string | null
+          financial_event_kind: string
+          include_in_profit: boolean | null
+          stock_movement_id: string | null
+          stock_purchase_id: string | null
         }
         Insert: {
           amount: number
@@ -2566,6 +2582,10 @@ export type Database = {
           supplier?: string | null
           truck_id: string
           warranty_id?: string | null
+          financial_event_kind?: string
+          include_in_profit?: boolean | null
+          stock_movement_id?: string | null
+          stock_purchase_id?: string | null
         }
         Update: {
           amount?: number
@@ -2584,6 +2604,10 @@ export type Database = {
           supplier?: string | null
           truck_id?: string
           warranty_id?: string | null
+          financial_event_kind?: string
+          include_in_profit?: boolean | null
+          stock_movement_id?: string | null
+          stock_purchase_id?: string | null
         }
         Relationships: [
           {
