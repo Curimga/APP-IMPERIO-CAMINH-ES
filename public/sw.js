@@ -42,7 +42,7 @@ function resolveAppRoute(link) {
   const path = link.split(/[?#]/)[0];
   const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path || "/";
   if (APP_ROUTES.has(normalized)) return normalized;
-  const match = normalized.match(/^\/garagem\/(.+)$/);
+  const match = normalized.match(/^\/garagem\/([^/]+)$/);
   if (match) return `/garagem/${match[1]}`;
   const flowMatch = normalized.match(/^\/fluxo-caminhao(?:\/([^/]+))?$/);
   if (flowMatch) return flowMatch[1] ? `/fluxo-caminhao/${flowMatch[1]}` : "/fluxo-caminhao";
@@ -79,7 +79,7 @@ const isAppAsset = (req) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return false;
   if (url.pathname.startsWith("/icons/") || url.pathname === "/manifest.webmanifest") return true;
-  return /^\/assets\/[^/]+\.(?:js|mjs|css|woff2?|ttf|otf|svg|png|webp|avif)$/i.test(url.pathname);
+  return /^\/assets\/.+\.(?:js|mjs|css|woff2?|ttf|otf|svg|png|webp|avif)$/i.test(url.pathname);
 };
 
 self.addEventListener("install", (e) => {
