@@ -97,7 +97,7 @@ describe("realtime-map — todos os prefixes mobile de queries.ts são invalidá
 describe("realtime hub — assinatura por perfil (financeiro/secretária não assinam finanças)", () => {
   it("admin assina TODAS as tabelas (inclusive financeiras)", () => {
     const tables = realtimeTablesForRoles(["admin"]);
-    expect(tables).toEqual(expect.arrayContaining(SUPABASE_REALTIME_TABLES));
+    expect(tables).toEqual(expect.arrayContaining([...SUPABASE_REALTIME_TABLES]));
     expect(ALL_REALTIME_TABLES).toEqual(expect.arrayContaining(SUPABASE_REALTIME_TABLES));
     for (const fin of FINANCIAL_TABLES) {
       expect(tables, `admin deveria assinar ${fin}`).toContain(fin);
