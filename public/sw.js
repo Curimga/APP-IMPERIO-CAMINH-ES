@@ -10,7 +10,7 @@
  *    usamos um payload HTML inline para nÃ£o rotear pelo app).
  */
 const CACHE_PREFIX = "imperio-";
-const VERSION = "imperio-v15-2026.10.16-webpush";
+const VERSION = "imperio-v16-2026.11-pwa-mobile";
 const APP_SHELL = "/";
 const DEFAULT_ICON = "/icons/crown-192.png";
 const DEFAULT_BADGE = "/icons/crown-96.png";
@@ -52,7 +52,7 @@ const OFFLINE_HTML = `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>Sem conexÃ£o â€” ImpÃ©rio CaminhÃµes</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -74,10 +74,13 @@ const OFFLINE_HTML = `<!doctype html>
 </body>
 </html>`;
 
-const FILTER_IMPORTANT = (req) =>
-  req.mode === "navigate" ||
-  (new URL(req.url).pathname.startsWith("/icons/") && req.method === "GET") ||
-  req.url.includes("manifest.webmanifest");
+const isAppAsset = (req) => {
+  if (req.method !== "GET") return false;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return false;
+  if (url.pathname.startsWith("/icons/") || url.pathname === "/manifest.webmanifest") return true;
+  return /^\/assets\/[^/]+\.(?:js|mjs|css|woff2?|ttf|otf|svg|png|webp|avif)$/i.test(url.pathname);
+};
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
@@ -216,7 +219,7 @@ self.addEventListener("fetch", (e) => {
   }
 
   // 3. Assets estÃ¡ticos (JS/CSS versionados, Ã­cones, fontes): stale-while-revalidate.
-  if (FILTER_IMPORTANT(req)) {
+  if (isAppAsset(req)) {
     e.respondWith(
       caches.match(req).then((cached) => {
         const fetched = fetch(req)
