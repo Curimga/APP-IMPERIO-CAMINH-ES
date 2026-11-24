@@ -15,6 +15,16 @@ export const FINANCIAL_TABLES: readonly string[] = [
   "financial_categories",
   "general_expenses",
   "inventory_movements",
+  "financial_attachments",
+  "general_expense_closings",
+  "inventory_expenses",
+  "truck_purchase_installments",
+  "sale_formalizations",
+  "sale_formalization_events",
+  "sale_formalization_logs",
+  "sale_signatures",
+  "company_vehicles",
+  "company_vehicle_maintenances",
 ];
 
 const BANKING_TABLES = ["bank_accounts", "bank_transactions", "financial_categories"] as const;
