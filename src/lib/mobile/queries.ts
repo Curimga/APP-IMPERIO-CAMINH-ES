@@ -1024,15 +1024,20 @@ export function useServices() {
     queryKey: ["services-mobile", enabled],
     enabled,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("services_operational")
-        .select(
-          "id, truck_id, supplier_id, title, description, sent_at, expected_at, completed_at, status, attachment_url, notes, created_by, created_at, updated_at, truck_previous_status, category",
-        )
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const rows = (data ?? []) as Array<Record<string, unknown> & { truck_id: string | null }>;
+      const rows: Array<Record<string, unknown> & { truck_id: string | null }> = [];
+      const pageSize = 200;
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await supabase
+          .from("services_operational")
+          .select("id, truck_id, supplier_id, title, description, sent_at, expected_at, completed_at, status, attachment_url, notes, created_by, created_at, updated_at, truck_previous_status, category")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        const page = (data ?? []) as Array<Record<string, unknown> & { truck_id: string | null }>;
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
       const trucks = await fetchTruckRefs(rows.map((row) => row.truck_id));
       return rows.map((row) => ({
         ...row,
@@ -1105,6 +1110,9 @@ export function useMobileFinance() {
   return useQuery({
     queryKey: ["finance-mobile", "crm-parity-v2", canAccessFinance],
     enabled: canAccessFinance,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const snap = await fetchDashboardSnapshot();
       const kpis = computeExecutiveKpis(snap);
