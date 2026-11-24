@@ -396,28 +396,13 @@ export function computePeriodReport(
   const despesasCaminhao = sumMoney(sold.map((t) => truckDirectExpenseTotal(t)));
   const custoTotal = money(custoCompra + despesasCaminhao);
 
-  // ── OPEX / DESPESAS GERAIS ────────────────────────────────────────────────
-  // Espelho de `despesasGerais()` (`monthly-report-data.ts:151-164`) — DUAS pernas:
-  //   1. `truckPayables`: `payables` com `truck_id` no período, só as que
-  //      `includeInProfit` (contas de preparação do caminhão são custo DIRETO,
-  //      mas o CRM as inclui aqui — paridade acima de opinião).
-  //   2. `general`: `general_expenses` do período SEM `truck_id` (as com
-  //      `truck_id` já estão capitalizadas em `trucks.expenses_total` e seriam
-  //      contadas duas vezes) e só as que `includeInProfit`.
-  // `includeInProfit` substitui o filtro antigo `!isAcquisitionPayment`: ele
-  // também descarta pagamento/aquisição de estoque, transferência interna e
-  // caminhão offline.
-  const opexTruckPayables = sumMoney(
-    (s.payables ?? [])
-      .filter((p) => inPeriod(p?.occurred_at) && !p?.company_vehicle_id && !!p?.truck_id && includeInProfit(p))
-      .map((p) => p?.amount),
-  );
-  const opexGeral = sumMoney(
+  // CRM: OPEX do resultado global exclui contas vinculadas a caminhões,
+  // que representam aquisição do ativo, e despesas da frota interna.
+  const opex = sumMoney(
     (s.generalExp ?? [])
       .filter((r) => inPeriod(r?.occurred_at) && !r?.company_vehicle_id && !r?.truck_id && includeInProfit(r))
       .map(reportExpenseValue),
   );
-  const opex = money(opexTruckPayables + opexGeral);
 
   // Compras do período (`calculatePurchases`): caminhões comprados, excluindo
   // offline e caminhões já representados por pagamento de aquisição, + pagamentos.
@@ -508,7 +493,7 @@ export function computeMonthReport(s: DashboardSnapshot, ref: Date): PeriodRepor
 export function computeWeekReport(s: DashboardSnapshot, ref: Date): PeriodReport {
   const start = startOfWeek(ref);
   const end = new Date(start);
-  end.setDate(end.getDate() + 6);
+  end.setDate(end.getDate() + 4);
   return {
     ...computePeriodReport(s, start, end, "week"),
     key: `${start.getFullYear()}-W${String(weekOfYear(start)).padStart(2, "0")}`,
