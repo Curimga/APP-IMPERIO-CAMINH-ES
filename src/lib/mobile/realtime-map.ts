@@ -121,6 +121,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
   profiles: ["profiles", "profiles_min", "truck-detail"],
   user_roles: ["user_roles", "roles"],
   payables: [
+    "payment-status-operational",
     "payables",
     "truck-detail",
     "finance-mobile",
@@ -136,6 +137,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "dashboard-snapshot",
   ],
   receivables: [
+    "payment-status-operational",
     "receivables",
     "truck-detail",
     "finance-mobile",
@@ -148,8 +150,8 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "notifications-bell",
     "dashboard-snapshot",
   ],
-  bank_accounts: ["finance-mobile", "bank_accounts", "dashboard-snapshot"],
-  bank_transactions: ["finance-mobile", "bank_transactions", "dashboard-snapshot"],
+  bank_accounts: ["banking-mobile", "finance-mobile", "bank_accounts", "dashboard-snapshot"],
+  bank_transactions: ["banking-mobile", "finance-mobile", "bank_transactions", "dashboard-snapshot"],
   commissions: ["finance-mobile", "commissions", "dashboard-snapshot"],
   goals: ["goals", "dashboard-snapshot"],
   calendar_events: [
@@ -181,7 +183,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
   suppliers: ["suppliers", "suppliers-options", "truck-detail"],
   employees: ["employees"],
   notifications: ["notifications", "notifications-bell", "notifications-mobile"],
-  financial_categories: ["financial_categories", "fin_cats", "finance-mobile"],
+  financial_categories: ["banking-mobile", "financial_categories", "fin_cats", "finance-mobile"],
   general_expenses: [
     "general-expenses",
     "finance-mobile",
@@ -231,7 +233,7 @@ export const TABLE_KEYS: RealtimeKeyMap = {
     "notifications-bell",
     "notifications-mobile",
   ],
-  expense_approval_events: ["expense-approval-requests", "expense-approval"],
+  expense_approval_events: ["expense-approval-executive", "expense-approval-requests", "expense-approval"],
   expense_approval_access: ["expense-approval-access"],
 };
 
