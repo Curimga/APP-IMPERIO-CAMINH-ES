@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { monthKey, monthLabel, dateBR, brl as brlFmt, sumMoney, money } from "@/lib/format";
-import { includeInProfit, isAcquisitionPayment, isStockSale } from "@/lib/finance/financial-class";
+import { includeInProfit, isAcquisitionPayment, isStockConsumption, isStockSale } from "@/lib/finance/financial-class";
 
 export type DashboardSnapshot = Awaited<ReturnType<typeof fetchDashboardSnapshot>>;
 
@@ -56,17 +56,17 @@ export async function fetchDashboardSnapshot() {
     fetchAllPages((from, to) => supabase.from("deals").select("id,stage,value,owner_id,truck_id,customer_id,title,created_at,updated_at", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("customers").select("id,name,status,created_at", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("leads").select("id,status,source,created_at,owner_id", { count: "exact" }).order("id").range(from, to)),
-    fetchAllPages((from, to) => supabase.from("payables").select("id,description,supplier,amount,due_date,paid_at,status,category_id,truck_id,created_at,occurred_at,financial_event_kind,stock_purchase_id", { count: "exact" }).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("payables").select("id,description,supplier,amount,due_date,paid_at,status,category_id,truck_id,company_vehicle_id,created_at,occurred_at,financial_event_kind,stock_purchase_id", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("receivables").select("id,description,amount,due_date,received_at,status,category_id,truck_id,customer_id,created_at,occurred_at", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("bank_accounts").select("id,name,current_balance,active", { count: "exact" }).eq("active", true).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("bank_transactions").select("id,amount,type,occurred_at,category_id", { count: "exact" }).gte("occurred_at", start12m).order("id").range(from, to)),
-    fetchAllPages((from, to) => supabase.from("truck_expenses").select("id,amount,truck_id,occurred_at,kind", { count: "exact" }).gte("occurred_at", start12m.slice(0, 10)).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("truck_expenses").select("id,amount,truck_id,occurred_at,kind,financial_event_kind,stock_movement_id,stock_purchase_id", { count: "exact" }).gte("occurred_at", start12m.slice(0, 10)).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("consolidated_truck_expenses").select("id,amount,imperio_amount,shared,truck_id,occurred_at,category", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("commissions").select("id,amount,status,employee_id,paid_at,created_at,occurred_at", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("goals").select("id,title,target_value,current_value,period,starts_at,ends_at,employee_id", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("employees").select("id,full_name,salary,commission_amount,status", { count: "exact" }).eq("status", "ativo").order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("calendar_events").select("id,title,description,starts_at,ends_at,type,priority,related_truck_id,related_deal_id", { count: "exact" }).gte("starts_at", today.toISOString()).lte("starts_at", next30).order("id").range(from, to)),
-    fetchAllPages((from, to) => supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,purchase_installment_id,status,financial_event_kind,stock_movement_id,stock_purchase_id", { count: "exact" }).gte("occurred_at", start12m.slice(0, 10)).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("general_expenses").select("id,amount,imperio_amount,c4_amount,shared,occurred_at,category,description,truck_id,company_vehicle_id,warranty_id,inventory_item_id,purchase_installment_id,status,financial_event_kind,stock_movement_id,stock_purchase_id", { count: "exact" }).gte("occurred_at", start12m.slice(0, 10)).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("services").select("id,title,status,expected_at,completed_at,truck_id,value,created_at", { count: "exact" }).order("id").range(from, to)),
     fetchAllPages((from, to) => supabase.from("truck_purchase_installments").select("*", { count: "exact" }).order("id").range(from, to)),
     // Sem limite superior: `computeMonthlyReports` cobre 12 meses para trás a
@@ -123,9 +123,9 @@ export function imperioShare(r: { shared?: boolean | null; amount?: number | nul
 export const reportExpenseValue = (r: { shared?: boolean | null; amount?: number | null; imperio_amount?: number | null }) =>
   money(r.shared ? (r.imperio_amount ?? 0) : (r.amount ?? r.imperio_amount ?? 0));
 
-function truckDirectExpenseTotal(s: DashboardSnapshot, truck: Tables<"trucks">): number {
-  const rows = (s.truckExpenseRows ?? []).filter((r) => r?.truck_id === truck.id);
-  if (rows.length) return sumMoney(rows.map(reportExpenseValue));
+function truckDirectExpenseTotal(truck: Tables<"trucks">): number {
+  // O CRM usa trucks.expenses_total, mantido pelo trigger do banco, como fonte
+  // oficial do custo direto. A view consolidada é apenas detalhe operacional.
   return Number(truck.expenses_total ?? 0);
 }
 
@@ -203,25 +203,43 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
       .reduce((acc, t) => acc + Number(t.sold_price ?? 0), 0);
   const revDay = revenueOf((d) => crmSameDay(d, today));
   const revWeek = revenueOf((d) => crmSameWeek(d, today));
-  const revMonth = revenueOf((d) => crmSameMonth(d, today));
-  const revYear = revenueOf((d) => crmSameYear(d, today));
+  const stockSales = (s.invMoves ?? []).filter(isStockSale);
+  const stockSalesThisMonth = stockSales
+    .filter((movement) => crmSameMonth(movement.created_at, today))
+    .reduce((sum, movement) => sum + Number(movement.total_amount ?? 0), 0);
+  const revMonth = revenueOf((d) => crmSameMonth(d, today)) + stockSalesThisMonth;
+  const revYear = revenueOf((d) => crmSameYear(d, today))
+    + stockSales
+      .filter((movement) => crmSameYear(movement.created_at, today))
+      .reduce((sum, movement) => sum + Number(movement.total_amount ?? 0), 0);
 
-  // KPIs idênticos ao CRM (`computeExecutiveKpis` do dashboard): lucro bruto e
-  // líquido são ACUMULADOS de todos os vendidos (lifetime); opex = contas pagas
-  // (status "pago") + despesas gerais dos últimos 12 meses. Despesas gerais
-  // vinculadas a caminhões ficam fora para não duplicar o `expenses_total`.
-  const grossProfit = pricedSold.reduce((s, t) => s + (Number(t.sold_price) - Number(t.purchase_price ?? 0)), 0);
+  // Paridade com computeExecutiveKpis do CRM: vendas de estoque entram em
+  // faturamento e lucro bruto; custo direto vem de expenses_total.
+  const grossProfit = pricedSold.reduce((sum, truck) => sum + (Number(truck.sold_price) - Number(truck.purchase_price ?? 0)), 0)
+    + stockSales.reduce((sum, movement) => sum + Number(movement.total_amount ?? 0), 0);
   const totalExpenses = sumMoney((pricedSold || []).map((t) => t?.expenses_total));
   const netProfit = money(grossProfit - totalExpenses);
 
-  // CRM (dashboard-data.ts:102-103): gerais SEM filtro de status e como a
-  // `imperioShare` do CRM (não compartilhada prefere imperio_amount).
+  // Espelha os filtros do KPI no CRM: exclui caminhão, veículo da empresa,
+  // garantia, estoque e classificações que não reduzem lucro. O status das
+  // despesas gerais não é filtrado no dashboard do CRM.
   const generalOpex = (s.generalExp ?? [])
-    .filter((r) => !r?.truck_id && !isAcquisitionPayment(r))
+    .filter((r) =>
+      !r?.truck_id
+      && !r?.company_vehicle_id
+      && !r?.warranty_id
+      && !r?.inventory_item_id
+      && includeInProfit(r))
     .reduce((sum, r) => sum + imperioShare(r), 0);
-  const opex = s.payables.filter((p) => p.status === "pago").reduce((s, r) => s + Number(r.amount ?? 0), 0) + generalOpex;
+  const payableOpex = s.payables
+    .filter((p) => !p.company_vehicle_id && p.status === "pago" && includeInProfit(p))
+    .reduce((sum, payable) => sum + Number(payable.amount ?? 0), 0);
+  const opex = payableOpex + generalOpex;
 
-  const stockExpenses = s.expenses.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  // O indicador do CRM considera somente consumo de estoque em caminhões.
+  const stockExpenses = s.expenses
+    .filter(isStockConsumption)
+    .reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
   const margins = pricedSold
     .map((t) => {
       const revenue = Number(t.sold_price ?? 0);
@@ -248,7 +266,9 @@ export function computeExecutiveKpis(s: DashboardSnapshot) {
   // CRM (dashboard-data.ts:107-109): SOMENTE status "aberto". "vencido" e
   // "cancelado" ficam fora por causa do filtro estrito — não os adicionar.
   const openReceivable = s.receivables.filter((r) => r.status === "aberto").reduce((s, r) => s + Number(r.amount ?? 0), 0);
-  const openPayable = s.payables.filter((p) => p.status === "aberto").reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const openPayable = s.payables
+    .filter((p) => !p.company_vehicle_id && p.status === "aberto")
+    .reduce((sum, payable) => sum + Number(payable.amount ?? 0), 0);
   const openPurchase = (s.purchaseInst ?? []).filter((p) => p.status === "pendente").reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const profitForecast = money(openReceivable - openPayable - openPurchase);
 
@@ -373,7 +393,7 @@ export function computePeriodReport(
   );
   const receita = money(sumMoney(sold.map((t) => t?.sold_price)) + vendaEstoque);
   const custoCompra = sumMoney(sold.map((t) => t?.purchase_price));
-  const despesasCaminhao = sumMoney(sold.map((t) => truckDirectExpenseTotal(s, t)));
+  const despesasCaminhao = sumMoney(sold.map((t) => truckDirectExpenseTotal(t)));
   const custoTotal = money(custoCompra + despesasCaminhao);
 
   // ── OPEX / DESPESAS GERAIS ────────────────────────────────────────────────
@@ -389,12 +409,12 @@ export function computePeriodReport(
   // caminhão offline.
   const opexTruckPayables = sumMoney(
     (s.payables ?? [])
-      .filter((p) => inPeriod(p?.occurred_at) && !!p?.truck_id && includeInProfit(p))
+      .filter((p) => inPeriod(p?.occurred_at) && !p?.company_vehicle_id && !!p?.truck_id && includeInProfit(p))
       .map((p) => p?.amount),
   );
   const opexGeral = sumMoney(
     (s.generalExp ?? [])
-      .filter((r) => inPeriod(r?.occurred_at) && !r?.truck_id && includeInProfit(r))
+      .filter((r) => inPeriod(r?.occurred_at) && !r?.company_vehicle_id && !r?.truck_id && includeInProfit(r))
       .map(reportExpenseValue),
   );
   const opex = money(opexTruckPayables + opexGeral);

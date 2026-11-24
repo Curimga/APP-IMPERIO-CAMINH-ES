@@ -12,7 +12,7 @@ import {
 } from "./dashboard-data";
 
 /**
- * Testes de PARIDADE com o CRM (`imperiocaminhoes-com-br`), inclusive dos bugs.
+ * Testes de paridade com as regras atuais do CRM (`imperiocaminhoes-com-br`) e regressões financeiras corrigidas.
  *
  * Fontes replicadas:
  * - `src/lib/dashboard-data.ts`          → `computeExecutiveKpis` (tela Executivo)
@@ -25,8 +25,9 @@ import {
  * - Compra dos veículos: Σ(purchase_price) dos VENDIDOS.
  * - Despesas diretas: Σ(expenses_total) dos VENDIDOS, com `expenses_total`
  *   sendo lifetime do caminhão.
- * - Despesas gerais/OPEX: `general_expenses` ativas, sem `truck_id` e sem
- *   aquisição. Sem `truck_expenses`/`payables` de caminhão.
+ * - OPEX do dashboard: exclusões de vínculo e classificação iguais ao CRM;
+ *   payables pagos excluem veículo da empresa e eventos que não reduzem lucro.
+ * - Consumo de estoque não se confunde com qualquer despesa de caminhão.
  * - Resultado do CRM nos cards: `receita − compra − despesas diretas − OPEX`.
  * - Semana do RELATÓRIO = segunda a domingo; semana do KPI = domingo a sábado.
  * - Duas regras de rateio diferentes no CRM (ver testes de `imperioShare`).
@@ -47,6 +48,7 @@ function baseSnap(): DashboardSnapshot {
     expenses: [],
     truckExpenseRows: [],
     purchaseInst: [],
+    invMoves: [],
     goals: [],
   } as unknown as DashboardSnapshot;
 }
@@ -125,6 +127,9 @@ function withPayable(
     due_date: string;
     status: string;
     paid_at: string | null;
+    company_vehicle_id: string | null;
+    financial_event_kind: string | null;
+    stock_purchase_id: string | null;
   }>,
 ) {
   return {
@@ -140,6 +145,9 @@ function withPayable(
         paid_at: null,
         occurred_at: "2026-09-01",
         due_date: "2026-09-30",
+        company_vehicle_id: null,
+        financial_event_kind: "despesa_operacional",
+        stock_purchase_id: null,
         ...over,
       } as never,
     ],
@@ -156,10 +164,15 @@ function withGeneralExpense(
     shared: boolean;
     occurred_at: string;
     truck_id: string | null;
+    company_vehicle_id: string | null;
+    warranty_id: string | null;
+    inventory_item_id: string | null;
     category: string;
     purchase_installment_id: string | null;
     status: string;
-    financial_event_kind: string;
+    financial_event_kind: string | null;
+    stock_movement_id: string | null;
+    stock_purchase_id: string | null;
   }>,
 ) {
   return {
@@ -175,7 +188,14 @@ function withGeneralExpense(
         c4_amount: 250,
         shared: true,
         truck_id: null,
+        company_vehicle_id: null,
+        warranty_id: null,
+        inventory_item_id: null,
         status: "aberto",
+        financial_event_kind: "despesa_operacional",
+        purchase_installment_id: null,
+        stock_movement_id: null,
+        stock_purchase_id: null,
         occurred_at: "2026-09-03",
         ...over,
       } as never,
@@ -185,7 +205,16 @@ function withGeneralExpense(
 
 function withTruckExpense(
   snap: DashboardSnapshot,
-  over: Partial<{ id: string; amount: number; truck_id: string; occurred_at: string; kind: string }>,
+  over: Partial<{
+    id: string;
+    amount: number;
+    truck_id: string;
+    occurred_at: string;
+    kind: string;
+    financial_event_kind: string | null;
+    stock_movement_id: string | null;
+    stock_purchase_id: string | null;
+  }>,
 ) {
   return {
     ...snap,
@@ -197,6 +226,35 @@ function withTruckExpense(
         amount: 700,
         truck_id: "t1",
         occurred_at: "2026-09-04",
+        financial_event_kind: "despesa_operacional",
+        stock_movement_id: null,
+        stock_purchase_id: null,
+        ...over,
+      } as never,
+    ],
+  } as unknown as DashboardSnapshot;
+}
+
+function withInventoryMovement(
+  snap: DashboardSnapshot,
+  over: Partial<{
+    id: string;
+    created_at: string;
+    total_amount: number;
+    financial_event_kind: string;
+    movement_type: string;
+  }>,
+) {
+  return {
+    ...snap,
+    invMoves: [
+      ...(((snap as unknown as { invMoves?: never[] }).invMoves ?? []) as never[]),
+      {
+        id: "im1",
+        created_at: "2026-09-10",
+        total_amount: 500,
+        financial_event_kind: "venda_estoque",
+        movement_type: "saida",
         ...over,
       } as never,
     ],
@@ -469,10 +527,10 @@ describe("paridade com o CRM — setembro/2026 (valores do relatório executivo 
     expect(r().custoTotal).toBe(207314.07);
   });
 
-  it("despesas diretas usam despesas consolidadas reais quando existirem", () => {
+  it("despesa direta usa expenses_total do CRM mesmo se a view consolidada divergir", () => {
     let snap = baseSnap();
-    snap = withTruck(snap, { id: "t1", sold_price: 282500, purchase_price: 180750, expenses_total: 1 });
-    snap = withConsolidatedTruckExpense(snap, { truck_id: "t1", amount: 27316.56, imperio_amount: 27316.56 });
+    snap = withTruck(snap, { id: "t1", sold_price: 282500, purchase_price: 180750, expenses_total: 27316.56 });
+    snap = withConsolidatedTruckExpense(snap, { truck_id: "t1", amount: 1, imperio_amount: 1 });
     const x = computeMonthReport(snap, new Date(2026, 8, 1));
     expect(x.despesasDiretas).toBe(27316.56);
     expect(x.lucroLiquidoCaminhoes).toBe(74433.44);
@@ -647,7 +705,7 @@ describe("computeExecutiveKpis — espelho de computeExecutiveKpis do CRM", () =
     expect(kpis.soldCount).toBe(2);
   });
 
-  it("opex do KPI = payables pagos + gerais sem truck_id e sem aquisição", () => {
+  it("OPEX do KPI aplica os filtros atuais de veículo, garantia, estoque e classificação do CRM", () => {
     let snap = kpiSnap();
     snap = withTruck(snap, { id: "t1", status: "vendido", expenses_total: 9000 });
     snap = withPayable(snap, { id: "p1", status: "pago", amount: 5000, truck_id: "t1" });
@@ -663,6 +721,13 @@ describe("computeExecutiveKpis — espelho de computeExecutiveKpis do CRM", () =
     snap = withGeneralExpense(snap, { id: "g5", shared: false, amount: 9000, imperio_amount: 9000, truck_id: "t1" });
     // vinculada a caminhão não entra no OPEX geral, mesmo sem venda no período.
     snap = withGeneralExpense(snap, { id: "g6", shared: false, amount: 800, imperio_amount: 800, truck_id: "stock1" });
+    snap = withPayable(snap, { id: "p4", status: "pago", amount: 6000, company_vehicle_id: "vehicle1" });
+    snap = withPayable(snap, { id: "p5", status: "pago", amount: 7000, financial_event_kind: "pagamento_estoque" });
+    snap = withGeneralExpense(snap, { id: "g7", amount: 1100, company_vehicle_id: "vehicle1" });
+    snap = withGeneralExpense(snap, { id: "g8", amount: 1200, warranty_id: "warranty1" });
+    snap = withGeneralExpense(snap, { id: "g9", amount: 1300, inventory_item_id: "item1" });
+    snap = withGeneralExpense(snap, { id: "g10", amount: 1400, financial_event_kind: "aquisicao_estoque" });
+    snap = withGeneralExpense(snap, { id: "g11", amount: 1500, financial_event_kind: "transferencia_interna" });
     const kpis = computeExecutiveKpis(snap);
     expect(kpis.opex).toBe(5000 + 1000 + 3000 + 5000 + 200);
   });
@@ -673,8 +738,28 @@ describe("computeExecutiveKpis — espelho de computeExecutiveKpis do CRM", () =
     snap = withReceivable(snap, { id: "r2", status: "vencido", amount: 2000, received_at: null, due_date: "2026-09-01" });
     snap = withReceivable(snap, { id: "r3", status: "cancelado", amount: 4000, received_at: null, due_date: "2026-09-01" });
     snap = withPayable(snap, { id: "p1", status: "aberto", amount: 500, truck_id: null });
-    // previsão = aberto a receber − aberto a pagar − parcelas pendentes
+    snap = withPayable(snap, { id: "p2", status: "aberto", amount: 4000, truck_id: null, company_vehicle_id: "vehicle1" });
+    // previsão = aberto a receber − contas abertas da operação − parcelas pendentes
     expect(computeExecutiveKpis(snap).profitForecast).toBe(500);
+  });
+
+  it("estoque consumido do KPI inclui apenas consumo estrutural", () => {
+    let snap = kpiSnap();
+    snap = withTruckExpense(snap, { id: "te-op", amount: 700, financial_event_kind: "despesa_operacional" });
+    snap = withTruckExpense(snap, { id: "te-stock", amount: 350, financial_event_kind: null, stock_movement_id: "movement1" });
+    expect(computeExecutiveKpis(snap).stockExpenses).toBe(350);
+  });
+
+  it("venda de estoque entra no faturamento mensal/anual e no lucro bruto do KPI", () => {
+    let snap = kpiSnap();
+    snap = withTruck(snap, { sold_at: "2026-09-10", sold_price: 1000, purchase_price: 800, expenses_total: 100 });
+    snap = withInventoryMovement(snap, { total_amount: 500, created_at: "2026-09-11" });
+    const kpis = computeExecutiveKpis(snap);
+    expect(kpis.revMonth).toBe(1500);
+    expect(kpis.revYear).toBe(1500);
+    expect(kpis.grossProfit).toBe(700);
+    expect(kpis.netProfit).toBe(600);
+    expect(kpis.ticketAvg).toBe(1500);
   });
 
   it("ticket médio e saldo seguem o CRM (divisão crua, sem arredondar)", () => {
