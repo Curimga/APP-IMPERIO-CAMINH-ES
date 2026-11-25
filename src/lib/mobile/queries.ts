@@ -1018,21 +1018,43 @@ export function useDashboardData() {
 
 /** Serviços gerais (com o caminhão relacionado). */
 export function useServices() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const enabled = canSeeServices(roles);
+  const includeServiceValue =
+    isSecretariaOnly(roles) || isFinanceExecutive(roles, user?.email);
   return useQuery({
-    queryKey: ["services-mobile", enabled],
+    queryKey: ["services-mobile", enabled, includeServiceValue],
     enabled,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("services_operational")
-        .select(
-          "id, truck_id, supplier_id, title, description, sent_at, expected_at, completed_at, status, attachment_url, notes, created_by, created_at, updated_at, truck_previous_status, category",
-        )
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const rows = (data ?? []) as Array<Record<string, unknown> & { truck_id: string | null }>;
+      const operationalColumns =
+        "id, truck_id, supplier_id, title, description, sent_at, expected_at, completed_at, status, attachment_url, notes, created_by, created_at, updated_at, truck_previous_status, category";
+      let rows: Array<Record<string, unknown> & { truck_id: string | null }>;
+
+      if (includeServiceValue) {
+        // A Secretaria pode consultar apenas o valor do serviço, sob a policy
+        // existente de leitura de services. Campos financeiros do caminhão
+        // não são selecionados neste caminho.
+        const { data, error } = await supabase
+          .from("services")
+          .select(`${operationalColumns}, value, total_value`)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (error) throw error;
+        rows = (data ?? []) as unknown as Array<
+          Record<string, unknown> & { truck_id: string | null }
+        >;
+      } else {
+        const { data, error } = await supabase
+          .from("services_operational")
+          .select(operationalColumns)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (error) throw error;
+        rows = (data ?? []) as Array<
+          Record<string, unknown> & { truck_id: string | null }
+        >;
+      }
+
       const trucks = await fetchTruckRefs(rows.map((row) => row.truck_id));
       return rows.map((row) => ({
         ...row,
