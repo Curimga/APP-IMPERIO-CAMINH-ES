@@ -6,7 +6,7 @@ import type { ServiceItem } from "@/lib/mobile/queries";
 import { setServiceStatus, updateServiceDeadline } from "@/lib/mobile/actions";
 import { MobileCard, SkeletonRows, EmptyState, Field, inputClass, btnGold } from "@/components/mobile/ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { dateBR } from "@/lib/format";
+import { brl, dateBR } from "@/lib/format";
 import { mdIsPastDue, mdRelative, spaTodayISO } from "@/lib/mobile/dates";
 import { truckTitle } from "@/lib/truck-title";
 import { cn } from "@/lib/utils";
@@ -95,6 +95,7 @@ function ServiceItem({ s, onEditDeadline }: { s: ServiceItem; onEditDeadline: (s
     s.status === "em_andamento" &&
     mdIsPastDue(s.expected_at);
   const isConcluido = s.status === "concluido";
+  const serviceValue = s.total_value ?? s.value;
   return (
     <div className="flex items-start gap-3 px-3 py-3">
       <div
@@ -136,6 +137,14 @@ function ServiceItem({ s, onEditDeadline }: { s: ServiceItem; onEditDeadline: (s
             <span className="text-muted-foreground">Conclusão {dateBR(s.completed_at)}</span>
           ) : null}
         </div>
+        {serviceValue != null && Number.isFinite(Number(serviceValue)) ? (
+          <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-gold/20 bg-gold/10 px-2.5 py-1 text-xs">
+            <span className="text-muted-foreground">Valor do serviço</span>
+            <span className="font-semibold tabular-nums text-gold-dark">
+              {brl(Number(serviceValue))}
+            </span>
+          </div>
+        ) : null}
         {s.notes ? (
           <div className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{s.notes}</div>
         ) : null}
